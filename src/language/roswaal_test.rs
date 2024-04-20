@@ -31,7 +31,7 @@ pub struct RoswaalStep {
 }
 
 #[cfg(test)]
-mod tests {
+mod roswaal_test_tests {
     use super::*;
 
     #[test]
