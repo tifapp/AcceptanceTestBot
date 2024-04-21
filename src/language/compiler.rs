@@ -9,5 +9,6 @@ pub enum RoswaalCompilationErrorCode {
     NoTestName,
     NoTestSteps,
     NoStepDescription { step_name: String },
+    NoLocationSpecified,
     InvalidCommandName(String)
 }

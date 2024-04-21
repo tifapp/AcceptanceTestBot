@@ -27,6 +27,12 @@ impl RoswaalTest {
                     }
                 };
                 return Err(error)
+            } else if step_name.starts_with("Set Location") {
+                let error = RoswaalCompilationError {
+                    line_number: 2,
+                    code: RoswaalCompilationErrorCode::NoLocationSpecified
+                };
+                return Err(error)
             }
             let error = RoswaalCompilationError {
                 line_number: 2,
@@ -132,6 +138,20 @@ mod roswaal_test_tests {
             code: RoswaalCompilationErrorCode::NoStepDescription {
                 step_name: "Step 1".to_string()
             }
+        };
+        assert_eq!(result, Err(error))
+    }
+
+    #[test]
+    fn test_parse_returns_no_location_specified_when_location_step_is_empty() {
+        let test = "\
+            New test: This is an acceptance test
+            Set Location:
+            ";
+        let result = RoswaalTest::parse(test);
+        let error = RoswaalCompilationError {
+            line_number: 2,
+            code: RoswaalCompilationErrorCode::NoLocationSpecified
         };
         assert_eq!(result, Err(error))
     }
