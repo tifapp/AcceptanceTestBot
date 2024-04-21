@@ -8,5 +8,6 @@ pub struct RoswaalCompilationError {
 pub enum RoswaalCompilationErrorCode {
     NoTestName,
     NoTestSteps,
+    NoStepDescription { step_name: String },
     InvalidCommandName(String)
 }

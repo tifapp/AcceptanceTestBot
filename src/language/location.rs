@@ -11,7 +11,13 @@ pub enum RoswaalLocationNameParsingError {
 /// for formatting the name in different contexts.
 #[derive(Debug, PartialEq, Eq)]
 pub struct RoswaalLocationName {
-    pub raw_value: String
+    raw_value: String
+}
+
+impl RoswaalLocationName {
+    pub fn name(&self) -> &str {
+        &self.raw_value
+    }
 }
 
 impl FromStr for RoswaalLocationName {
@@ -19,7 +25,7 @@ impl FromStr for RoswaalLocationName {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.is_empty() { return Err(RoswaalLocationNameParsingError::Empty) }
-        Ok(Self { raw_value: String::from(s) })
+        Ok(Self { raw_value: s.to_string() })
     }
 }
 
@@ -33,7 +39,7 @@ impl RoswaalLocationName {
     /// assert!(name.matches("  Hello  World  "))
     /// ```
     pub fn matches(&self, str: &str) -> bool {
-        self.normalize(&self.raw_value) == self.normalize(str)
+        self.normalize(self.name()) == self.normalize(str)
     }
 
     fn normalize(&self, str: &str) -> String {

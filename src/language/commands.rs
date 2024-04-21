@@ -38,8 +38,8 @@ export const setLocationTo{} = async () => {{
   await setUserLocation(TestLocations.{})
 }}
 ",
-                    location_name.raw_value.to_ascii_pascal_case(),
-                    location_name.raw_value.to_ascii_pascal_case()
+                    location_name.name().to_ascii_pascal_case(),
+                    location_name.name().to_ascii_pascal_case()
                 )
             }
         }

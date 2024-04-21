@@ -4,7 +4,7 @@ use super::compiler::{RoswaalCompilationError, RoswaalCompilationErrorCode};
 pub struct RoswaalTest;
 
 impl RoswaalTest {
-    pub fn parse(roswaal_string: &String) -> Result<Self, RoswaalCompilationError> {
+    pub fn parse(roswaal_string: &str) -> Result<Self, RoswaalCompilationError> {
         let mut lines = roswaal_string.lines();
         let has_test_name = lines.next()
             .map(|l| l.to_lowercase().starts_with("new test:"))
@@ -19,6 +19,15 @@ impl RoswaalTest {
         let step_line = lines.next();
         if let Some((step_name, _)) = step_line.and_then(|l| l.split_once(":")) {
             let step_name = String::from(step_name.trim());
+            if step_name.starts_with("Step 1") {
+                let error = RoswaalCompilationError {
+                    line_number: 2,
+                    code: RoswaalCompilationErrorCode::NoStepDescription {
+                        step_name
+                    }
+                };
+                return Err(error)
+            }
             let error = RoswaalCompilationError {
                 line_number: 2,
                 code: RoswaalCompilationErrorCode::InvalidCommandName(step_name)
@@ -107,6 +116,22 @@ mod roswaal_test_tests {
         let error = RoswaalCompilationError {
             line_number: 2,
             code: RoswaalCompilationErrorCode::InvalidCommandName(step_name)
+        };
+        assert_eq!(result, Err(error))
+    }
+
+    #[test]
+    fn test_parse_returns_no_step_description_when_step_lacks_description() {
+        let test = "\
+            New Test: Hello wordl
+            Step 1:
+            ";
+        let result = RoswaalTest::parse(test);
+        let error = RoswaalCompilationError {
+            line_number: 2,
+            code: RoswaalCompilationErrorCode::NoStepDescription {
+                step_name: "Step 1".to_string()
+            }
         };
         assert_eq!(result, Err(error))
     }
