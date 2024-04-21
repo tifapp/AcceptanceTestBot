@@ -1,4 +1,9 @@
-use super::error::RoswaalCompilationError;
+#[derive(Debug, PartialEq, Eq)]
+pub enum RoswaalCompilationError {
+    NoTestName,
+    NoTestSteps,
+    InvalidStepName(String)
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct RoswaalTest {
