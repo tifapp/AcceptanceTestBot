@@ -21,7 +21,7 @@ impl RoswaalTest {
             let step_name = String::from(step_name.trim());
             let error = RoswaalCompilationError {
                 line_number: 2,
-                code: RoswaalCompilationErrorCode::InvalidStepName(step_name)
+                code: RoswaalCompilationErrorCode::InvalidCommandName(step_name)
             };
             return Err(error)
         }
@@ -97,7 +97,7 @@ mod roswaal_test_tests {
     }
 
     #[test]
-    fn test_parse_returns_invalid_step_name_when_command_is_not_a_step() {
+    fn test_parse_returns_invalid_command_name_when_command_is_not_a_step() {
         let test = "\
             new test: Hello world
             passo 1: mamma mia
@@ -106,7 +106,7 @@ mod roswaal_test_tests {
         let step_name = String::from("passo 1");
         let error = RoswaalCompilationError {
             line_number: 2,
-            code: RoswaalCompilationErrorCode::InvalidStepName(step_name)
+            code: RoswaalCompilationErrorCode::InvalidCommandName(step_name)
         };
         assert_eq!(result, Err(error))
     }
