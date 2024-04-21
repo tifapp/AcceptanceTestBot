@@ -1,6 +1,6 @@
-use crate::utils::string::ToAsciiCamelCase;
+use crate::utils::string::{ToAsciiCamelCase, UppercaseFirstAsciiCharacter};
 
-use super::location::RoswaalLocation;
+use super::location::RoswaalLocationName;
 
 pub trait RoswaalTestCommand {
     fn typescript(&self) -> String;
@@ -28,25 +28,27 @@ impl RoswaalTestCommand for StepCommand {
 }
 
 pub struct SetLocationCommand {
-    location: RoswaalLocation
+    location_name: RoswaalLocationName
 }
 
 impl RoswaalTestCommand for SetLocationCommand {
     fn typescript(&self) -> String {
         format!(
             "\
-            export const setLocationTo{:?} = async () => {{
-              await setUserLocation(TestLocations.{:?})
+            export const setLocationTo{} = async () => {{
+              await setUserLocation(TestLocations.{})
             }}
             ",
-            self.location,
-            self.location
+            self.location_name.raw_value.to_ascii_pascal_case(),
+            self.location_name.raw_value.to_ascii_pascal_case()
         )
     }
 }
 
 #[cfg(test)]
 mod roswaal_command_tests {
+    use std::str::FromStr;
+
     use super::*;
 
     #[test]
@@ -68,12 +70,13 @@ mod roswaal_command_tests {
     #[test]
     fn test_set_location_command_typescript() {
         let command = SetLocationCommand {
-            location: RoswaalLocation::Miami
+            location_name: RoswaalLocationName::from_str("San Francisco")
+                .unwrap()
         };
         let ts = command.typescript();
         let expected_ts = "\
-            export const setLocationToMiami = async () => {
-              await setUserLocation(TestLocations.Miami)
+            export const setLocationToSanFrancisco = async () => {
+              await setUserLocation(TestLocations.SanFrancisco)
             }
             ";
         assert_eq!(ts, String::from(expected_ts))

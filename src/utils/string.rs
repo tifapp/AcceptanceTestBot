@@ -17,9 +17,16 @@ impl ToAsciiCamelCase for String {
 pub trait UppercaseFirstAsciiCharacter: ToString {
     fn uppercase_first_ascii_char(&self) -> String {
         let mut str = self.to_string();
-        if str.is_empty() { return self.to_string() }
+        if str.is_empty() { return str }
         str[0..1].make_ascii_uppercase();
         return str
+    }
+
+    fn to_ascii_pascal_case(&self) -> String {
+        self.to_string()
+            .split_whitespace()
+            .map(|s| s.uppercase_first_ascii_char())
+            .collect::<String>()
     }
 }
 
@@ -59,5 +66,15 @@ mod string_utils_tests {
     fn test_string_to_camel_case_with_spaced_words() {
         let str = String::from("Hello world this is a test");
         assert_eq!(str.to_ascii_camel_case(), String::from("helloWorldThisIsATest"))
+    }
+
+    #[test]
+    fn test_pascal_case_uppercases_first_letter_of_single_word_name() {
+        assert_eq!("oakland".to_ascii_pascal_case(), String::from("Oakland"))
+    }
+
+    #[test]
+    fn test_pascal_case_uppercases_first_letter_of_all_words_and_trims_white_space() {
+        assert_eq!("santa cruz".to_ascii_pascal_case(), String::from("SantaCruz"))
     }
 }

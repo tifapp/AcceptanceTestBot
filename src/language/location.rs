@@ -1,33 +1,43 @@
 use std::str::FromStr;
 
-use strum_macros::EnumString;
-
-use crate::utils::string::UppercaseFirstAsciiCharacter;
-
-#[derive(Debug, PartialEq, Eq, EnumString)]
-pub enum RoswaalLocation {
-    LosAngeles,
-    SanFrancisco,
-    Oakland,
-    Brooklyn,
-    Houston,
-    Antarctica,
-    London,
-    Miami,
-    Reno,
-    SanJose,
-    SantaCruz,
-    Sacramento,
-    Paris,
-    SaltLakeCity
+#[derive(Debug, PartialEq, Eq)]
+pub enum RoswaalLocationNameParsingError {
+    Empty
 }
 
-impl RoswaalLocation {
-    fn parse(str: &String) -> Option<Self> {
-        let comparator = str.split_whitespace()
-            .map(|s| s.uppercase_first_ascii_char())
-            .collect::<String>();
-        RoswaalLocation::from_str(comparator.as_str()).ok()
+/// A valid location name representing a place.
+///
+/// This type contains helpers for matching the name against a query, and
+/// for formatting the name in different contexts.
+#[derive(Debug, PartialEq, Eq)]
+pub struct RoswaalLocationName {
+    pub raw_value: String
+}
+
+impl FromStr for RoswaalLocationName {
+    type Err = RoswaalLocationNameParsingError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.is_empty() { return Err(RoswaalLocationNameParsingError::Empty) }
+        Ok(Self { raw_value: String::from(s) })
+    }
+}
+
+impl RoswaalLocationName {
+    /// Returns true if the specified string slice is the same as this
+    /// name case and whitespace insensitive.
+    ///
+    /// Ex.
+    /// ```rs
+    /// let name = RoswaalLocationName::from_str("hello world").unwrap();
+    /// assert!(name.matches("  Hello  World  "))
+    /// ```
+    pub fn matches(&self, str: &str) -> bool {
+        self.normalize(&self.raw_value) == self.normalize(str)
+    }
+
+    fn normalize(&self, str: &str) -> String {
+        str.to_lowercase().split_whitespace().collect::<String>()
     }
 }
 
@@ -36,51 +46,42 @@ mod roswaal_location_tests {
     use super::*;
 
     #[test]
-    fn test_parse_empty() {
-        let location = RoswaalLocation::parse(&String::from(""));
-        assert!(location.is_none())
+    fn test_from_str_returns_error_when_empty() {
+        let name = RoswaalLocationName::from_str("");
+        assert_eq!(name, Err(RoswaalLocationNameParsingError::Empty))
     }
 
     #[test]
-    fn test_parse_random() {
-        let location = RoswaalLocation::parse(&String::from("didhughduiguyd"));
-        assert!(location.is_none())
+    fn test_from_str_returns_success_when_valid() {
+        let name = RoswaalLocationName::from_str("hello world");
+        assert!(name.is_ok())
     }
 
     #[test]
-    fn test_name_for_all_locations() {
-        assert_location("Los Angeles", RoswaalLocation::LosAngeles);
-        assert_location("San Francisco", RoswaalLocation::SanFrancisco);
-        assert_location("Oakland", RoswaalLocation::Oakland);
-        assert_location("Antarctica", RoswaalLocation::Antarctica);
-        assert_location("Paris", RoswaalLocation::Paris);
-        assert_location("Santa Cruz", RoswaalLocation::SantaCruz);
-        assert_location("Houston", RoswaalLocation::Houston);
-        assert_location("London", RoswaalLocation::London);
-        assert_location("Salt Lake City", RoswaalLocation::SaltLakeCity);
-        assert_location("Sacramento", RoswaalLocation::Sacramento);
-        assert_location("San Jose", RoswaalLocation::SanJose);
-        assert_location("Reno", RoswaalLocation::Reno);
-        assert_location("Brooklyn", RoswaalLocation::Brooklyn);
-        assert_location("Miami", RoswaalLocation::Miami);
+    fn test_matches_returns_false_when_empty_string() {
+        let name = RoswaalLocationName::from_str("hello world")
+            .expect("Should parse successfully.");
+        assert!(!name.matches(""))
     }
 
-    fn assert_location(name: &str, location: RoswaalLocation) {
-        let name_str = String::from(name);
-        let some_location = Some(location);
-        assert_eq!(RoswaalLocation::parse(&name_str), some_location);
-        assert_eq!(
-            RoswaalLocation::parse(&name_str.to_lowercase()),
-            some_location
-        );
-        let with_whitespace = format!("  \t{}  \t", name);
-        assert_eq!(
-            RoswaalLocation::parse(&with_whitespace),
-            some_location
-        );
-        assert_eq!(
-            RoswaalLocation::parse(&with_whitespace.to_lowercase()),
-            some_location
-        );
+    #[test]
+    fn test_matches_returns_true_when_exact_same_name() {
+        let name = RoswaalLocationName::from_str("hello world")
+            .expect("Should parse successfully.");
+        assert!(name.matches("hello world"))
+    }
+
+    #[test]
+    fn test_matches_returns_true_when_same_name_but_uppercased() {
+        let name = RoswaalLocationName::from_str("hello world")
+            .expect("Should parse successfully.");
+        assert!(name.matches("Hello World"))
+    }
+
+    #[test]
+    fn test_matches_returns_true_when_same_name_but_different_white_spacing_and_uppercased() {
+        let name = RoswaalLocationName::from_str("hello world")
+            .expect("Should parse successfully.");
+        assert!(name.matches("\t  Hello   World\t  "))
     }
 }
