@@ -1,4 +1,6 @@
-use super::{ast::RoswaalTestSyntax, test::RoswaalTest};
+use crate::is_case;
+
+use super::{ast::{RoswaalTestSyntax, RoswaalTestSyntaxToken}, test::RoswaalTest};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct RoswaalCompilationError {
@@ -30,9 +32,10 @@ pub trait RoswaalCompile: Sized {
 
 impl RoswaalCompile for RoswaalTest {
     fn compile_syntax(syntax: RoswaalTestSyntax) -> Result<Self, RoswaalCompilationError> {
-        let mut lines = syntax.source_code().lines();
-        let has_test_name = lines.next()
-            .map(|l| l.to_lowercase().starts_with("new test:"))
+        let mut token_lines = syntax.token_lines();
+        let has_test_name = token_lines
+            .next()
+            .map(|t| is_case!(t, RoswaalTestSyntaxToken::NewTest))
             .unwrap_or(false);
         if !has_test_name {
             let error = RoswaalCompilationError {
@@ -41,35 +44,48 @@ impl RoswaalCompile for RoswaalTest {
             };
             return Err(error);
         }
-        let step_line = lines.next();
-        if let Some((step_name, _)) = step_line.and_then(|l| l.split_once(":")) {
-            let step_name = String::from(step_name.trim());
-            if step_name.starts_with("Step 1") {
+        let step_line = token_lines.next();
+        match step_line {
+            Some(RoswaalTestSyntaxToken::Step { description: _ }) => {
                 let error = RoswaalCompilationError {
                     line_number: 2,
                     code: RoswaalCompilationErrorCode::NoStepDescription {
-                        step_name
+                        step_name: "Step 1".to_string()
                     }
                 };
                 return Err(error)
-            } else if step_name.starts_with("Set Location") {
+            },
+            Some(RoswaalTestSyntaxToken::SetLocation { parse_result: _ }) => {
                 let error = RoswaalCompilationError {
                     line_number: 2,
                     code: RoswaalCompilationErrorCode::NoLocationSpecified
                 };
                 return Err(error)
+            },
+            Some(RoswaalTestSyntaxToken::UnknownCommand { name, description: _ }) => {
+                let error = RoswaalCompilationError {
+                    line_number: 2,
+                    code: RoswaalCompilationErrorCode::InvalidCommandName(
+                        name.to_string()
+                    )
+                };
+                return Err(error)
             }
-            let error = RoswaalCompilationError {
-                line_number: 2,
-                code: RoswaalCompilationErrorCode::InvalidCommandName(step_name)
-            };
-            return Err(error)
+            Some(_) => {
+                let error = RoswaalCompilationError {
+                    line_number: 2,
+                    code: RoswaalCompilationErrorCode::NoTestSteps
+                };
+                return Err(error)
+            },
+            _ => {
+                let error = RoswaalCompilationError {
+                    line_number: 1,
+                    code: RoswaalCompilationErrorCode::NoTestSteps
+                };
+                return Err(error)
+            }
         }
-        let error = RoswaalCompilationError {
-            line_number: if step_line.is_some() { 2 } else { 1 },
-            code: RoswaalCompilationErrorCode::NoTestSteps
-        };
-        Err(error)
     }
 }
 
@@ -120,9 +136,9 @@ mod compiler_tests {
     #[test]
     fn test_parse_returns_no_steps_when_step_line_is_random_string() {
         let test = "\
-            new test: Hello world
-            lsjkhadjkhasdfjkhasdjkfhkjsd
-            ";
+new test: Hello world
+lsjkhadjkhasdfjkhasdjkfhkjsd
+";
         let error = RoswaalCompilationError {
             line_number: 2,
             code: RoswaalCompilationErrorCode::NoTestSteps
@@ -134,9 +150,9 @@ mod compiler_tests {
     #[test]
     fn test_parse_returns_invalid_command_name_when_command_is_not_a_step() {
         let test = "\
-            new test: Hello world
-            passo 1: mamma mia
-            ";
+new test: Hello world
+passo 1: mamma mia
+";
         let result = RoswaalTest::compile(test);
         let step_name = String::from("passo 1");
         let error = RoswaalCompilationError {
@@ -149,9 +165,9 @@ mod compiler_tests {
     #[test]
     fn test_parse_returns_no_step_description_when_step_lacks_description() {
         let test = "\
-            New Test: Hello wordl
-            Step 1:
-            ";
+New Test: Hello wordl
+Step 1:
+";
         let result = RoswaalTest::compile(test);
         let error = RoswaalCompilationError {
             line_number: 2,
@@ -165,9 +181,9 @@ mod compiler_tests {
     #[test]
     fn test_parse_returns_no_location_specified_when_location_step_is_empty() {
         let test = "\
-            New test: This is an acceptance test
-            Set Location:
-            ";
+New test: This is an acceptance test
+Set Location:
+";
         let result = RoswaalTest::compile(test);
         let error = RoswaalCompilationError {
             line_number: 2,

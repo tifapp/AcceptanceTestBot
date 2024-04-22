@@ -13,7 +13,7 @@ macro_rules! is_case {
 mod is_case_tests {
     enum TestEnum {
         One,
-        Two { hello: u8 },
+        Two { _hello: u8 },
         Three(u8)
     }
 
@@ -28,7 +28,7 @@ mod is_case_tests {
 
     #[test]
     fn test_is_case_two() {
-        let mut value = TestEnum::Two { hello: 8 };
+        let mut value = TestEnum::Two { _hello: 8 };
         assert!(is_case!(value, TestEnum::Two));
 
         value = TestEnum::Three(1);

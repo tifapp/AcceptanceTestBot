@@ -111,6 +111,7 @@ impl From<&str> for RoswaalTestSyntax {
     }
 }
 
+/// An iterator of syntax tokens for each line in the source code.
 pub struct RoswaalTestTokenLines<'a> {
     lines: Lines<'a>
 }
