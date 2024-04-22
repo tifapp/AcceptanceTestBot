@@ -59,35 +59,31 @@ mod roswaal_location_tests {
 
     #[test]
     fn test_from_str_returns_success_when_valid() {
-        let name = RoswaalLocationName::from_str("hello world");
-        assert!(name.is_ok())
+        let name = RoswaalLocationName::from_str("hello world").unwrap();
+        assert_eq!(name.name(), "hello world")
     }
 
     #[test]
     fn test_matches_returns_false_when_empty_string() {
-        let name = RoswaalLocationName::from_str("hello world")
-            .expect("Should parse successfully.");
+        let name = RoswaalLocationName::from_str("hello world").unwrap();
         assert!(!name.matches(""))
     }
 
     #[test]
     fn test_matches_returns_true_when_exact_same_name() {
-        let name = RoswaalLocationName::from_str("hello world")
-            .expect("Should parse successfully.");
+        let name = RoswaalLocationName::from_str("hello world").unwrap();
         assert!(name.matches("hello world"))
     }
 
     #[test]
     fn test_matches_returns_true_when_same_name_but_uppercased() {
-        let name = RoswaalLocationName::from_str("hello world")
-            .expect("Should parse successfully.");
+        let name = RoswaalLocationName::from_str("hello world").unwrap();
         assert!(name.matches("Hello World"))
     }
 
     #[test]
     fn test_matches_returns_true_when_same_name_but_different_white_spacing_and_uppercased() {
-        let name = RoswaalLocationName::from_str("hello world")
-            .expect("Should parse successfully.");
+        let name = RoswaalLocationName::from_str("hello world").unwrap();
         assert!(name.matches("\t  Hello   World\t  "))
     }
 }
