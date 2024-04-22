@@ -1,6 +1,7 @@
 /// A token of roswaal test syntax.
 ///
 /// Each token represents a line of source code. See `RoswaalTestSyntax`.
+#[derive(Debug, PartialEq, Eq)]
 pub enum RoswaalTestSyntaxToken {
     /// A line denoting a "Step" command without its matching "Requirement"
     /// command.
@@ -18,6 +19,19 @@ pub enum RoswaalTestSyntaxToken {
     Unknown { source: String },
     /// An empty line.
     EmptyLine
+}
+
+impl From<&str> for RoswaalTestSyntaxToken {
+    fn from(line: &str) -> Self {
+        if let Some((_, description)) = line.split_once(":") {
+            return Self::Step { description: description.trim().to_string() }
+        }
+        if line.is_empty() {
+            Self::EmptyLine
+        } else {
+            Self::Unknown { source: line.to_string() }
+        }
+    }
 }
 
 /// An opaque data structure representing parsed roswaal test syntax.
@@ -62,5 +76,59 @@ impl RoswaalTestSyntax {
 impl From<&str> for RoswaalTestSyntax {
     fn from(source_code: &str) -> Self {
         Self { source_code: source_code.to_string() }
+    }
+}
+
+#[cfg(test)]
+mod ast_tests {
+    use super::*;
+
+    #[cfg(test)]
+    mod token_tests {
+        use super::*;
+
+        #[test]
+        fn test_from_string_returns_empty_line_for_empty_string() {
+            let token = RoswaalTestSyntaxToken::from("");
+            assert_eq!(token, RoswaalTestSyntaxToken::EmptyLine)
+        }
+
+        #[test]
+        fn test_from_string_returns_unknown_for_jibberish() {
+            let source = "Sorry King Kai! I didn't know where else to bring him!".to_string();
+            let token = RoswaalTestSyntaxToken::from(source.as_str());
+            assert_eq!(token, RoswaalTestSyntaxToken::Unknown { source })
+        }
+
+        #[test]
+        fn test_from_string_returns_step_for_simple_step_commands() {
+            fn assert_step_description(line: &str, expected_description: &str) {
+                let token = RoswaalTestSyntaxToken::from(line);
+                let expected_token = RoswaalTestSyntaxToken::Step {
+                    description: expected_description.to_string()
+                };
+                assert_eq!(token, expected_token)
+            }
+            assert_step_description(
+                "Step 1: Hello world this is a test",
+                "Hello world this is a test"
+            );
+            assert_step_description(
+                "Step: i am batman",
+                "i am batman"
+            );
+            assert_step_description(
+                "step 1: Hello",
+                "Hello"
+            );
+            assert_step_description(
+                "step one: Hello world this is a test",
+                "Hello world this is a test"
+            );
+            assert_step_description(
+                "step:",
+                ""
+            )
+        }
     }
 }
