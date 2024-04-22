@@ -1,9 +1,16 @@
 use std::str::FromStr;
 
+use super::normalize::RoswaalNormalize;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum RoswaalLocationNameParsingError {
     Empty
 }
+
+pub type RoswaalLocationParsingResult = Result<
+    RoswaalLocationName,
+    RoswaalLocationNameParsingError
+>;
 
 /// A valid location name representing a place.
 ///
@@ -23,7 +30,7 @@ impl RoswaalLocationName {
 impl FromStr for RoswaalLocationName {
     type Err = RoswaalLocationNameParsingError;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> RoswaalLocationParsingResult {
         if s.is_empty() { return Err(RoswaalLocationNameParsingError::Empty) }
         Ok(Self { raw_value: s.to_string() })
     }
@@ -39,11 +46,7 @@ impl RoswaalLocationName {
     /// assert!(name.matches("  Hello  World  "))
     /// ```
     pub fn matches(&self, str: &str) -> bool {
-        self.normalize(self.name()) == self.normalize(str)
-    }
-
-    fn normalize(&self, str: &str) -> String {
-        str.to_lowercase().split_whitespace().collect::<String>()
+        self.name().roswaal_normalize() == str.roswaal_normalize()
     }
 }
 

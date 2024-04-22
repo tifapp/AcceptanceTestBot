@@ -3,3 +3,4 @@ pub mod commands;
 pub mod location;
 pub mod ast;
 pub mod test;
+mod normalize;

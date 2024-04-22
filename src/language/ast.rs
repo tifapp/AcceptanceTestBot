@@ -1,35 +1,62 @@
+use std::str::FromStr;
+
+use super::{
+    location::{RoswaalLocationName, RoswaalLocationParsingResult},
+    normalize::RoswaalNormalize
+};
+
 /// A token of roswaal test syntax.
 ///
 /// Each token represents a line of source code. See `RoswaalTestSyntax`.
 #[derive(Debug, PartialEq, Eq)]
-pub enum RoswaalTestSyntaxToken {
+pub enum RoswaalTestSyntaxToken<'a> {
     /// A line denoting a "Step" command without its matching "Requirement"
     /// command.
-    Step { description: String },
+    Step { description: &'a str },
     /// A line denoting the "New Test" command.
-    NewTest { name: String },
+    NewTest { name: &'a str },
     /// A line denoting the "SetLocation" command.
-    SetLocation { unchecked_name: String },
+    SetLocation { parse_result: RoswaalLocationParsingResult },
     /// A line denoting the "Requirement" command that is to be paired with a
     /// respective step command.
-    Requirement { description: String },
+    Requirement { description: &'a str },
     /// A line which has proper command syntax, but the command is not known.
-    UnknownCommand { name: String, description: String },
+    UnknownCommand { name: &'a str, description: &'a str },
     /// A line which does not follow traditional command syntax.
-    Unknown { source: String },
+    Unknown { source: &'a str },
     /// An empty line.
     EmptyLine
 }
 
-impl From<&str> for RoswaalTestSyntaxToken {
-    fn from(line: &str) -> Self {
-        if let Some((_, description)) = line.split_once(":") {
-            return Self::Step { description: description.trim().to_string() }
-        }
-        if line.is_empty() {
-            Self::EmptyLine
+impl <'a> From<&'a str> for RoswaalTestSyntaxToken<'a> {
+    fn from(line: &'a str) -> Self {
+        let (command, description) = match line.split_once(":") {
+            Some(split) => split,
+            None => {
+                return if line.is_empty() {
+                    Self::EmptyLine
+                } else {
+                    Self::Unknown { source: line }
+                }
+            }
+        };
+        let normalized_command = command.roswaal_normalize();
+        let description = description.trim();
+        if normalized_command.starts_with("step") {
+            return Self::Step { description }
+        } else if normalized_command.starts_with("setlocation") {
+            return Self::SetLocation {
+                parse_result: RoswaalLocationName::from_str(&description)
+            }
+        } else if normalized_command.starts_with("newtest") {
+            return Self::NewTest { name: description }
+        } else if normalized_command.starts_with("requirement") {
+            return Self::Requirement { description }
         } else {
-            Self::Unknown { source: line.to_string() }
+            return Self::UnknownCommand {
+                name: command,
+                description
+            }
         }
     }
 }
@@ -85,6 +112,10 @@ mod ast_tests {
 
     #[cfg(test)]
     mod token_tests {
+        use std::str::FromStr;
+
+        use crate::language::location::RoswaalLocationNameParsingError;
+
         use super::*;
 
         #[test]
@@ -95,17 +126,17 @@ mod ast_tests {
 
         #[test]
         fn test_from_string_returns_unknown_for_jibberish() {
-            let source = "Sorry King Kai! I didn't know where else to bring him!".to_string();
-            let token = RoswaalTestSyntaxToken::from(source.as_str());
+            let source = "Sorry King Kai! I didn't know where else to bring him!";
+            let token = RoswaalTestSyntaxToken::from(source);
             assert_eq!(token, RoswaalTestSyntaxToken::Unknown { source })
         }
 
         #[test]
         fn test_from_string_returns_step_for_simple_step_commands() {
-            fn assert_step_description(line: &str, expected_description: &str) {
+            fn assert_step_description(line: &str, description: &str) {
                 let token = RoswaalTestSyntaxToken::from(line);
                 let expected_token = RoswaalTestSyntaxToken::Step {
-                    description: expected_description.to_string()
+                    description
                 };
                 assert_eq!(token, expected_token)
             }
@@ -122,6 +153,10 @@ mod ast_tests {
                 "Hello"
             );
             assert_step_description(
+                "   step    1   : Hello",
+                "Hello"
+            );
+            assert_step_description(
                 "step one: Hello world this is a test",
                 "Hello world this is a test"
             );
@@ -129,6 +164,85 @@ mod ast_tests {
                 "step:",
                 ""
             )
+        }
+
+        #[test]
+        fn test_from_string_returns_set_location_for_set_location_commands() {
+            fn assert_set_location_name(line: &str, name: &str) {
+                let token = RoswaalTestSyntaxToken::from(line);
+                let parse_result = RoswaalLocationName::from_str(name);
+                let expected_token = RoswaalTestSyntaxToken::SetLocation {
+                    parse_result: RoswaalLocationName::from_str(name)
+                };
+                assert_eq!(token, expected_token);
+                assert_eq!(name, parse_result.unwrap().name())
+            }
+
+            fn assert_no_location_name(
+                line: &str,
+                error: RoswaalLocationNameParsingError
+            ) {
+                let token = RoswaalTestSyntaxToken::from(line);
+                let expected_token = RoswaalTestSyntaxToken::SetLocation {
+                    parse_result: Err(error)
+                };
+                assert_eq!(token, expected_token)
+            }
+
+            assert_set_location_name("set location: Apple", "Apple");
+            assert_set_location_name("Set Location: Houston", "Houston");
+            assert_set_location_name("Set      location: A", "A");
+            assert_set_location_name("Set      location      : A", "A");
+            assert_set_location_name("   Set      location      : A", "A");
+            assert_no_location_name(
+                "set location:",
+                RoswaalLocationNameParsingError::Empty
+            )
+        }
+
+        #[test]
+        fn test_from_string_returns_unknown_command_for_random_commands() {
+            fn assert_unknown_command(line: &str, name: &str, description: &str) {
+                let token = RoswaalTestSyntaxToken::from(line);
+                let expected_token = RoswaalTestSyntaxToken::UnknownCommand {
+                    name,
+                    description
+                };
+                assert_eq!(token, expected_token)
+            }
+
+            assert_unknown_command("dkjhkjdh: hello", "dkjhkjdh", "hello");
+            assert_unknown_command("dkjh kjdh: hello ", "dkjh kjdh", "hello")
+        }
+
+        #[test]
+        fn test_from_string_returns_new_test_for_new_test_command() {
+            fn assert_new_test(line: &str, name: &str) {
+                let token = RoswaalTestSyntaxToken::from(line);
+                let expected_token = RoswaalTestSyntaxToken::NewTest {
+                    name
+                };
+                assert_eq!(token, expected_token)
+            }
+
+            assert_new_test("New Test: Hello world", "Hello world");
+            assert_new_test("new test: test", "test");
+            assert_new_test(" new    tESt    : weird  ", "weird")
+        }
+
+        #[test]
+        fn test_from_string_returns_requirement_for_requirement_command() {
+            fn assert_requirement(line: &str, description: &str) {
+                let token = RoswaalTestSyntaxToken::from(line);
+                let expected_token = RoswaalTestSyntaxToken::Requirement {
+                    description
+                };
+                assert_eq!(token, expected_token)
+            }
+
+            assert_requirement("Requirement 1: Hello world", "Hello world");
+            assert_requirement("requirement: test", "test");
+            assert_requirement(" requirement   4: weird  ", "weird")
         }
     }
 }
