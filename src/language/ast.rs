@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::str::{FromStr, Lines};
 
 use super::{
     location::{RoswaalLocationName, RoswaalLocationParsingResult},
@@ -98,11 +98,28 @@ impl RoswaalTestSyntax {
     pub fn source_code(&self) -> &str {
         &self.source_code
     }
+
+    /// Returns an iterator of syntax tokens for each line in the source code.
+    pub fn token_lines(&self) -> RoswaalTestTokenLines {
+        RoswaalTestTokenLines { lines: self.source_code().lines() }
+    }
 }
 
 impl From<&str> for RoswaalTestSyntax {
     fn from(source_code: &str) -> Self {
         Self { source_code: source_code.to_string() }
+    }
+}
+
+pub struct RoswaalTestTokenLines<'a> {
+    lines: Lines<'a>
+}
+
+impl <'a> Iterator for RoswaalTestTokenLines<'a> {
+    type Item = RoswaalTestSyntaxToken<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.lines.next().map(RoswaalTestSyntaxToken::from)
     }
 }
 
@@ -243,6 +260,49 @@ mod ast_tests {
             assert_requirement("Requirement 1: Hello world", "Hello world");
             assert_requirement("requirement: test", "test");
             assert_requirement(" requirement   4: weird  ", "weird")
+        }
+    }
+
+    #[cfg(test)]
+    mod syntax_tests {
+        use std::str::FromStr;
+
+        use crate::language::ast::ast_tests::RoswaalLocationName;
+
+        use super::{RoswaalTestSyntax, RoswaalTestSyntaxToken};
+
+        #[test]
+        fn test_token_lines_iterator() {
+            let test = "\
+New Test: Something cool
+Step 1: Write a step
+Step 2: Another step
+Set Location: Europe
+Big: chungus
+Requirement 1: Do the thing
+Requirement 2: Do the other thing
+";
+            let syntax = RoswaalTestSyntax::from(test);
+            let tokens = syntax
+                .token_lines()
+                .collect::<Vec<RoswaalTestSyntaxToken>>();
+            assert_eq!(
+                tokens,
+                vec!(
+                    RoswaalTestSyntaxToken::NewTest { name: "Something cool" },
+                    RoswaalTestSyntaxToken::Step { description: "Write a step" },
+                    RoswaalTestSyntaxToken::Step { description: "Another step" },
+                    RoswaalTestSyntaxToken::SetLocation {
+                        parse_result: RoswaalLocationName::from_str("Europe")
+                    },
+                    RoswaalTestSyntaxToken::UnknownCommand {
+                        name: "Big",
+                        description: "chungus"
+                    },
+                    RoswaalTestSyntaxToken::Requirement { description: "Do the thing" },
+                    RoswaalTestSyntaxToken::Requirement { description: "Do the other thing" }
+                )
+            )
         }
     }
 }
