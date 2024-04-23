@@ -13,6 +13,8 @@ pub enum RoswaalTestSyntaxToken<'a> {
     /// A line denoting a "Step" command without its matching "Requirement"
     /// command.
     Step { description: &'a str },
+    /// A line denoting the "Abstract" command.
+    Abstract { description: &'a str },
     /// A line denoting the "New Test" command.
     NewTest { name: &'a str },
     /// A line denoting the "SetLocation" command.
@@ -52,6 +54,8 @@ impl <'a> From<&'a str> for RoswaalTestSyntaxToken<'a> {
             return Self::NewTest { name: description }
         } else if normalized_command.starts_with("requirement") {
             return Self::Requirement { description }
+        } else if normalized_command.starts_with("abstract") {
+            return Self::Abstract { description }
         } else {
             return Self::UnknownCommand {
                 name: command,
@@ -261,6 +265,21 @@ mod ast_tests {
             assert_requirement("Requirement 1: Hello world", "Hello world");
             assert_requirement("requirement: test", "test");
             assert_requirement(" requirement   4: weird  ", "weird")
+        }
+
+        #[test]
+        fn test_from_string_returns_abstract_for_abstract_command() {
+            fn assert_abstract(line: &str, description: &str) {
+                let token = RoswaalTestSyntaxToken::from(line);
+                let expected_token = RoswaalTestSyntaxToken::Abstract {
+                    description
+                };
+                assert_eq!(token, expected_token)
+            }
+
+            assert_abstract("Abstract 1: Hello world", "Hello world");
+            assert_abstract("abstract: test", "test");
+            assert_abstract(" abstract   4: weird  ", "weird")
         }
     }
 
