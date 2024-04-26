@@ -112,6 +112,18 @@ impl RoswaalTestSyntax {
                     })
             })
     }
+
+    /// Returns the last line number of this syntax.
+    ///
+    /// If the syntax is empty, line 1 is returned.
+    pub fn last_line_number(&self) -> u32 {
+        let line_count = self.source_code.lines().count();
+        return if line_count == 0 {
+            1
+        } else {
+            line_count as u32
+        }
+    }
 }
 
 impl From<&str> for RoswaalTestSyntax {
@@ -305,6 +317,31 @@ mod ast_tests {
         use crate::language::ast::{ast_tests::RoswaalLocationName, RoswaalTestSyntaxLine};
 
         use super::{RoswaalTestSyntax, RoswaalTestSyntaxToken};
+
+        #[test]
+        fn test_last_line_number_returns_1_when_empty() {
+            let syntax = RoswaalTestSyntax::from("");
+            assert_eq!(syntax.last_line_number(), 1)
+        }
+
+        #[test]
+        fn test_last_line_number_returns_1_when_single_line() {
+            let syntax = RoswaalTestSyntax::from("hello");
+            assert_eq!(syntax.last_line_number(), 1)
+        }
+
+        #[test]
+        fn test_last_line_number_returns_1_number_of_lines_in_code() {
+            let test = "\
+New Test: I am a test
+Step 1: Piccolo was the first to try
+Requirement 1: Have piccolo fight Android 17 and 18 all at once
+Step 2: And the first to die
+Requirement 2: Make sure that \"even Krillin\" can't be stopped by the dreadful duo
+";
+            let syntax = RoswaalTestSyntax::from(test);
+            assert_eq!(syntax.last_line_number(), 5)
+        }
 
         #[test]
         fn test_token_lines_iterator() {
