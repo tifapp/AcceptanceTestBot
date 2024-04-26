@@ -1,5 +1,3 @@
-use crate::is_case;
-
 use super::{ast::{RoswaalTestSyntax, RoswaalTestSyntaxToken}, location::RoswaalLocationName, test::RoswaalTest};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -23,12 +21,12 @@ pub trait RoswaalCompile: Sized {
     fn compile_syntax(
         syntax: RoswaalTestSyntax,
         locations: Vec<RoswaalLocationName>
-    ) -> Result<Self, RoswaalCompilationError>;
+    ) -> Result<Self, Vec<RoswaalCompilationError>>;
 
     fn compile(
         source_code: &str,
         locations: Vec<RoswaalLocationName>
-    ) -> Result<Self, RoswaalCompilationError> {
+    ) -> Result<Self, Vec<RoswaalCompilationError>> {
         Self::compile_syntax(RoswaalTestSyntax::from(source_code), locations)
     }
 }
@@ -37,7 +35,8 @@ impl RoswaalCompile for RoswaalTest {
     fn compile_syntax(
         syntax: RoswaalTestSyntax,
         locations: Vec<RoswaalLocationName>
-    ) -> Result<Self, RoswaalCompilationError> {
+    ) -> Result<Self, Vec<RoswaalCompilationError>> {
+        let mut errors: Vec<RoswaalCompilationError> = Vec::new();
         let mut has_test_line = false;
         for line in syntax.token_lines() {
             let line_number = line.line_number();
@@ -52,25 +51,22 @@ impl RoswaalCompile for RoswaalTest {
                             step_name: name.to_string()
                         }
                     };
-                    return Err(error);
+                    errors.push(error);
                 },
                 RoswaalTestSyntaxToken::SetLocation { parse_result } => {
-                    return match parse_result {
-                        Ok(name) => Err(
-                            RoswaalCompilationError {
-                                line_number,
-                                code: RoswaalCompilationErrorCode::InvalidLocationName(
-                                    name.name().to_string()
-                                )
-                            }
-                        ),
-                        Err(_) => Err(
-                            RoswaalCompilationError {
-                                line_number,
-                                code: RoswaalCompilationErrorCode::NoLocationSpecified
-                            }
-                        )
+                    let err = match parse_result {
+                        Ok(name) => RoswaalCompilationError {
+                            line_number,
+                            code: RoswaalCompilationErrorCode::InvalidLocationName(
+                                name.name().to_string()
+                            )
+                        },
+                        Err(_) => RoswaalCompilationError {
+                            line_number,
+                            code: RoswaalCompilationErrorCode::NoLocationSpecified
+                        }
                     };
+                    errors.push(err);
                 },
                 RoswaalTestSyntaxToken::UnknownCommand { name, description: _ } => {
                     let error = RoswaalCompilationError {
@@ -79,7 +75,7 @@ impl RoswaalCompile for RoswaalTest {
                             name.to_string()
                         )
                     };
-                    return Err(error)
+                    errors.push(error)
                 },
                 RoswaalTestSyntaxToken::Unknown { source } => {
                     let error = RoswaalCompilationError {
@@ -88,25 +84,25 @@ impl RoswaalCompile for RoswaalTest {
                             source.to_string()
                         )
                     };
-                    return Err(error)
+                    errors.push(error)
                 },
                 _ => {}
             }
         }
         if !has_test_line {
-            return Err(
-                RoswaalCompilationError {
-                    line_number: syntax.last_line_number(),
-                    code: RoswaalCompilationErrorCode::NoTestName
-                }
-            )
-        }
-        Err(
-            RoswaalCompilationError {
+            let error = RoswaalCompilationError {
+                line_number: syntax.last_line_number(),
+                code: RoswaalCompilationErrorCode::NoTestName
+            };
+            errors.push(error)
+        } else {
+            let error = RoswaalCompilationError {
                 line_number: syntax.last_line_number(),
                 code: RoswaalCompilationErrorCode::NoTestSteps
-            }
-        )
+            };
+            errors.push(error);
+        }
+        Err(errors)
     }
 }
 
@@ -125,7 +121,7 @@ mod compiler_tests {
             line_number: 1,
             code: RoswaalCompilationErrorCode::NoTestName
         };
-        assert_eq!(result, Err(error))
+        assert_contains_compile_error(&result, &error);
     }
 
     #[test]
@@ -136,20 +132,37 @@ mod compiler_tests {
             line_number: 4,
             code: RoswaalCompilationErrorCode::NoTestName
         };
-        assert_eq!(result, Err(error))
+        assert_contains_compile_error(&result, &error);
     }
 
     #[test]
-    fn test_parse_returns_unknown_command_for_random_string() {
+    fn test_parse_returns_unknown_command_and_no_test_name_for_random_string() {
         let code = "jkashdkjashdkjahsd ehiuh3ui2geuyg23urg";
         let result = RoswaalTest::compile(code, vec![]);
+        let errors = vec!(
+            RoswaalCompilationError {
+                line_number: 1,
+                code: RoswaalCompilationErrorCode::InvalidCommandName(
+                    code.to_string()
+                )
+            },
+            RoswaalCompilationError {
+                line_number: 1,
+                code: RoswaalCompilationErrorCode::NoTestName
+            }
+        );
+        assert_contains_compile_error(&result, &errors[0]);
+        assert_contains_compile_error(&result, &errors[1])
+    }
+
+    #[test]
+    fn test_compile_does_not_return_a_no_test_steps_error_when_no_test_name() {
+        let result = RoswaalTest::compile("", vec![]);
         let error = RoswaalCompilationError {
             line_number: 1,
-            code: RoswaalCompilationErrorCode::InvalidCommandName(
-                code.to_string()
-            )
+            code: RoswaalCompilationErrorCode::NoTestSteps
         };
-        assert_eq!(result, Err(error))
+        assert_not_contains_compile_error(&result, &error)
     }
 
     #[test]
@@ -159,7 +172,7 @@ mod compiler_tests {
             line_number: 1,
             code: RoswaalCompilationErrorCode::NoTestSteps
         };
-        assert_eq!(result, Err(error))
+        assert_contains_compile_error(&result, &error);
     }
 
     #[test]
@@ -169,23 +182,30 @@ mod compiler_tests {
             line_number: 1,
             code: RoswaalCompilationErrorCode::NoTestSteps
         };
-        assert_eq!(result, Err(error))
+        assert_contains_compile_error(&result, &error);
     }
 
     #[test]
-    fn test_parse_returns_invalid_command_name_when_step_line_is_random_string() {
+    fn test_parse_returns_invalid_command_name_and_no_steps_when_random_string_after_new_test() {
         let test = "\
 new test: Hello world
 lsjkhadjkhasdfjkhasdjkfhkjsd
 ";
-        let error = RoswaalCompilationError {
-            line_number: 2,
-            code: RoswaalCompilationErrorCode::InvalidCommandName(
-                "lsjkhadjkhasdfjkhasdjkfhkjsd".to_string()
-            )
-        };
+        let errors = vec!(
+            RoswaalCompilationError {
+                line_number: 2,
+                code: RoswaalCompilationErrorCode::InvalidCommandName(
+                    "lsjkhadjkhasdfjkhasdjkfhkjsd".to_string()
+                )
+            },
+            RoswaalCompilationError {
+                line_number: 2,
+                code: RoswaalCompilationErrorCode::NoTestSteps
+            }
+        );
         let result = RoswaalTest::compile(test, vec![]);
-        assert_eq!(result, Err(error))
+        assert_contains_compile_error(&result, &errors[0]);
+        assert_contains_compile_error(&result, &errors[1])
     }
 
     #[test]
@@ -196,7 +216,7 @@ lsjkhadjkhasdfjkhasdjkfhkjsd
             code: RoswaalCompilationErrorCode::NoTestSteps
         };
         let result = RoswaalTest::compile(test, vec![]);
-        assert_eq!(result, Err(error))
+        assert_contains_compile_error(&result, &error)
     }
 
     #[test]
@@ -206,12 +226,12 @@ new test: Hello world
 passo 1: mamma mia
 ";
         let result = RoswaalTest::compile(test, vec![]);
-        let step_name = String::from("passo 1");
+        let step_name = "passo 1".to_string();
         let error = RoswaalCompilationError {
             line_number: 2,
             code: RoswaalCompilationErrorCode::InvalidCommandName(step_name)
         };
-        assert_eq!(result, Err(error))
+        assert_contains_compile_error(&result, &error);
     }
 
     #[test]
@@ -227,7 +247,7 @@ Step 1:
                 step_name: "Step 1".to_string()
             }
         };
-        assert_eq!(result, Err(error))
+        assert_contains_compile_error(&result, &error);
     }
 
     #[test]
@@ -241,7 +261,7 @@ Set Location:
             line_number: 2,
             code: RoswaalCompilationErrorCode::NoLocationSpecified
         };
-        assert_eq!(result, Err(error))
+        assert_contains_compile_error(&result, &error);
     }
 
     #[test]
@@ -256,6 +276,20 @@ Set Location: world
             line_number: 2,
             code: RoswaalCompilationErrorCode::InvalidLocationName("world".to_string())
         };
-        assert_eq!(result, Err(error))
+        assert_contains_compile_error(&result, &error);
+    }
+
+    fn assert_contains_compile_error(
+        result: &Result<RoswaalTest, Vec<RoswaalCompilationError>>,
+        error: &RoswaalCompilationError
+    ) {
+        assert!(result.as_ref().err().unwrap().contains(error))
+    }
+
+    fn assert_not_contains_compile_error(
+        result: &Result<RoswaalTest, Vec<RoswaalCompilationError>>,
+        error: &RoswaalCompilationError
+    ) {
+        assert!(!result.as_ref().err().unwrap().contains(error))
     }
 }
