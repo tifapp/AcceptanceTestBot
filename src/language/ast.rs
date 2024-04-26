@@ -1,4 +1,4 @@
-use std::str::{FromStr, Lines};
+use std::{iter::Enumerate, str::{FromStr, Lines}};
 
 use super::{
     location::{RoswaalLocationName, RoswaalLocationParsingResult},
@@ -105,7 +105,7 @@ impl RoswaalTestSyntax {
 
     /// Returns an iterator of syntax tokens for each line in the source code.
     pub fn token_lines(&self) -> RoswaalTestTokenLines {
-        RoswaalTestTokenLines { lines: self.source_code().lines() }
+        RoswaalTestTokenLines { lines: self.source_code().lines().enumerate() }
     }
 }
 
@@ -115,16 +115,27 @@ impl From<&str> for RoswaalTestSyntax {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct RoswaalTestSyntaxLine<'a> {
+    pub line_number: u32,
+    pub token: RoswaalTestSyntaxToken<'a>
+}
+
 /// An iterator of syntax tokens for each line in the source code.
 pub struct RoswaalTestTokenLines<'a> {
-    lines: Lines<'a>
+    lines: Enumerate<Lines<'a>>
 }
 
 impl <'a> Iterator for RoswaalTestTokenLines<'a> {
-    type Item = RoswaalTestSyntaxToken<'a>;
+    type Item = RoswaalTestSyntaxLine<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.lines.next().map(RoswaalTestSyntaxToken::from)
+        self.lines.next().map(|(i, line)| {
+            RoswaalTestSyntaxLine {
+                line_number: (i + 1) as u32,
+                token: RoswaalTestSyntaxToken::from(line)
+            }
+        })
     }
 }
 
@@ -287,7 +298,7 @@ mod ast_tests {
     mod syntax_tests {
         use std::str::FromStr;
 
-        use crate::language::ast::ast_tests::RoswaalLocationName;
+        use crate::language::ast::{ast_tests::RoswaalLocationName, RoswaalTestSyntaxLine};
 
         use super::{RoswaalTestSyntax, RoswaalTestSyntaxToken};
 
@@ -299,28 +310,64 @@ Step 1: Write a step
 Step 2: Another step
 Set Location: Europe
 Big: chungus
+
 Requirement 1: Do the thing
 Requirement 2: Do the other thing
 ";
             let syntax = RoswaalTestSyntax::from(test);
             let tokens = syntax
                 .token_lines()
-                .collect::<Vec<RoswaalTestSyntaxToken>>();
+                .collect::<Vec<RoswaalTestSyntaxLine>>();
             assert_eq!(
                 tokens,
                 vec!(
-                    RoswaalTestSyntaxToken::NewTest { name: "Something cool" },
-                    RoswaalTestSyntaxToken::Step { description: "Write a step" },
-                    RoswaalTestSyntaxToken::Step { description: "Another step" },
-                    RoswaalTestSyntaxToken::SetLocation {
-                        parse_result: RoswaalLocationName::from_str("Europe")
+                    RoswaalTestSyntaxLine {
+                        line_number: 1,
+                        token: RoswaalTestSyntaxToken::NewTest {
+                            name: "Something cool"
+                        }
                     },
-                    RoswaalTestSyntaxToken::UnknownCommand {
-                        name: "Big",
-                        description: "chungus"
+                    RoswaalTestSyntaxLine {
+                        line_number: 2,
+                        token: RoswaalTestSyntaxToken::Step {
+                            description: "Write a step"
+                        }
                     },
-                    RoswaalTestSyntaxToken::Requirement { description: "Do the thing" },
-                    RoswaalTestSyntaxToken::Requirement { description: "Do the other thing" }
+                    RoswaalTestSyntaxLine {
+                        line_number: 3,
+                        token: RoswaalTestSyntaxToken::Step {
+                            description: "Another step"
+                        }
+                    },
+                    RoswaalTestSyntaxLine {
+                        line_number: 4,
+                        token: RoswaalTestSyntaxToken::SetLocation {
+                            parse_result: RoswaalLocationName::from_str("Europe")
+                        }
+                    },
+                    RoswaalTestSyntaxLine {
+                        line_number: 5,
+                        token: RoswaalTestSyntaxToken::UnknownCommand {
+                            name: "Big",
+                            description: "chungus"
+                        }
+                    },
+                    RoswaalTestSyntaxLine {
+                        line_number: 6,
+                        token: RoswaalTestSyntaxToken::EmptyLine
+                    },
+                    RoswaalTestSyntaxLine {
+                        line_number: 7,
+                        token: RoswaalTestSyntaxToken::Requirement {
+                            description: "Do the thing"
+                        }
+                    },
+                    RoswaalTestSyntaxLine {
+                        line_number: 8,
+                        token: RoswaalTestSyntaxToken::Requirement {
+                            description: "Do the other thing"
+                        }
+                    }
                 )
             )
         }

@@ -35,7 +35,10 @@ impl RoswaalCompile for RoswaalTest {
         let mut token_lines = syntax.token_lines();
         let has_test_name = token_lines
             .next()
-            .map(|t| is_case!(t, RoswaalTestSyntaxToken::NewTest))
+            .map(|line| {
+                let token = line.token;
+                is_case!(token, RoswaalTestSyntaxToken::NewTest)
+            })
             .unwrap_or(false);
         if !has_test_name {
             let error = RoswaalCompilationError {
@@ -44,43 +47,45 @@ impl RoswaalCompile for RoswaalTest {
             };
             return Err(error);
         }
-        let step_line = token_lines.next();
-        match step_line {
-            Some(RoswaalTestSyntaxToken::Step { description: _ }) => {
+        let step_line = match token_lines.next() {
+            Some(line) => line,
+            None => {
                 let error = RoswaalCompilationError {
-                    line_number: 2,
+                    line_number: 1,
+                    code: RoswaalCompilationErrorCode::NoTestSteps
+                };
+                return Err(error)
+            }
+        };
+        match step_line.token {
+            RoswaalTestSyntaxToken::Step { description: _ } => {
+                let error = RoswaalCompilationError {
+                    line_number: step_line.line_number,
                     code: RoswaalCompilationErrorCode::NoStepDescription {
                         step_name: "Step 1".to_string()
                     }
                 };
                 return Err(error)
             },
-            Some(RoswaalTestSyntaxToken::SetLocation { parse_result: _ }) => {
+            RoswaalTestSyntaxToken::SetLocation { parse_result: _ } => {
                 let error = RoswaalCompilationError {
-                    line_number: 2,
+                    line_number: step_line.line_number,
                     code: RoswaalCompilationErrorCode::NoLocationSpecified
                 };
                 return Err(error)
             },
-            Some(RoswaalTestSyntaxToken::UnknownCommand { name, description: _ }) => {
+            RoswaalTestSyntaxToken::UnknownCommand { name, description: _ } => {
                 let error = RoswaalCompilationError {
-                    line_number: 2,
+                    line_number: step_line.line_number,
                     code: RoswaalCompilationErrorCode::InvalidCommandName(
                         name.to_string()
                     )
                 };
                 return Err(error)
             }
-            Some(_) => {
-                let error = RoswaalCompilationError {
-                    line_number: 2,
-                    code: RoswaalCompilationErrorCode::NoTestSteps
-                };
-                return Err(error)
-            },
             _ => {
                 let error = RoswaalCompilationError {
-                    line_number: 1,
+                    line_number: step_line.line_number,
                     code: RoswaalCompilationErrorCode::NoTestSteps
                 };
                 return Err(error)
