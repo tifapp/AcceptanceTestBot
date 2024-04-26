@@ -36,7 +36,7 @@ impl RoswaalCompile for RoswaalTest {
         let has_test_name = token_lines
             .next()
             .map(|line| {
-                let token = line.token;
+                let token = line.token();
                 is_case!(token, RoswaalTestSyntaxToken::NewTest)
             })
             .unwrap_or(false);
@@ -57,10 +57,10 @@ impl RoswaalCompile for RoswaalTest {
                 return Err(error)
             }
         };
-        match step_line.token {
+        match step_line.token() {
             RoswaalTestSyntaxToken::Step { description: _ } => {
                 let error = RoswaalCompilationError {
-                    line_number: step_line.line_number,
+                    line_number: step_line.line_number(),
                     code: RoswaalCompilationErrorCode::NoStepDescription {
                         step_name: "Step 1".to_string()
                     }
@@ -69,14 +69,14 @@ impl RoswaalCompile for RoswaalTest {
             },
             RoswaalTestSyntaxToken::SetLocation { parse_result: _ } => {
                 let error = RoswaalCompilationError {
-                    line_number: step_line.line_number,
+                    line_number: step_line.line_number(),
                     code: RoswaalCompilationErrorCode::NoLocationSpecified
                 };
                 return Err(error)
             },
             RoswaalTestSyntaxToken::UnknownCommand { name, description: _ } => {
                 let error = RoswaalCompilationError {
-                    line_number: step_line.line_number,
+                    line_number: step_line.line_number(),
                     code: RoswaalCompilationErrorCode::InvalidCommandName(
                         name.to_string()
                     )
@@ -85,7 +85,7 @@ impl RoswaalCompile for RoswaalTest {
             }
             _ => {
                 let error = RoswaalCompilationError {
-                    line_number: step_line.line_number,
+                    line_number: step_line.line_number(),
                     code: RoswaalCompilationErrorCode::NoTestSteps
                 };
                 return Err(error)
