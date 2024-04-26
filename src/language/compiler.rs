@@ -58,11 +58,11 @@ impl RoswaalCompile for RoswaalTest {
             }
         };
         match step_line.token() {
-            RoswaalTestSyntaxToken::Step { description: _ } => {
+            RoswaalTestSyntaxToken::Step { name, description: _ } => {
                 let error = RoswaalCompilationError {
                     line_number: step_line.line_number(),
                     code: RoswaalCompilationErrorCode::NoStepDescription {
-                        step_name: "Step 1".to_string()
+                        step_name: name.to_string()
                     }
                 };
                 return Err(error)

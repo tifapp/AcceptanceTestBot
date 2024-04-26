@@ -12,7 +12,7 @@ use super::{
 pub enum RoswaalTestSyntaxToken<'a> {
     /// A line denoting a "Step" command without its matching "Requirement"
     /// command.
-    Step { description: &'a str },
+    Step { name: &'a str, description: &'a str },
     /// A line denoting the "Abstract" command.
     Abstract { description: &'a str },
     /// A line denoting the "New Test" command.
@@ -21,7 +21,7 @@ pub enum RoswaalTestSyntaxToken<'a> {
     SetLocation { parse_result: RoswaalLocationParsingResult },
     /// A line denoting the "Requirement" command that is to be paired with a
     /// respective step command.
-    Requirement { description: &'a str },
+    Requirement { name: &'a str, description: &'a str },
     /// A line which has proper command syntax, but the command is not known.
     UnknownCommand { name: &'a str, description: &'a str },
     /// A line which does not follow traditional command syntax.
@@ -45,7 +45,7 @@ impl <'a> TryFrom<&'a str> for RoswaalTestSyntaxToken<'a> {
         let normalized_command = command.roswaal_normalize();
         let description = description.trim();
         if normalized_command.starts_with("step") {
-            return Ok(Self::Step { description })
+            return Ok(Self::Step { name: command, description })
         } else if normalized_command.starts_with("setlocation") {
             return Ok(
                 Self::SetLocation {
@@ -55,7 +55,7 @@ impl <'a> TryFrom<&'a str> for RoswaalTestSyntaxToken<'a> {
         } else if normalized_command.starts_with("newtest") {
             return Ok(Self::NewTest { name: description })
         } else if normalized_command.starts_with("requirement") {
-            return Ok(Self::Requirement { description })
+            return Ok(Self::Requirement { name: command, description })
         } else if normalized_command.starts_with("abstract") {
             return Ok(Self::Abstract { description })
         } else {
@@ -157,34 +157,41 @@ mod ast_tests {
 
         #[test]
         fn test_from_string_returns_step_for_simple_step_commands() {
-            fn assert_step_description(line: &str, description: &str) {
+            fn assert_step_description(line: &str, name: &str, description: &str) {
                 let expected_token = RoswaalTestSyntaxToken::Step {
+                    name,
                     description
                 };
                 assert_eq!(RoswaalTestSyntaxToken::try_from(line), Ok(expected_token))
             }
             assert_step_description(
                 "Step 1: Hello world this is a test",
+                "Step 1",
                 "Hello world this is a test"
             );
             assert_step_description(
                 "Step: i am batman",
+                "Step",
                 "i am batman"
             );
             assert_step_description(
                 "step 1: Hello",
+                "step 1",
                 "Hello"
             );
             assert_step_description(
                 "   step    1   : Hello",
+                "   step    1   ",
                 "Hello"
             );
             assert_step_description(
                 "step one: Hello world this is a test",
+                "step one",
                 "Hello world this is a test"
             );
             assert_step_description(
                 "step:",
+                "step",
                 ""
             )
         }
@@ -251,16 +258,29 @@ mod ast_tests {
 
         #[test]
         fn test_from_string_returns_requirement_for_requirement_command() {
-            fn assert_requirement(line: &str, description: &str) {
+            fn assert_requirement(line: &str, name: &str, description: &str) {
                 let expected_token = RoswaalTestSyntaxToken::Requirement {
+                    name,
                     description
                 };
                 assert_eq!(RoswaalTestSyntaxToken::try_from(line), Ok(expected_token))
             }
 
-            assert_requirement("Requirement 1: Hello world", "Hello world");
-            assert_requirement("requirement: test", "test");
-            assert_requirement(" requirement   4: weird  ", "weird")
+            assert_requirement(
+                "Requirement 1: Hello world",
+                "Requirement 1",
+                "Hello world"
+            );
+            assert_requirement(
+                "requirement: test",
+                "requirement",
+                "test"
+            );
+            assert_requirement(
+                " requirement   4: weird  ",
+                " requirement   4",
+                "weird"
+            )
         }
 
         #[test]
@@ -314,12 +334,14 @@ Requirement 2: Do the other thing
                     RoswaalTestSyntaxLine {
                         line_number: 2,
                         token: RoswaalTestSyntaxToken::Step {
+                            name: "Step 1",
                             description: "Write a step"
                         }
                     },
                     RoswaalTestSyntaxLine {
                         line_number: 3,
                         token: RoswaalTestSyntaxToken::Step {
+                            name: "Step 2",
                             description: "Another step"
                         }
                     },
@@ -339,12 +361,14 @@ Requirement 2: Do the other thing
                     RoswaalTestSyntaxLine {
                         line_number: 7,
                         token: RoswaalTestSyntaxToken::Requirement {
+                            name: "Requirement 1",
                             description: "Do the thing"
                         }
                     },
                     RoswaalTestSyntaxLine {
                         line_number: 8,
                         token: RoswaalTestSyntaxToken::Requirement {
+                            name: "Requirement 2",
                             description: "Do the other thing"
                         }
                     }
