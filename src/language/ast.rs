@@ -14,11 +14,14 @@ pub enum RoswaalTestSyntaxToken<'a> {
     /// command.
     Step { name: &'a str, description: &'a str },
     /// A line denoting the "Abstract" command.
-    Abstract { description: &'a str },
+    Abstract { command_name: &'a str, description: &'a str },
     /// A line denoting the "New Test" command.
-    NewTest { name: &'a str },
-    /// A line denoting the "SetLocation" command.
-    SetLocation { parse_result: RoswaalLocationParsingResult },
+    NewTest { command_name: &'a str, test_name: &'a str },
+    /// A line denoting the "Set Location" command.
+    SetLocation {
+        command_name: &'a str,
+        parse_result: RoswaalLocationParsingResult
+    },
     /// A line denoting the "Requirement" command that is to be paired with a
     /// respective step command.
     Requirement { name: &'a str, description: &'a str },
@@ -49,15 +52,16 @@ impl <'a> TryFrom<&'a str> for RoswaalTestSyntaxToken<'a> {
         } else if normalized_command.starts_with("setlocation") {
             return Ok(
                 Self::SetLocation {
+                    command_name: command,
                     parse_result: RoswaalLocationName::from_str(&description)
                 }
             )
         } else if normalized_command.starts_with("newtest") {
-            return Ok(Self::NewTest { name: description })
+            return Ok(Self::NewTest { command_name: command, test_name: description })
         } else if normalized_command.starts_with("requirement") {
             return Ok(Self::Requirement { name: command, description })
         } else if normalized_command.starts_with("abstract") {
-            return Ok(Self::Abstract { description })
+            return Ok(Self::Abstract { command_name: command, description })
         } else {
             return Ok(Self::UnknownCommand { name: command, description })
         }
@@ -210,32 +214,56 @@ mod ast_tests {
 
         #[test]
         fn test_from_string_returns_set_location_for_set_location_commands() {
-            fn assert_set_location_name(line: &str, name: &str) {
+            fn assert_set_location(line: &str, command_name: &str, name: &str) {
                 let parse_result = RoswaalLocationName::from_str(name);
                 let expected_token = RoswaalTestSyntaxToken::SetLocation {
+                    command_name,
                     parse_result: RoswaalLocationName::from_str(name)
                 };
                 assert_eq!(RoswaalTestSyntaxToken::try_from(line), Ok(expected_token));
                 assert_eq!(name, parse_result.unwrap().name())
             }
 
-            fn assert_no_location_name(
+            fn assert_set_location_with_error(
                 line: &str,
+                command_name: &str,
                 error: RoswaalLocationNameParsingError
             ) {
                 let expected_token = RoswaalTestSyntaxToken::SetLocation {
+                    command_name,
                     parse_result: Err(error)
                 };
                 assert_eq!(RoswaalTestSyntaxToken::try_from(line), Ok(expected_token))
             }
 
-            assert_set_location_name("set location: Apple", "Apple");
-            assert_set_location_name("Set Location: Houston", "Houston");
-            assert_set_location_name("Set      location: A", "A");
-            assert_set_location_name("Set      location      : A", "A");
-            assert_set_location_name("   Set      location      : A", "A");
-            assert_no_location_name(
+            assert_set_location(
+                "set location: Apple",
+                "set location",
+                "Apple"
+            );
+            assert_set_location(
+                "Set Location: Houston",
+                "Set Location",
+                "Houston"
+            );
+            assert_set_location(
+                "Set      location: A",
+                "Set      location",
+                "A"
+            );
+            assert_set_location(
+                "Set      location      : A",
+                "Set      location      ",
+                "A"
+            );
+            assert_set_location(
+                "   Set      location      : A",
+                "   Set      location      ",
+                "A"
+            );
+            assert_set_location_with_error(
                 "set location:",
+                "set location",
                 RoswaalLocationNameParsingError::Empty
             )
         }
@@ -256,16 +284,29 @@ mod ast_tests {
 
         #[test]
         fn test_from_string_returns_new_test_for_new_test_command() {
-            fn assert_new_test(line: &str, name: &str) {
+            fn assert_new_test(line: &str, name: &str, test_name: &str) {
                 let expected_token = RoswaalTestSyntaxToken::NewTest {
-                    name
+                    command_name: name,
+                    test_name
                 };
                 assert_eq!(RoswaalTestSyntaxToken::try_from(line), Ok(expected_token))
             }
 
-            assert_new_test("New Test: Hello world", "Hello world");
-            assert_new_test("new test: test", "test");
-            assert_new_test(" new    tESt    : weird  ", "weird")
+            assert_new_test(
+                "New Test: Hello world",
+                "New Test",
+                "Hello world"
+            );
+            assert_new_test(
+                "new test: test",
+                "new test",
+                "test"
+            );
+            assert_new_test(
+                " new    tESt    : weird  ",
+                " new    tESt    ",
+                "weird"
+            )
         }
 
         #[test]
@@ -297,16 +338,29 @@ mod ast_tests {
 
         #[test]
         fn test_from_string_returns_abstract_for_abstract_command() {
-            fn assert_abstract(line: &str, description: &str) {
+            fn assert_abstract(line: &str, name: &str, description: &str) {
                 let expected_token = RoswaalTestSyntaxToken::Abstract {
+                    command_name: name,
                     description
                 };
                 assert_eq!(RoswaalTestSyntaxToken::try_from(line), Ok(expected_token))
             }
 
-            assert_abstract("Abstract 1: Hello world", "Hello world");
-            assert_abstract("abstract: test", "test");
-            assert_abstract(" abstract   4: weird  ", "weird")
+            assert_abstract(
+                "Abstract 1: Hello world",
+                "Abstract 1",
+                "Hello world"
+            );
+            assert_abstract(
+                "abstract: test",
+                "abstract",
+                "test"
+            );
+            assert_abstract(
+                " abstract   4: weird  ",
+                " abstract   4",
+                "weird"
+            )
         }
     }
 
@@ -365,7 +419,8 @@ Requirement 2: Do the other thing
                     RoswaalTestSyntaxLine {
                         line_number: 1,
                         token: RoswaalTestSyntaxToken::NewTest {
-                            name: "Something cool"
+                            command_name: "New Test",
+                            test_name: "Something cool"
                         }
                     },
                     RoswaalTestSyntaxLine {
@@ -385,6 +440,7 @@ Requirement 2: Do the other thing
                     RoswaalTestSyntaxLine {
                         line_number: 4,
                         token: RoswaalTestSyntaxToken::SetLocation {
+                            command_name: "Set Location",
                             parse_result: RoswaalLocationName::from_str("Europe")
                         }
                     },

@@ -60,7 +60,7 @@ impl RoswaalCompile for RoswaalTest {
         for line in syntax.token_lines() {
             let line_number = line.line_number();
             match line.token() {
-                RoswaalTestSyntaxToken::NewTest { name } => {
+                RoswaalTestSyntaxToken::NewTest { command_name: _, test_name: name } => {
                     has_test_line = true;
                     if ctx.test_names.contains(&name.to_string()) {
                         let error = RoswaalCompilationError {
@@ -86,7 +86,7 @@ impl RoswaalCompile for RoswaalTest {
                     };
                     errors.push(error);
                 },
-                RoswaalTestSyntaxToken::SetLocation { parse_result } => {
+                RoswaalTestSyntaxToken::SetLocation { command_name, parse_result } => {
                     let err = match parse_result {
                         Ok(name) => RoswaalCompilationError {
                             line_number,
@@ -97,7 +97,7 @@ impl RoswaalCompile for RoswaalTest {
                         Err(_) => RoswaalCompilationError {
                             line_number,
                             code: RoswaalCompilationErrorCode::NoCommandDescription {
-                                command_name: "Set Location".to_string()
+                                command_name: command_name.to_string()
                             }
                         }
                     };
