@@ -10,8 +10,7 @@ pub struct RoswaalCompilationError {
 pub enum RoswaalCompilationErrorCode {
     NoTestName,
     NoTestSteps,
-    NoStepDescription { step_name: String },
-    NoLocationSpecified,
+    NoCommandDescription { command_name: String },
     InvalidLocationName(String),
     InvalidCommandName(String),
     DuplicateTestName(String),
@@ -81,8 +80,8 @@ impl RoswaalCompile for RoswaalTest {
                 RoswaalTestSyntaxToken::Step { name, description: _ } => {
                     let error = RoswaalCompilationError {
                         line_number,
-                        code: RoswaalCompilationErrorCode::NoStepDescription {
-                            step_name: name.to_string()
+                        code: RoswaalCompilationErrorCode::NoCommandDescription {
+                            command_name: name.to_string()
                         }
                     };
                     errors.push(error);
@@ -97,7 +96,9 @@ impl RoswaalCompile for RoswaalTest {
                         },
                         Err(_) => RoswaalCompilationError {
                             line_number,
-                            code: RoswaalCompilationErrorCode::NoLocationSpecified
+                            code: RoswaalCompilationErrorCode::NoCommandDescription {
+                                command_name: "Set Location".to_string()
+                            }
                         }
                     };
                     errors.push(err);
@@ -306,8 +307,8 @@ Step 1:
         let result = RoswaalTest::compile(test, RoswaalCompileContext::empty());
         let error = RoswaalCompilationError {
             line_number: 2,
-            code: RoswaalCompilationErrorCode::NoStepDescription {
-                step_name: "Step 1".to_string()
+            code: RoswaalCompilationErrorCode::NoCommandDescription {
+                command_name: "Step 1".to_string()
             }
         };
         assert_contains_compile_error(&result, &error);
@@ -322,7 +323,9 @@ Set Location:
         let result = RoswaalTest::compile(test, RoswaalCompileContext::empty());
         let error = RoswaalCompilationError {
             line_number: 2,
-            code: RoswaalCompilationErrorCode::NoLocationSpecified
+            code: RoswaalCompilationErrorCode::NoCommandDescription {
+                command_name: "Set Location".to_string()
+            }
         };
         assert_contains_compile_error(&result, &error);
     }
