@@ -102,7 +102,7 @@ pub struct RoswaalTestSyntax {
 
 impl RoswaalTestSyntax {
     /// Returns an iterator of syntax tokens for each line in the source code.
-    pub fn token_lines(&self) -> impl Iterator<Item = RoswaalTestSyntaxLine> {
+    pub fn lines(&self) -> impl Iterator<Item = RoswaalTestSyntaxLine> {
         self.source_code.lines()
             .enumerate()
             .filter_map(|(i, line)| {
@@ -411,7 +411,7 @@ Requirement 2: Do the other thing
 ";
             let syntax = RoswaalTestSyntax::from(test);
             let tokens = syntax
-                .token_lines()
+                .lines()
                 .collect::<Vec<RoswaalTestSyntaxLine>>();
             assert_eq!(
                 tokens,

@@ -57,7 +57,7 @@ impl RoswaalCompile for RoswaalTest {
     ) -> Result<Self, Vec<RoswaalCompilationError>> {
         let mut errors: Vec<RoswaalCompilationError> = Vec::new();
         let mut has_test_line = false;
-        for line in syntax.token_lines() {
+        for line in syntax.lines() {
             let line_number = line.line_number();
             match line.token() {
                 RoswaalTestSyntaxToken::NewTest { command_name: _, test_name: name } => {
@@ -339,7 +339,7 @@ Set Location: world
 ";
         let result = RoswaalTest::compile(
             test,
-            RoswaalCompileContext { location_names, test_names: vec![] }
+            RoswaalCompileContext::new(location_names, vec![])
         );
         let error = RoswaalCompilationError {
             line_number: 2,
