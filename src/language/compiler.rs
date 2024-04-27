@@ -14,7 +14,8 @@ pub enum RoswaalCompilationErrorCode {
     NoLocationSpecified,
     InvalidLocationName(String),
     InvalidCommandName(String),
-    DuplicateTestName(String)
+    DuplicateTestName(String),
+    TestNameAlreadyDeclared
 }
 
 pub struct RoswaalCompileContext {
@@ -66,6 +67,13 @@ impl RoswaalCompile for RoswaalTest {
                         let error = RoswaalCompilationError {
                             line_number,
                             code: RoswaalCompilationErrorCode::DuplicateTestName(name.to_string())
+                        };
+                        errors.push(error);
+                    }
+                    if has_test_line {
+                        let error = RoswaalCompilationError {
+                            line_number,
+                            code: RoswaalCompilationErrorCode::TestNameAlreadyDeclared
                         };
                         errors.push(error);
                     }
@@ -256,6 +264,20 @@ lsjkhadjkhasdfjkhasdjkfhkjsd
         let error = RoswaalCompilationError {
             line_number: 1,
             code: RoswaalCompilationErrorCode::DuplicateTestName(test_name.to_string())
+        };
+        assert_contains_compile_error(&result, &error)
+    }
+
+    #[test]
+    fn test_parse_returns_test_name_declared_when_2_new_test_commands() {
+        let test = "\
+New test: Test 1
+New Test: Test 2
+";
+        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty());
+        let error = RoswaalCompilationError {
+            line_number: 2,
+            code: RoswaalCompilationErrorCode::TestNameAlreadyDeclared
         };
         assert_contains_compile_error(&result, &error)
     }
