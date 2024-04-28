@@ -16,7 +16,6 @@ pub enum RoswaalCompilationErrorCode {
     DuplicateTestName(String),
     TestNameAlreadyDeclared
 }
-
 pub struct RoswaalCompileContext {
     location_names: Vec<RoswaalLocationName>,
     test_names: Vec<String>
@@ -61,6 +60,16 @@ impl RoswaalCompile for RoswaalTest {
             let line_number = line.line_number();
             match line.content() {
                 RoswaalTestSyntaxLineContent::Command { name, description, command } => {
+                    if description.is_empty() {
+                        let error = RoswaalCompilationError {
+                            line_number,
+                            code: RoswaalCompilationErrorCode::NoCommandDescription {
+                                command_name: name.to_string()
+                            }
+                        };
+                        errors.push(error);
+                        continue
+                    }
                     match command {
                         RoswaalTestSyntaxCommand::NewTest => {
                             has_test_line = true;
@@ -81,31 +90,16 @@ impl RoswaalCompile for RoswaalTest {
                                 errors.push(error);
                             }
                         },
-                        RoswaalTestSyntaxCommand::Step => {
-                            let error = RoswaalCompilationError {
-                                line_number,
-                                code: RoswaalCompilationErrorCode::NoCommandDescription {
-                                    command_name: name.to_string()
-                                }
-                            };
-                            errors.push(error);
-                        },
                         RoswaalTestSyntaxCommand::SetLocation { parse_result } => {
-                            let err = match parse_result {
-                                Ok(name) => RoswaalCompilationError {
+                            if let Some(location_name) = parse_result.as_ref().ok() {
+                                let error = RoswaalCompilationError {
                                     line_number,
                                     code: RoswaalCompilationErrorCode::InvalidLocationName(
-                                        name.name().to_string()
+                                        location_name.name().to_string()
                                     )
-                                },
-                                Err(_) => RoswaalCompilationError {
-                                    line_number,
-                                    code: RoswaalCompilationErrorCode::NoCommandDescription {
-                                        command_name: name.to_string()
-                                    }
-                                }
-                            };
-                            errors.push(err);
+                                };
+                                errors.push(error)
+                            }
                         },
                         RoswaalTestSyntaxCommand::UnknownCommand => {
                             let error = RoswaalCompilationError {
