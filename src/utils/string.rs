@@ -1,5 +1,3 @@
-use std::ops::Range;
-
 pub trait ToAsciiCamelCase {
     fn to_ascii_camel_case(&self) -> String;
 }
@@ -35,36 +33,9 @@ pub trait UppercaseFirstAsciiCharacter: ToString {
 impl UppercaseFirstAsciiCharacter for String {}
 impl UppercaseFirstAsciiCharacter for &str {}
 
-pub trait FirstRangeOfString: ToString {
-    fn first_range_of_string(
-        &self,
-        string: &str
-    ) -> Option<Range<usize>> {
-        self.to_string()
-            .match_indices(string)
-            .next()
-            .map(|(i, _)| i..(i + string.len()))
-    }
-}
-
-impl FirstRangeOfString for &str {}
-impl FirstRangeOfString for String {}
-
 #[cfg(test)]
 mod string_utils_tests {
     use super::*;
-
-    #[test]
-    fn test_first_range_of_none_when_characters_not_found() {
-        let range = "hello".first_range_of_string("yay");
-        assert_eq!(range, None)
-    }
-
-    #[test]
-    fn test_first_range_of_returns_range_of_first_occurrence() {
-        let range = "hel hel".first_range_of_string("hel");
-        assert_eq!(range, Some(0..3))
-    }
 
     #[test]
     fn test_make_first_uppercase_empty() {

@@ -11,7 +11,6 @@ pub enum RoswaalCompilationErrorCode {
     NoTestName,
     NoTestSteps,
     NoCommandDescription { command_name: String },
-    MissingStep { requirement_name: String },
     InvalidLocationName(String),
     InvalidCommandName(String),
     DuplicateTestName(String),
@@ -108,15 +107,6 @@ impl RoswaalCompile for RoswaalTest {
                                 code: RoswaalCompilationErrorCode::InvalidCommandName(
                                     name.to_string()
                                 )
-                            };
-                            errors.push(error)
-                        },
-                        RoswaalTestSyntaxCommand::Requirement { label: name } => {
-                            let error = RoswaalCompilationError {
-                                line_number,
-                                code: RoswaalCompilationErrorCode::MissingStep {
-                                    requirement_name: name.to_string()
-                                }
                             };
                             errors.push(error)
                         },
@@ -364,22 +354,6 @@ Set Location: world
             code: RoswaalCompilationErrorCode::InvalidLocationName("world".to_string())
         };
         assert_contains_compile_error(&result, &error);
-    }
-
-    #[test]
-    fn test_parse_returns_no_step_for_requirement_when_requirement_has_no_accompanying_step() {
-        let test = "\
-New test: the thing
-Requirement 1: hello
-";
-        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty());
-        let error = RoswaalCompilationError {
-            line_number: 2,
-            code: RoswaalCompilationErrorCode::MissingStep {
-                requirement_name: "1".to_string()
-            }
-        };
-        assert_contains_compile_error(&result, &error)
     }
 
     fn assert_contains_compile_error(
