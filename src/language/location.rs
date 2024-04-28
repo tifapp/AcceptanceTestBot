@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use super::normalize::RoswaalNormalize;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum RoswaalLocationNameParsingError {
     Empty
 }
@@ -16,7 +16,7 @@ pub type RoswaalLocationParsingResult = Result<
 ///
 /// This type contains helpers for matching the name against a query, and
 /// for formatting the name in different contexts.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct RoswaalLocationName {
     raw_value: String
 }

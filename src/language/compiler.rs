@@ -1,4 +1,4 @@
-use super::{ast::{RoswaalTestSyntax, RoswaalTestSyntaxToken}, location::RoswaalLocationName, test::RoswaalTest};
+use super::{ast::{RoswaalTestSyntax, RoswaalTestSyntaxCommand, RoswaalTestSyntaxLineContent}, location::RoswaalLocationName, test::RoswaalTest};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct RoswaalCompilationError {
@@ -59,69 +59,75 @@ impl RoswaalCompile for RoswaalTest {
         let mut has_test_line = false;
         for line in syntax.lines() {
             let line_number = line.line_number();
-            match line.token() {
-                RoswaalTestSyntaxToken::NewTest { command_name: _, test_name: name } => {
-                    has_test_line = true;
-                    if ctx.test_names.contains(&name.to_string()) {
-                        let error = RoswaalCompilationError {
-                            line_number,
-                            code: RoswaalCompilationErrorCode::DuplicateTestName(name.to_string())
-                        };
-                        errors.push(error);
-                    }
-                    if has_test_line {
-                        let error = RoswaalCompilationError {
-                            line_number,
-                            code: RoswaalCompilationErrorCode::TestNameAlreadyDeclared
-                        };
-                        errors.push(error);
-                    }
-                },
-                RoswaalTestSyntaxToken::Step { name, description: _ } => {
-                    let error = RoswaalCompilationError {
-                        line_number,
-                        code: RoswaalCompilationErrorCode::NoCommandDescription {
-                            command_name: name.to_string()
-                        }
-                    };
-                    errors.push(error);
-                },
-                RoswaalTestSyntaxToken::SetLocation { command_name, parse_result } => {
-                    let err = match parse_result {
-                        Ok(name) => RoswaalCompilationError {
-                            line_number,
-                            code: RoswaalCompilationErrorCode::InvalidLocationName(
-                                name.name().to_string()
-                            )
-                        },
-                        Err(_) => RoswaalCompilationError {
-                            line_number,
-                            code: RoswaalCompilationErrorCode::NoCommandDescription {
-                                command_name: command_name.to_string()
+            match line.content() {
+                RoswaalTestSyntaxLineContent::Command { name, description, command } => {
+                    match command {
+                        RoswaalTestSyntaxCommand::NewTest => {
+                            has_test_line = true;
+                            if ctx.test_names.contains(&description.to_string()) {
+                                let error = RoswaalCompilationError {
+                                    line_number,
+                                    code: RoswaalCompilationErrorCode::DuplicateTestName(
+                                        description.to_string()
+                                    )
+                                };
+                                errors.push(error);
                             }
-                        }
-                    };
-                    errors.push(err);
-                },
-                RoswaalTestSyntaxToken::UnknownCommand { name, description: _ } => {
+                            if has_test_line {
+                                let error = RoswaalCompilationError {
+                                    line_number,
+                                    code: RoswaalCompilationErrorCode::TestNameAlreadyDeclared
+                                };
+                                errors.push(error);
+                            }
+                        },
+                        RoswaalTestSyntaxCommand::Step => {
+                            let error = RoswaalCompilationError {
+                                line_number,
+                                code: RoswaalCompilationErrorCode::NoCommandDescription {
+                                    command_name: name.to_string()
+                                }
+                            };
+                            errors.push(error);
+                        },
+                        RoswaalTestSyntaxCommand::SetLocation { parse_result } => {
+                            let err = match parse_result {
+                                Ok(name) => RoswaalCompilationError {
+                                    line_number,
+                                    code: RoswaalCompilationErrorCode::InvalidLocationName(
+                                        name.name().to_string()
+                                    )
+                                },
+                                Err(_) => RoswaalCompilationError {
+                                    line_number,
+                                    code: RoswaalCompilationErrorCode::NoCommandDescription {
+                                        command_name: name.to_string()
+                                    }
+                                }
+                            };
+                            errors.push(err);
+                        },
+                        RoswaalTestSyntaxCommand::UnknownCommand => {
+                            let error = RoswaalCompilationError {
+                                line_number,
+                                code: RoswaalCompilationErrorCode::InvalidCommandName(
+                                    name.to_string()
+                                )
+                            };
+                            errors.push(error)
+                        },
+                        _ => {}
+                    }
+                }
+                RoswaalTestSyntaxLineContent::Unknown(content) => {
                     let error = RoswaalCompilationError {
                         line_number,
                         code: RoswaalCompilationErrorCode::InvalidCommandName(
-                            name.to_string()
+                            content.to_string()
                         )
                     };
                     errors.push(error)
-                },
-                RoswaalTestSyntaxToken::Unknown { source } => {
-                    let error = RoswaalCompilationError {
-                        line_number,
-                        code: RoswaalCompilationErrorCode::InvalidCommandName(
-                            source.to_string()
-                        )
-                    };
-                    errors.push(error)
-                },
-                _ => {}
+                }
             }
         }
         if !has_test_line {
@@ -202,7 +208,10 @@ mod compiler_tests {
 
     #[test]
     fn test_parse_returns_no_steps_when_name_formatted_correctly_uppercase() {
-        let result = RoswaalTest::compile("New Test: Hello world", RoswaalCompileContext::empty());
+        let result = RoswaalTest::compile(
+            "New Test: Hello world",
+            RoswaalCompileContext::empty()
+        );
         let error = RoswaalCompilationError {
             line_number: 1,
             code: RoswaalCompilationErrorCode::NoTestSteps
@@ -212,7 +221,10 @@ mod compiler_tests {
 
     #[test]
     fn test_parse_returns_no_steps_when_name_formatted_correctly_lowercase() {
-        let result = RoswaalTest::compile("new test: Hello world", RoswaalCompileContext::empty());
+        let result = RoswaalTest::compile(
+            "new test: Hello world",
+            RoswaalCompileContext::empty()
+        );
         let error = RoswaalCompilationError {
             line_number: 1,
             code: RoswaalCompilationErrorCode::NoTestSteps
@@ -264,7 +276,9 @@ lsjkhadjkhasdfjkhasdjkfhkjsd
         );
         let error = RoswaalCompilationError {
             line_number: 1,
-            code: RoswaalCompilationErrorCode::DuplicateTestName(test_name.to_string())
+            code: RoswaalCompilationErrorCode::DuplicateTestName(
+                test_name.to_string()
+            )
         };
         assert_contains_compile_error(&result, &error)
     }
