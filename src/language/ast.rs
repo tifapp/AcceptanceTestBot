@@ -76,11 +76,11 @@ impl RoswaalTestSyntaxCommand {
 /// Requirement 1: I am a requirement that matches step 1.
 /// Requirement 2: I am a requirement that is paired with step 2.
 /// ```
-pub struct RoswaalTestSyntax {
-    source_code: String
+pub struct RoswaalTestSyntax<'a> {
+    source_code: &'a str
 }
 
-impl RoswaalTestSyntax {
+impl <'a> RoswaalTestSyntax<'a> {
     /// Returns an iterator of syntax tokens for each line in the source code.
     pub fn lines(&self) -> impl Iterator<Item = RoswaalTestSyntaxLine> {
         self.source_code.lines()
@@ -109,9 +109,9 @@ impl RoswaalTestSyntax {
     }
 }
 
-impl From<&str> for RoswaalTestSyntax {
-    fn from(source_code: &str) -> Self {
-        Self { source_code: source_code.to_string() }
+impl <'a> From<&'a str> for RoswaalTestSyntax<'a> {
+    fn from(source_code: &'a str) -> Self {
+        Self { source_code }
     }
 }
 
