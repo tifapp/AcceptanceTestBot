@@ -1,4 +1,4 @@
-use super::{ast::{RoswaalTestSyntax, RoswaalTestSyntaxCommand, RoswaalTestSyntaxLineContent}, location::RoswaalLocationName, test::RoswaalTest};
+use super::{ast::{RoswaalTestSyntax, RoswaalTestSyntaxCommand, RoswaalTestSyntaxLineContent}, location::RoswaalLocationName, test::{RoswaalTest, RoswaalTestCommand}};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct RoswaalCompilationError {
@@ -11,8 +11,8 @@ pub enum RoswaalCompilationErrorCode {
     NoTestName,
     NoTestSteps,
     NoCommandDescription { command_name: String },
-    NoStepRequirement { step_name: String },
-    NoRequirementStep { requirement_name: String },
+    NoStepRequirement { step_name: String, step_description: String },
+    NoRequirementStep { requirement_name: String, requirement_description: String },
     InvalidLocationName(String),
     InvalidCommandName(String),
     DuplicateTestName(String),
@@ -37,11 +37,20 @@ impl RoswaalCompileContext {
     }
 }
 
+struct CommandInfo {
+    line_number: u32,
+    name: String,
+    description: String
+}
+
 struct CompileContext {
     location_names: Vec<RoswaalLocationName>,
     test_names: Vec<String>,
     errors: Vec<RoswaalCompilationError>,
-    test_name: Option<String>
+    test_name: Option<String>,
+    step_name: Vec<CommandInfo>,
+    requirement_name: Vec<CommandInfo>,
+    commnands: Vec<RoswaalTestCommand>
 }
 
 impl CompileContext {
@@ -50,7 +59,10 @@ impl CompileContext {
             location_names: ctx.location_names,
             test_names: ctx.test_names,
             errors: vec![],
-            test_name: None
+            test_name: None,
+            step_name: vec![],
+            requirement_name: vec![],
+            commnands: vec![]
         }
     }
 }
@@ -69,6 +81,51 @@ impl CompileContext {
         } else {
             self.test_name = Some(name);
         }
+    }
+
+    fn append_step(&mut self, line_number: u32, name: &str, description: &str) {
+        if let Some(requirement_name) = self.requirement_name.pop() {
+            let command = RoswaalTestCommand::Step {
+                name: description.to_string(),
+                requirement: requirement_name.description
+            };
+            self.commnands.push(command)
+        } else {
+            let info = CommandInfo {
+                line_number,
+                name: name.to_string(),
+                description: description.to_string()
+            };
+            self.step_name.push(info);
+        }
+    }
+
+    fn append_requirment(&mut self, line_number: u32, name: &str, description: &str) {
+        if let Some(step_name) = self.step_name.pop() {
+            let command = RoswaalTestCommand::Step {
+                name: step_name.description,
+                requirement: description.to_string()
+            };
+            self.commnands.push(command)
+        } else {
+            let info = CommandInfo {
+                line_number,
+                name: name.to_string(),
+                description: description.to_string()
+            };
+            self.requirement_name.push(info);
+        }
+    }
+
+    fn test(self) -> Result<RoswaalTest, Vec<RoswaalCompilationError>> {
+        let test_name = match self.test_name {
+            Some(name) => name,
+            _ => return Err(self.errors)
+        };
+        if !self.errors.is_empty() {
+            return Err(self.errors)
+        }
+        return Ok(RoswaalTest::new(test_name, self.commnands));
     }
 }
 
@@ -123,16 +180,10 @@ impl RoswaalCompile for RoswaalTest {
                             ctx.append_error(line_number, code);
                         },
                         RoswaalTestSyntaxCommand::Step => {
-                          let code = RoswaalCompilationErrorCode::NoStepRequirement {
-                              step_name: name.to_string()
-                          };
-                          ctx.append_error(line_number, code);
+                            ctx.append_step(line_number, name, description);
                         },
                         RoswaalTestSyntaxCommand::Requirement => {
-                          let code = RoswaalCompilationErrorCode::NoRequirementStep {
-                              requirement_name: name.to_string()
-                          };
-                          ctx.append_error(line_number, code);
+                            ctx.append_requirment(line_number, name, description);
                         },
                         _ => {}
                     }
@@ -147,10 +198,24 @@ impl RoswaalCompile for RoswaalTest {
         }
         if ctx.test_name.is_none() {
             ctx.append_error(syntax.last_line_number(), RoswaalCompilationErrorCode::NoTestName);
-        } else {
+        } else if ctx.commnands.is_empty() {
             ctx.append_error(syntax.last_line_number(), RoswaalCompilationErrorCode::NoTestSteps);
         }
-        Err(ctx.errors)
+        if let Some(step_name) = ctx.step_name.first() {
+            let code = RoswaalCompilationErrorCode::NoStepRequirement {
+                step_name: step_name.name.clone(),
+                step_description: step_name.description.clone()
+            };
+            ctx.append_error(step_name.line_number, code);
+        }
+        if let Some(requirment_name) = ctx.requirement_name.first() {
+            let code = RoswaalCompilationErrorCode::NoRequirementStep {
+                requirement_name: requirment_name.name.clone(),
+                requirement_description: requirment_name.description.clone()
+            };
+            ctx.append_error(requirment_name.line_number, code);
+        }
+        ctx.test()
     }
 }
 
@@ -158,7 +223,7 @@ impl RoswaalCompile for RoswaalTest {
 mod compiler_tests {
     use std::str::FromStr;
 
-    use crate::language::location::RoswaalLocationName;
+    use crate::language::{location::RoswaalLocationName, test::RoswaalTestCommand};
 
     use super::*;
 
@@ -379,7 +444,8 @@ Step 1: Jump in the air
         let error = RoswaalCompilationError {
             line_number: 2,
             code: RoswaalCompilationErrorCode::NoStepRequirement {
-                step_name: "Step 1".to_string()
+                step_name: "Step 1".to_string(),
+                step_description: "Jump in the air".to_string()
             }
         };
         assert_contains_compile_error(&result, &error);
@@ -395,10 +461,31 @@ Requirement 1: Jump in the air
         let error = RoswaalCompilationError {
             line_number: 2,
             code: RoswaalCompilationErrorCode::NoRequirementStep {
-                requirement_name: "Requirement 1".to_string()
+                requirement_name: "Requirement 1".to_string(),
+                requirement_description: "Jump in the air".to_string()
             }
         };
         assert_contains_compile_error(&result, &error);
+    }
+
+    #[test]
+    fn test_parse_returns_test_with_single_step() {
+        let test = "\
+New Test: Piccolo fights cyborgs
+Step 1: Piccolo can use special-beam-cannon
+Requirement 1: Have Piccolo charge his special-beam-cannon
+";
+        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty()).unwrap();
+        let expected_test = RoswaalTest::new(
+            "Piccolo fights cyborgs".to_string(),
+            vec![
+                RoswaalTestCommand::Step {
+                    name: "Piccolo can use special-beam-cannon".to_string(),
+                    requirement: "Have Piccolo charge his special-beam-cannon".to_string()
+                }
+            ]
+        );
+        assert_eq!(result, expected_test)
     }
 
     fn assert_contains_compile_error(
