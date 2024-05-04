@@ -11,6 +11,8 @@ pub enum RoswaalCompilationErrorCode {
     NoTestName,
     NoTestSteps,
     NoCommandDescription { command_name: String },
+    NoStepRequirement { step_name: String },
+    NoRequirementStep { requirement_name: String },
     InvalidLocationName(String),
     InvalidCommandName(String),
     DuplicateTestName(String),
@@ -119,6 +121,18 @@ impl RoswaalCompile for RoswaalTest {
                                 name.to_string()
                             );
                             ctx.append_error(line_number, code);
+                        },
+                        RoswaalTestSyntaxCommand::Step => {
+                          let code = RoswaalCompilationErrorCode::NoStepRequirement {
+                              step_name: name.to_string()
+                          };
+                          ctx.append_error(line_number, code);
+                        },
+                        RoswaalTestSyntaxCommand::Requirement => {
+                          let code = RoswaalCompilationErrorCode::NoRequirementStep {
+                              requirement_name: name.to_string()
+                          };
+                          ctx.append_error(line_number, code);
                         },
                         _ => {}
                     }
@@ -351,6 +365,38 @@ Set Location: world
         let error = RoswaalCompilationError {
             line_number: 2,
             code: RoswaalCompilationErrorCode::InvalidLocationName("world".to_string())
+        };
+        assert_contains_compile_error(&result, &error);
+    }
+
+    #[test]
+    fn test_parse_returns_no_step_requirement_when_step_does_not_have_requirement() {
+        let test = "\
+New Test: I am a test
+Step 1: Jump in the air
+";
+        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty());
+        let error = RoswaalCompilationError {
+            line_number: 2,
+            code: RoswaalCompilationErrorCode::NoStepRequirement {
+                step_name: "Step 1".to_string()
+            }
+        };
+        assert_contains_compile_error(&result, &error);
+    }
+
+    #[test]
+    fn test_parse_returns_no_requirement_step_when_requirement_does_not_have_step() {
+        let test = "\
+New Test: I am a test
+Requirement 1: Jump in the air
+";
+        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty());
+        let error = RoswaalCompilationError {
+            line_number: 2,
+            code: RoswaalCompilationErrorCode::NoRequirementStep {
+                requirement_name: "Requirement 1".to_string()
+            }
         };
         assert_contains_compile_error(&result, &error);
     }
