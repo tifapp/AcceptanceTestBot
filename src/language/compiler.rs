@@ -16,6 +16,7 @@ pub enum RoswaalCompilationErrorCode {
     DuplicateTestName(String),
     TestNameAlreadyDeclared
 }
+
 pub struct RoswaalCompileContext {
     location_names: Vec<RoswaalLocationName>,
     test_names: Vec<String>
@@ -31,6 +32,41 @@ impl RoswaalCompileContext {
         test_names: Vec<String>
     ) -> Self {
         Self { location_names, test_names }
+    }
+}
+
+struct CompileContext {
+    location_names: Vec<RoswaalLocationName>,
+    test_names: Vec<String>,
+    errors: Vec<RoswaalCompilationError>,
+    test_name: Option<String>
+}
+
+impl CompileContext {
+    fn new(ctx: RoswaalCompileContext) -> Self {
+        CompileContext {
+            location_names: ctx.location_names,
+            test_names: ctx.test_names,
+            errors: vec![],
+            test_name: None
+        }
+    }
+}
+
+impl CompileContext {
+    fn append_error(&mut self, line_number: u32, code: RoswaalCompilationErrorCode) {
+        self.errors.push(RoswaalCompilationError { line_number, code })
+    }
+
+    fn try_set_test_name(&mut self, line_number: u32, name: &str) {
+        let name = name.to_string();
+        if self.test_names.contains(&name) {
+            self.append_error(line_number, RoswaalCompilationErrorCode::DuplicateTestName(name));
+        } else if self.test_name.is_some() {
+            self.append_error(line_number, RoswaalCompilationErrorCode::TestNameAlreadyDeclared);
+        } else {
+            self.test_name = Some(name);
+        }
     }
 }
 
@@ -54,90 +90,53 @@ impl RoswaalCompile for RoswaalTest {
         syntax: RoswaalTestSyntax,
         ctx: RoswaalCompileContext
     ) -> Result<Self, Vec<RoswaalCompilationError>> {
-        let mut errors: Vec<RoswaalCompilationError> = Vec::new();
-        let mut has_test_line = false;
+        let mut ctx = CompileContext::new(ctx);
         for line in syntax.lines() {
             let line_number = line.line_number();
             match line.content() {
                 RoswaalTestSyntaxLineContent::Command { name, description, command } => {
                     if description.is_empty() {
-                        let error = RoswaalCompilationError {
-                            line_number,
-                            code: RoswaalCompilationErrorCode::NoCommandDescription {
-                                command_name: name.to_string()
-                            }
+                        let code = RoswaalCompilationErrorCode::NoCommandDescription {
+                            command_name: name.to_string()
                         };
-                        errors.push(error);
+                        ctx.append_error(line_number, code);
                         continue
                     }
                     match command {
                         RoswaalTestSyntaxCommand::NewTest => {
-                            has_test_line = true;
-                            if ctx.test_names.contains(&description.to_string()) {
-                                let error = RoswaalCompilationError {
-                                    line_number,
-                                    code: RoswaalCompilationErrorCode::DuplicateTestName(
-                                        description.to_string()
-                                    )
-                                };
-                                errors.push(error);
-                            }
-                            if has_test_line {
-                                let error = RoswaalCompilationError {
-                                    line_number,
-                                    code: RoswaalCompilationErrorCode::TestNameAlreadyDeclared
-                                };
-                                errors.push(error);
-                            }
+                            ctx.try_set_test_name(line_number, description);
                         },
                         RoswaalTestSyntaxCommand::SetLocation { parse_result } => {
                             if let Some(location_name) = parse_result.as_ref().ok() {
-                                let error = RoswaalCompilationError {
-                                    line_number,
-                                    code: RoswaalCompilationErrorCode::InvalidLocationName(
-                                        location_name.name().to_string()
-                                    )
-                                };
-                                errors.push(error)
+                                let code =  RoswaalCompilationErrorCode::InvalidLocationName(
+                                    location_name.name().to_string()
+                                );
+                                ctx.append_error(line_number, code);
                             }
                         },
                         RoswaalTestSyntaxCommand::UnknownCommand => {
-                            let error = RoswaalCompilationError {
-                                line_number,
-                                code: RoswaalCompilationErrorCode::InvalidCommandName(
-                                    name.to_string()
-                                )
-                            };
-                            errors.push(error)
+                            let code = RoswaalCompilationErrorCode::InvalidCommandName(
+                                name.to_string()
+                            );
+                            ctx.append_error(line_number, code);
                         },
                         _ => {}
                     }
                 }
                 RoswaalTestSyntaxLineContent::Unknown(content) => {
-                    let error = RoswaalCompilationError {
-                        line_number,
-                        code: RoswaalCompilationErrorCode::InvalidCommandName(
-                            content.to_string()
-                        )
-                    };
-                    errors.push(error)
+                    let code = RoswaalCompilationErrorCode::InvalidCommandName(
+                        content.to_string()
+                    );
+                    ctx.append_error(line_number, code);
                 }
             }
         }
-        if !has_test_line {
-            let error = RoswaalCompilationError {
-                line_number: syntax.last_line_number(),
-                code: RoswaalCompilationErrorCode::NoTestName
-            };
-            errors.push(error)
+        if ctx.test_name.is_none() {
+            ctx.append_error(syntax.last_line_number(), RoswaalCompilationErrorCode::NoTestName);
         } else {
-            let error = RoswaalCompilationError {
-                line_number: syntax.last_line_number(),
-                code: RoswaalCompilationErrorCode::NoTestSteps
-            };
-            errors.push(error);
+            ctx.append_error(syntax.last_line_number(), RoswaalCompilationErrorCode::NoTestSteps);
         }
-        Err(errors)
+        Err(ctx.errors)
     }
 }
 
