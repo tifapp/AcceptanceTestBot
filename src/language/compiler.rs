@@ -39,110 +39,6 @@ impl RoswaalCompileContext {
     }
 }
 
-struct CommandInfo {
-    line_number: u32,
-    name: String,
-    description: String
-}
-
-trait AppendCompililationError {
-    fn append_error(&mut self, line_number: u32, code: RoswaalCompilationErrorCode);
-}
-
-impl AppendCompililationError for Vec<RoswaalCompilationError> {
-    fn append_error(&mut self, line_number: u32, code: RoswaalCompilationErrorCode) {
-        self.push(RoswaalCompilationError { line_number, code })
-    }
-}
-
-struct CompileContext {
-    location_names: Vec<RoswaalLocationName>,
-    test_names: Vec<String>,
-    errors: Vec<RoswaalCompilationError>,
-    test_name: Option<String>,
-    unmatched_steps: HashMap<String, CommandInfo>,
-    unmatched_requirements: HashMap<String, CommandInfo>,
-    commands: Vec<RoswaalTestCommand>
-}
-
-impl CompileContext {
-    fn new(ctx: RoswaalCompileContext) -> Self {
-        CompileContext {
-            location_names: ctx.location_names,
-            test_names: ctx.test_names,
-            errors: vec![],
-            test_name: None,
-            unmatched_steps: HashMap::new(),
-            unmatched_requirements: HashMap::new(),
-            commands: vec![]
-        }
-    }
-}
-
-impl CompileContext {
-    fn append_error(&mut self, line_number: u32, code: RoswaalCompilationErrorCode) {
-        self.errors.append_error(line_number, code)
-    }
-
-    fn try_set_test_name(&mut self, line_number: u32, name: &str) {
-        let name = name.to_string();
-        if self.test_names.contains(&name) {
-            self.append_error(line_number, RoswaalCompilationErrorCode::DuplicateTestName(name));
-        } else if self.test_name.is_some() {
-            self.append_error(line_number, RoswaalCompilationErrorCode::TestNameAlreadyDeclared);
-        } else {
-            self.test_name = Some(name);
-        }
-    }
-
-    fn append_step(&mut self, line_number: u32, name: &str, description: &str, label: &str) {
-        let label_key = label.to_string();
-        if let Some(requirement_name) = self.unmatched_requirements.remove(&label_key) {
-            let command = RoswaalTestCommand::Step {
-                name: description.to_string(),
-                requirement: requirement_name.description
-            };
-            self.commands.push(command);
-        } else {
-            let info = CommandInfo {
-                line_number,
-                name: name.to_string(),
-                description: description.to_string()
-            };
-            self.unmatched_steps.insert(label_key, info);
-        }
-    }
-
-    fn append_requirment(&mut self, line_number: u32, name: &str, description: &str, label: &str) {
-        let label_key = label.to_string();
-        if let Some(step_name) = self.unmatched_steps.remove(&label_key) {
-            let command = RoswaalTestCommand::Step {
-                name: step_name.description,
-                requirement: description.to_string()
-            };
-            self.commands.push(command)
-        } else {
-            let info = CommandInfo {
-                line_number,
-                name: name.to_string(),
-                description: description.to_string()
-            };
-            self.unmatched_requirements.insert(label_key, info);
-        }
-    }
-
-    fn finalize<'a>(self) -> Result<RoswaalTest, Vec<RoswaalCompilationError>> {
-        let test_name = match self.test_name {
-            Some(name) => name,
-            _ => return Err(self.errors)
-        };
-        if !self.errors.is_empty() {
-            return Err(self.errors)
-        }
-        return Ok(RoswaalTest::new(test_name, self.commands));
-    }
-}
-
 /// A trait for self-initializing by compiling roswaal test syntax.
 pub trait RoswaalCompile: Sized {
     fn compile_syntax(
@@ -233,6 +129,116 @@ impl RoswaalCompile for RoswaalTest {
 
         ctx.errors.append(&mut errors);
         ctx.finalize()
+    }
+}
+
+struct CommandInfo {
+    line_number: u32,
+    name: String,
+    description: String
+}
+
+trait AppendCompililationError {
+    fn append_error(&mut self, line_number: u32, code: RoswaalCompilationErrorCode);
+}
+
+impl AppendCompililationError for Vec<RoswaalCompilationError> {
+    fn append_error(&mut self, line_number: u32, code: RoswaalCompilationErrorCode) {
+        self.push(RoswaalCompilationError { line_number, code })
+    }
+}
+
+struct CompiledCommand {
+    line_number: u32,
+    command: RoswaalTestCommand
+}
+
+struct CompileContext {
+    location_names: Vec<RoswaalLocationName>,
+    test_names: Vec<String>,
+    errors: Vec<RoswaalCompilationError>,
+    test_name: Option<String>,
+    unmatched_steps: HashMap<String, CommandInfo>,
+    unmatched_requirements: HashMap<String, CommandInfo>,
+    commands: Vec<CompiledCommand>
+}
+
+impl CompileContext {
+    fn new(ctx: RoswaalCompileContext) -> Self {
+        CompileContext {
+            location_names: ctx.location_names,
+            test_names: ctx.test_names,
+            errors: vec![],
+            test_name: None,
+            unmatched_steps: HashMap::new(),
+            unmatched_requirements: HashMap::new(),
+            commands: vec![]
+        }
+    }
+}
+
+impl CompileContext {
+    fn append_error(&mut self, line_number: u32, code: RoswaalCompilationErrorCode) {
+        self.errors.append_error(line_number, code)
+    }
+
+    fn try_set_test_name(&mut self, line_number: u32, name: &str) {
+        let name = name.to_string();
+        if self.test_names.contains(&name) {
+            self.append_error(line_number, RoswaalCompilationErrorCode::DuplicateTestName(name));
+        } else if self.test_name.is_some() {
+            self.append_error(line_number, RoswaalCompilationErrorCode::TestNameAlreadyDeclared);
+        } else {
+            self.test_name = Some(name);
+        }
+    }
+
+    fn append_step(&mut self, line_number: u32, name: &str, description: &str, label: &str) {
+        let label_key = label.to_string();
+        if let Some(requirement_name) = self.unmatched_requirements.remove(&label_key) {
+            let command = RoswaalTestCommand::Step {
+                name: description.to_string(),
+                requirement: requirement_name.description
+            };
+            self.commands.push(CompiledCommand { line_number, command });
+        } else {
+            let info = CommandInfo {
+                line_number,
+                name: name.to_string(),
+                description: description.to_string()
+            };
+            self.unmatched_steps.insert(label_key, info);
+        }
+    }
+
+    fn append_requirment(&mut self, line_number: u32, name: &str, description: &str, label: &str) {
+        let label_key = label.to_string();
+        if let Some(step_name) = self.unmatched_steps.remove(&label_key) {
+            let command = RoswaalTestCommand::Step {
+                name: step_name.description,
+                requirement: description.to_string()
+            };
+            self.commands.push(CompiledCommand { line_number, command });
+        } else {
+            let info = CommandInfo {
+                line_number,
+                name: name.to_string(),
+                description: description.to_string()
+            };
+            self.unmatched_requirements.insert(label_key, info);
+        }
+    }
+
+    fn finalize<'a>(mut self) -> Result<RoswaalTest, Vec<RoswaalCompilationError>> {
+        let test_name = match self.test_name {
+            Some(name) => name,
+            _ => return Err(self.errors)
+        };
+        if !self.errors.is_empty() {
+            return Err(self.errors)
+        }
+        self.commands.sort_by(|a, b| b.line_number.cmp(&a.line_number));
+        return Ok(RoswaalTest::new(test_name, self.commands.iter().map(|c| c.command.clone()).collect()))
     }
 }
 
@@ -578,6 +584,32 @@ Requirement 1: Have Piccolo charge his special-beam-cannon
                 RoswaalTestCommand::Step {
                     name: "Piccolo can use special-beam-cannon".to_string(),
                     requirement: "Have Piccolo charge his special-beam-cannon".to_string()
+                }
+            ]
+        );
+        assert_eq!(result, expected_test)
+    }
+
+    #[test]
+    fn test_parse_returns_test_with_single_step_and_out_of_order_requirements() {
+        let test = "\
+New Test: I'm Insane, From Earth
+Step 1: He means Saiyan
+Step 2: I'm gonna deck you in the shnaz
+Requirement 2: What???
+Requirement 1: Have the guy dying on the floor clarify that the other guy means Saiyan
+";
+        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty()).unwrap();
+        let expected_test = RoswaalTest::new(
+            "I'm Insane, From Earth".to_string(),
+            vec![
+                RoswaalTestCommand::Step {
+                    name: "He means Saiyan".to_string(),
+                    requirement: "Have the guy dying on the floor clarify that the other guy means Saiyan".to_string()
+                },
+                RoswaalTestCommand::Step {
+                    name: "I'm gonna deck you in the shnaz".to_string(),
+                    requirement: "What???".to_string()
                 }
             ]
         );

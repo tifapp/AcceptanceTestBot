@@ -12,7 +12,7 @@ impl RoswaalTest {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum RoswaalTestCommand {
     Step { name: String, requirement: String },
     SetLocation { location_name: RoswaalLocationName }
