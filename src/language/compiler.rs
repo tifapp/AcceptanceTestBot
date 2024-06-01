@@ -45,6 +45,16 @@ struct CommandInfo {
     description: String
 }
 
+trait AppendCompililationError {
+    fn append_error(&mut self, line_number: u32, code: RoswaalCompilationErrorCode);
+}
+
+impl AppendCompililationError for Vec<RoswaalCompilationError> {
+    fn append_error(&mut self, line_number: u32, code: RoswaalCompilationErrorCode) {
+        self.push(RoswaalCompilationError { line_number, code })
+    }
+}
+
 struct CompileContext {
     location_names: Vec<RoswaalLocationName>,
     test_names: Vec<String>,
@@ -71,7 +81,7 @@ impl CompileContext {
 
 impl CompileContext {
     fn append_error(&mut self, line_number: u32, code: RoswaalCompilationErrorCode) {
-        self.errors.push(RoswaalCompilationError { line_number, code })
+        self.errors.append_error(line_number, code)
     }
 
     fn try_set_test_name(&mut self, line_number: u32, name: &str) {
@@ -121,7 +131,7 @@ impl CompileContext {
         }
     }
 
-    fn test(self) -> Result<RoswaalTest, Vec<RoswaalCompilationError>> {
+    fn finalize<'a>(self) -> Result<RoswaalTest, Vec<RoswaalCompilationError>> {
         let test_name = match self.test_name {
             Some(name) => name,
             _ => return Err(self.errors)
@@ -205,21 +215,24 @@ impl RoswaalCompile for RoswaalTest {
         } else if ctx.commands.is_empty() {
             ctx.append_error(syntax.last_line_number(), RoswaalCompilationErrorCode::NoTestSteps);
         }
-        if let Some(step_name) = ctx.unmatched_steps.values().next() {
+        let mut errors = Vec::new();
+        for step_info in ctx.unmatched_steps.values() {
             let code = RoswaalCompilationErrorCode::NoStepRequirement {
-                step_name: step_name.name.clone(),
-                step_description: step_name.description.clone()
+                step_name: step_info.name.clone(),
+                step_description: step_info.description.clone()
             };
-            ctx.append_error(step_name.line_number, code);
+            errors.append_error(step_info.line_number, code);
         }
-        if let Some(requirment_name) = ctx.unmatched_requirements.values().next() {
+        for requirement_info in ctx.unmatched_requirements.values() {
             let code = RoswaalCompilationErrorCode::NoRequirementStep {
-                requirement_name: requirment_name.name.clone(),
-                requirement_description: requirment_name.description.clone()
+                requirement_name: requirement_info.name.clone(),
+                requirement_description: requirement_info.description.clone()
             };
-            ctx.append_error(requirment_name.line_number, code);
+            errors.push(RoswaalCompilationError { line_number: requirement_info.line_number, code })
         }
-        ctx.test()
+
+        ctx.errors.append(&mut errors);
+        ctx.finalize()
     }
 }
 
@@ -509,6 +522,49 @@ Requirement A: Jump in the air
     }
 
     #[test]
+    fn test_parse_returns_multiple_non_matching_step_and_requirement_errors() {
+        let test = "\
+New Test: I am a test
+Step 1: I am blob
+Step 2: I am blob Jr.
+Requirement A: Jump in the air
+Requirement B: And summon Shenron
+";
+        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty());
+        let errors = vec![
+            RoswaalCompilationError {
+                line_number: 2,
+                code: RoswaalCompilationErrorCode::NoStepRequirement {
+                    step_name: "Step 1".to_string(),
+                    step_description: "I am blob".to_string()
+                }
+            },
+            RoswaalCompilationError {
+                line_number: 3,
+                code: RoswaalCompilationErrorCode::NoStepRequirement {
+                    step_name: "Step 2".to_string(),
+                    step_description: "I am blob Jr.".to_string()
+                }
+            },
+            RoswaalCompilationError {
+                line_number: 4,
+                code: RoswaalCompilationErrorCode::NoRequirementStep {
+                    requirement_name: "Requirement A".to_string(),
+                    requirement_description: "Jump in the air".to_string()
+                }
+            },
+            RoswaalCompilationError {
+                line_number: 5,
+                code: RoswaalCompilationErrorCode::NoRequirementStep {
+                    requirement_name: "Requirement B".to_string(),
+                    requirement_description: "And summon Shenron".to_string()
+                }
+            },
+        ];
+        assert_contains_compile_errors(&result, &errors);
+    }
+
+    #[test]
     fn test_parse_returns_test_with_single_step() {
         let test = "\
 New Test: Piccolo fights cyborgs
@@ -533,6 +589,15 @@ Requirement 1: Have Piccolo charge his special-beam-cannon
         error: &RoswaalCompilationError
     ) {
         assert!(result.as_ref().err().unwrap().contains(error))
+    }
+
+    fn assert_contains_compile_errors(
+        result: &Result<RoswaalTest, Vec<RoswaalCompilationError>>,
+        errors: &Vec<RoswaalCompilationError>
+    ) {
+        for error in errors {
+            assert_contains_compile_error(result, &error)
+        }
     }
 
     fn assert_not_contains_compile_error(
