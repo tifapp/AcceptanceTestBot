@@ -3,9 +3,7 @@ use std::str::FromStr;
 use once_cell::sync::Lazy;
 use regex::{Regex, RegexBuilder};
 
-use super::{
-    location::{RoswaalLocationName, RoswaalLocationParsingResult}
-};
+use super::location::{RoswaalLocationName, RoswaalLocationParsingResult};
 
 /// A token of roswaal test syntax.
 ///
@@ -38,23 +36,6 @@ static KNOWN_COMMANDS_REGEX: Lazy<Regex> = Lazy::new(|| {
 
 impl <'a> RoswaalTestSyntaxCommand<'a> {
     fn new(name: &'a str, description: &'a str) -> Self {
-        // let normalized_command = name.roswaal_normalize();
-        // let description = description.trim();
-        // if normalized_command.starts_with("step") {
-        //     return Self::Step
-        // } else if normalized_command.starts_with("setlocation") {
-        //     return Self::SetLocation {
-        //         parse_result: RoswaalLocationName::from_str(description)
-        //     }
-        // } else if normalized_command.starts_with("newtest") {
-        //     return Self::NewTest
-        // } else if normalized_command.starts_with("requirement") {
-        //     return Self::Requirement
-        // } else if normalized_command.starts_with("abstract") {
-        //     return Self::Abstract
-        // } else {
-        //     return Self::UnknownCommand
-        // }
         let captures = match KNOWN_COMMANDS_REGEX.captures(name) {
             Some(c) => c,
             None => return RoswaalTestSyntaxCommand::UnknownCommand

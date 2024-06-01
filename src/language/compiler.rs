@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::{ast::{RoswaalTestSyntax, RoswaalTestSyntaxCommand, RoswaalTestSyntaxLineContent}, location::RoswaalLocationName, test::{RoswaalTest, RoswaalTestCommand}};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -48,9 +50,9 @@ struct CompileContext {
     test_names: Vec<String>,
     errors: Vec<RoswaalCompilationError>,
     test_name: Option<String>,
-    step_name: Vec<CommandInfo>,
-    requirement_name: Vec<CommandInfo>,
-    commnands: Vec<RoswaalTestCommand>
+    unmatched_steps: HashMap<String, CommandInfo>,
+    unmatched_requirements: HashMap<String, CommandInfo>,
+    commands: Vec<RoswaalTestCommand>
 }
 
 impl CompileContext {
@@ -60,9 +62,9 @@ impl CompileContext {
             test_names: ctx.test_names,
             errors: vec![],
             test_name: None,
-            step_name: vec![],
-            requirement_name: vec![],
-            commnands: vec![]
+            unmatched_steps: HashMap::new(),
+            unmatched_requirements: HashMap::new(),
+            commands: vec![]
         }
     }
 }
@@ -83,37 +85,39 @@ impl CompileContext {
         }
     }
 
-    fn append_step(&mut self, line_number: u32, name: &str, description: &str) {
-        if let Some(requirement_name) = self.requirement_name.pop() {
+    fn append_step(&mut self, line_number: u32, name: &str, description: &str, label: &str) {
+        let label_key = label.to_string();
+        if let Some(requirement_name) = self.unmatched_requirements.remove(&label_key) {
             let command = RoswaalTestCommand::Step {
                 name: description.to_string(),
                 requirement: requirement_name.description
             };
-            self.commnands.push(command)
+            self.commands.push(command);
         } else {
             let info = CommandInfo {
                 line_number,
                 name: name.to_string(),
                 description: description.to_string()
             };
-            self.step_name.push(info);
+            self.unmatched_steps.insert(label_key, info);
         }
     }
 
-    fn append_requirment(&mut self, line_number: u32, name: &str, description: &str) {
-        if let Some(step_name) = self.step_name.pop() {
+    fn append_requirment(&mut self, line_number: u32, name: &str, description: &str, label: &str) {
+        let label_key = label.to_string();
+        if let Some(step_name) = self.unmatched_steps.remove(&label_key) {
             let command = RoswaalTestCommand::Step {
                 name: step_name.description,
                 requirement: description.to_string()
             };
-            self.commnands.push(command)
+            self.commands.push(command)
         } else {
             let info = CommandInfo {
                 line_number,
                 name: name.to_string(),
                 description: description.to_string()
             };
-            self.requirement_name.push(info);
+            self.unmatched_requirements.insert(label_key, info);
         }
     }
 
@@ -125,7 +129,7 @@ impl CompileContext {
         if !self.errors.is_empty() {
             return Err(self.errors)
         }
-        return Ok(RoswaalTest::new(test_name, self.commnands));
+        return Ok(RoswaalTest::new(test_name, self.commands));
     }
 }
 
@@ -179,11 +183,11 @@ impl RoswaalCompile for RoswaalTest {
                             );
                             ctx.append_error(line_number, code);
                         },
-                        RoswaalTestSyntaxCommand::Step { label: _ } => {
-                            ctx.append_step(line_number, name, description);
+                        RoswaalTestSyntaxCommand::Step { label } => {
+                            ctx.append_step(line_number, name, description, label);
                         },
-                        RoswaalTestSyntaxCommand::Requirement { label: _ } => {
-                            ctx.append_requirment(line_number, name, description);
+                        RoswaalTestSyntaxCommand::Requirement { label } => {
+                            ctx.append_requirment(line_number, name, description, label);
                         },
                         _ => {}
                     }
@@ -198,17 +202,17 @@ impl RoswaalCompile for RoswaalTest {
         }
         if ctx.test_name.is_none() {
             ctx.append_error(syntax.last_line_number(), RoswaalCompilationErrorCode::NoTestName);
-        } else if ctx.commnands.is_empty() {
+        } else if ctx.commands.is_empty() {
             ctx.append_error(syntax.last_line_number(), RoswaalCompilationErrorCode::NoTestSteps);
         }
-        if let Some(step_name) = ctx.step_name.first() {
+        if let Some(step_name) = ctx.unmatched_steps.values().next() {
             let code = RoswaalCompilationErrorCode::NoStepRequirement {
                 step_name: step_name.name.clone(),
                 step_description: step_name.description.clone()
             };
             ctx.append_error(step_name.line_number, code);
         }
-        if let Some(requirment_name) = ctx.requirement_name.first() {
+        if let Some(requirment_name) = ctx.unmatched_requirements.values().next() {
             let code = RoswaalCompilationErrorCode::NoRequirementStep {
                 requirement_name: requirment_name.name.clone(),
                 requirement_description: requirment_name.description.clone()
@@ -463,6 +467,42 @@ Requirement 1: Jump in the air
             code: RoswaalCompilationErrorCode::NoRequirementStep {
                 requirement_name: "Requirement 1".to_string(),
                 requirement_description: "Jump in the air".to_string()
+            }
+        };
+        assert_contains_compile_error(&result, &error);
+    }
+
+    #[test]
+    fn test_parse_returns_no_requirement_step_when_requirement_label_does_not_have_matching_requirement() {
+        let test = "\
+New Test: I am a test
+Step 1: I am blob
+Requirement A: Jump in the air
+";
+        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty());
+        let error = RoswaalCompilationError {
+            line_number: 3,
+            code: RoswaalCompilationErrorCode::NoRequirementStep {
+                requirement_name: "Requirement A".to_string(),
+                requirement_description: "Jump in the air".to_string()
+            }
+        };
+        assert_contains_compile_error(&result, &error);
+    }
+
+    #[test]
+    fn test_parse_returns_no_step_requirement_when_step_label_does_not_have_matching_requirement() {
+        let test = "\
+New Test: I am a test
+Step 1: I am blob
+Requirement A: Jump in the air
+";
+        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty());
+        let error = RoswaalCompilationError {
+            line_number: 2,
+            code: RoswaalCompilationErrorCode::NoStepRequirement {
+                step_name: "Step 1".to_string(),
+                step_description: "I am blob".to_string()
             }
         };
         assert_contains_compile_error(&result, &error);
