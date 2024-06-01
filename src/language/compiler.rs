@@ -179,10 +179,10 @@ impl RoswaalCompile for RoswaalTest {
                             );
                             ctx.append_error(line_number, code);
                         },
-                        RoswaalTestSyntaxCommand::Step => {
+                        RoswaalTestSyntaxCommand::Step { label: _ } => {
                             ctx.append_step(line_number, name, description);
                         },
-                        RoswaalTestSyntaxCommand::Requirement => {
+                        RoswaalTestSyntaxCommand::Requirement { label: _ } => {
                             ctx.append_requirment(line_number, name, description);
                         },
                         _ => {}
