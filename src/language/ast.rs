@@ -175,7 +175,7 @@ mod ast_tests {
 
     #[cfg(test)]
     mod token_tests {
-        use std::{process::Command, str::FromStr};
+        use std::str::FromStr;
 
         use crate::language::location::RoswaalLocationNameParsingError;
 

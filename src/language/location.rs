@@ -45,8 +45,8 @@ impl RoswaalLocationName {
     /// let name = RoswaalLocationName::from_str("hello world").unwrap();
     /// assert!(name.matches("  Hello  World  "))
     /// ```
-    pub fn matches(&self, str: &str) -> bool {
-        self.name().roswaal_normalize() == str.roswaal_normalize()
+    pub fn matches(&self, other: &Self) -> bool {
+        self.name().roswaal_normalize() == other.name().roswaal_normalize()
     }
 }
 
@@ -67,26 +67,20 @@ mod roswaal_location_tests {
     }
 
     #[test]
-    fn test_matches_returns_false_when_empty_string() {
-        let name = RoswaalLocationName::from_str("hello world").unwrap();
-        assert!(!name.matches(""))
-    }
-
-    #[test]
     fn test_matches_returns_true_when_exact_same_name() {
         let name = RoswaalLocationName::from_str("hello world").unwrap();
-        assert!(name.matches("hello world"))
+        assert!(name.matches(&"hello world".parse().unwrap()))
     }
 
     #[test]
     fn test_matches_returns_true_when_same_name_but_uppercased() {
         let name = RoswaalLocationName::from_str("hello world").unwrap();
-        assert!(name.matches("Hello World"))
+        assert!(name.matches(&"Hello World".parse().unwrap()))
     }
 
     #[test]
     fn test_matches_returns_true_when_same_name_but_different_white_spacing_and_uppercased() {
         let name = RoswaalLocationName::from_str("hello world").unwrap();
-        assert!(name.matches("\t  Hello   World\t  "))
+        assert!(name.matches(&"\t  Hello   World\t  ".parse().unwrap()))
     }
 }

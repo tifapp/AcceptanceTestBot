@@ -77,10 +77,7 @@ impl RoswaalCompile for RoswaalTest {
                         },
                         RoswaalTestSyntaxCommand::SetLocation { parse_result } => {
                             if let Some(location_name) = parse_result.as_ref().ok() {
-                                let code =  RoswaalCompilationErrorCode::InvalidLocationName(
-                                    location_name.name().to_string()
-                                );
-                                ctx.append_error(line_number, code);
+                                ctx.append_set_location(line_number, location_name.clone());
                             }
                         },
                         RoswaalTestSyntaxCommand::UnknownCommand => {
@@ -180,6 +177,21 @@ impl PrivateCompileContext {
 }
 
 impl PrivateCompileContext {
+    fn append_set_location(&mut self, line_number: u32, location_name: RoswaalLocationName) {
+        if !self.location_names.iter().any(|name| name.matches(&location_name)) {
+            self.append_error(
+                line_number,
+                RoswaalCompilationErrorCode::InvalidLocationName(location_name.name().to_string())
+            )
+        } else {
+            let command = CompiledCommand {
+                line_number,
+                command: RoswaalTestCommand::SetLocation { location_name }
+            };
+            self.commands.push(command);
+        }
+    }
+
     fn append_error(&mut self, line_number: u32, code: RoswaalCompilationErrorCode) {
         self.errors.append_error(line_number, code)
     }
@@ -664,6 +676,37 @@ Requirement 1: Have the guy dying on the floor clarify that the other guy means 
                 RoswaalTestCommand::Step {
                     name: "I'm gonna deck you in the shnaz".to_string(),
                     requirement: "What???".to_string()
+                }
+            ]
+        );
+        assert_eq!(result, expected_test)
+    }
+
+    #[test]
+    fn test_parse_returns_test_with_multiple_steps_and_location_commands() {
+        let test = "\
+New Test: I'm Insane, From New York
+Requirement 2: NAAAAHHHH
+Step 1: Why didn't you block that
+Set Location: New York
+Step 2: I thought you had it
+Requirement 1: Have the guy dying on the floor ask why he didn't block that
+";
+        let result = RoswaalTest::compile(
+            test,
+            RoswaalCompileContext::new(vec!["new york".parse().unwrap()], vec![])
+        ).unwrap();
+        let expected_test = RoswaalTest::new(
+            "I'm Insane, From New York".to_string(),
+            vec![
+                RoswaalTestCommand::Step {
+                    name: "Why didn't you block that".to_string(),
+                    requirement: "Have the guy dying on the floor ask why he didn't block that".to_string()
+                },
+                RoswaalTestCommand::SetLocation { location_name: "New York".parse().unwrap() },
+                RoswaalTestCommand::Step {
+                    name: "I thought you had it".to_string(),
+                    requirement: "NAAAAHHHH".to_string()
                 }
             ]
         );
