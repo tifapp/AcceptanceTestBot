@@ -59,7 +59,7 @@ impl RoswaalCompile for RoswaalTest {
         syntax: RoswaalTestSyntax,
         ctx: RoswaalCompileContext
     ) -> Result<Self, Vec<RoswaalCompilationError>> {
-        let mut ctx = CompileContext::new(ctx);
+        let mut ctx = PrivateCompileContext::new(ctx);
         for line in syntax.lines() {
             let line_number = line.line_number();
             match line.content() {
@@ -132,6 +132,7 @@ impl RoswaalCompile for RoswaalTest {
     }
 }
 
+#[derive(Debug)]
 struct CommandInfo {
     line_number: u32,
     name: String,
@@ -148,12 +149,13 @@ impl AppendCompililationError for Vec<RoswaalCompilationError> {
     }
 }
 
+#[derive(Debug)]
 struct CompiledCommand {
     line_number: u32,
     command: RoswaalTestCommand
 }
 
-struct CompileContext {
+struct PrivateCompileContext {
     location_names: Vec<RoswaalLocationName>,
     test_names: Vec<String>,
     errors: Vec<RoswaalCompilationError>,
@@ -163,9 +165,9 @@ struct CompileContext {
     commands: Vec<CompiledCommand>
 }
 
-impl CompileContext {
+impl PrivateCompileContext {
     fn new(ctx: RoswaalCompileContext) -> Self {
-        CompileContext {
+        PrivateCompileContext {
             location_names: ctx.location_names,
             test_names: ctx.test_names,
             errors: vec![],
@@ -177,7 +179,7 @@ impl CompileContext {
     }
 }
 
-impl CompileContext {
+impl PrivateCompileContext {
     fn append_error(&mut self, line_number: u32, code: RoswaalCompilationErrorCode) {
         self.errors.append_error(line_number, code)
     }
@@ -195,10 +197,10 @@ impl CompileContext {
 
     fn append_step(&mut self, line_number: u32, name: &str, description: &str, label: &str) {
         let label_key = label.to_string();
-        if let Some(requirement_name) = self.unmatched_requirements.remove(&label_key) {
+        if let Some(requirement_info) = self.unmatched_requirements.remove(&label_key) {
             let command = RoswaalTestCommand::Step {
                 name: description.to_string(),
-                requirement: requirement_name.description
+                requirement: requirement_info.description
             };
             self.commands.push(CompiledCommand { line_number, command });
         } else {
@@ -213,12 +215,12 @@ impl CompileContext {
 
     fn append_requirment(&mut self, line_number: u32, name: &str, description: &str, label: &str) {
         let label_key = label.to_string();
-        if let Some(step_name) = self.unmatched_steps.remove(&label_key) {
+        if let Some(step_info) = self.unmatched_steps.remove(&label_key) {
             let command = RoswaalTestCommand::Step {
-                name: step_name.description,
+                name: step_info.description,
                 requirement: description.to_string()
             };
-            self.commands.push(CompiledCommand { line_number, command });
+            self.commands.push(CompiledCommand { line_number: step_info.line_number, command });
         } else {
             let info = CommandInfo {
                 line_number,
@@ -237,7 +239,7 @@ impl CompileContext {
         if !self.errors.is_empty() {
             return Err(self.errors)
         }
-        self.commands.sort_by(|a, b| b.line_number.cmp(&a.line_number));
+        self.commands.sort_by(|a, b| a.line_number.cmp(&b.line_number));
         return Ok(RoswaalTest::new(test_name, self.commands.iter().map(|c| c.command.clone()).collect()))
     }
 }
@@ -591,12 +593,64 @@ Requirement 1: Have Piccolo charge his special-beam-cannon
     }
 
     #[test]
-    fn test_parse_returns_test_with_single_step_and_out_of_order_requirements() {
+    fn test_parse_returns_test_with_multiple_steps() {
+        let test = "\
+New Test: I'm Insane, From Earth
+Step 1: He means Saiyan
+Requirement 1: Have the guy dying on the floor clarify that the other guy means Saiyan
+Step 2: I'm gonna deck you in the shnaz
+Requirement 2: What???
+";
+        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty()).unwrap();
+        let expected_test = RoswaalTest::new(
+            "I'm Insane, From Earth".to_string(),
+            vec![
+                RoswaalTestCommand::Step {
+                    name: "He means Saiyan".to_string(),
+                    requirement: "Have the guy dying on the floor clarify that the other guy means Saiyan".to_string()
+                },
+                RoswaalTestCommand::Step {
+                    name: "I'm gonna deck you in the shnaz".to_string(),
+                    requirement: "What???".to_string()
+                }
+            ]
+        );
+        assert_eq!(result, expected_test)
+    }
+
+    #[test]
+    fn test_parse_returns_test_with_multiple_steps_and_out_of_order_requirements() {
         let test = "\
 New Test: I'm Insane, From Earth
 Step 1: He means Saiyan
 Step 2: I'm gonna deck you in the shnaz
 Requirement 2: What???
+Requirement 1: Have the guy dying on the floor clarify that the other guy means Saiyan
+";
+        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty()).unwrap();
+        let expected_test = RoswaalTest::new(
+            "I'm Insane, From Earth".to_string(),
+            vec![
+                RoswaalTestCommand::Step {
+                    name: "He means Saiyan".to_string(),
+                    requirement: "Have the guy dying on the floor clarify that the other guy means Saiyan".to_string()
+                },
+                RoswaalTestCommand::Step {
+                    name: "I'm gonna deck you in the shnaz".to_string(),
+                    requirement: "What???".to_string()
+                }
+            ]
+        );
+        assert_eq!(result, expected_test)
+    }
+
+    #[test]
+    fn test_parse_returns_test_with_multiple_steps_and_out_of_order_requirement_before_step() {
+        let test = "\
+New Test: I'm Insane, From Earth
+Requirement 2: What???
+Step 1: He means Saiyan
+Step 2: I'm gonna deck you in the shnaz
 Requirement 1: Have the guy dying on the floor clarify that the other guy means Saiyan
 ";
         let result = RoswaalTest::compile(test, RoswaalCompileContext::empty()).unwrap();
