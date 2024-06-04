@@ -75,6 +75,9 @@ impl RoswaalCompile for RoswaalTest {
                         RoswaalTestSyntaxCommand::NewTest => {
                             ctx.try_set_test_name(line_number, description);
                         },
+                        RoswaalTestSyntaxCommand::Abstract => {
+                            ctx.test_description = Some(description.to_string())
+                        },
                         RoswaalTestSyntaxCommand::SetLocation { parse_result } => {
                             if let Some(location_name) = parse_result.as_ref().ok() {
                                 ctx.append_set_location(line_number, location_name.clone());
@@ -91,8 +94,7 @@ impl RoswaalCompile for RoswaalTest {
                         },
                         RoswaalTestSyntaxCommand::Requirement { label } => {
                             ctx.append_requirment(line_number, name, description, label);
-                        },
-                        _ => {}
+                        }
                     }
                 }
                 RoswaalTestSyntaxLineContent::Unknown(content) => {
@@ -157,6 +159,7 @@ struct PrivateCompileContext {
     test_names: Vec<String>,
     errors: Vec<RoswaalCompilationError>,
     test_name: Option<String>,
+    test_description: Option<String>,
     unmatched_steps: HashMap<String, CommandInfo>,
     unmatched_requirements: HashMap<String, CommandInfo>,
     commands: Vec<CompiledCommand>
@@ -169,6 +172,7 @@ impl PrivateCompileContext {
             test_names: ctx.test_names,
             errors: vec![],
             test_name: None,
+            test_description: None,
             unmatched_steps: HashMap::new(),
             unmatched_requirements: HashMap::new(),
             commands: vec![]
@@ -252,7 +256,13 @@ impl PrivateCompileContext {
             return Err(self.errors)
         }
         self.commands.sort_by(|a, b| a.line_number.cmp(&b.line_number));
-        return Ok(RoswaalTest::new(test_name, self.commands.iter().map(|c| c.command.clone()).collect()))
+        return Ok(
+            RoswaalTest::new(
+                test_name,
+                self.test_description,
+                self.commands.iter().map(|c| c.command.clone()).collect()
+            )
+        )
     }
 }
 
@@ -594,6 +604,7 @@ Requirement 1: Have Piccolo charge his special-beam-cannon
         let result = RoswaalTest::compile(test, RoswaalCompileContext::empty()).unwrap();
         let expected_test = RoswaalTest::new(
             "Piccolo fights cyborgs".to_string(),
+            None,
             vec![
                 RoswaalTestCommand::Step {
                     name: "Piccolo can use special-beam-cannon".to_string(),
@@ -616,6 +627,7 @@ Requirement 2: What???
         let result = RoswaalTest::compile(test, RoswaalCompileContext::empty()).unwrap();
         let expected_test = RoswaalTest::new(
             "I'm Insane, From Earth".to_string(),
+            None,
             vec![
                 RoswaalTestCommand::Step {
                     name: "He means Saiyan".to_string(),
@@ -642,6 +654,7 @@ Requirement 1: Have the guy dying on the floor clarify that the other guy means 
         let result = RoswaalTest::compile(test, RoswaalCompileContext::empty()).unwrap();
         let expected_test = RoswaalTest::new(
             "I'm Insane, From Earth".to_string(),
+            None,
             vec![
                 RoswaalTestCommand::Step {
                     name: "He means Saiyan".to_string(),
@@ -668,6 +681,7 @@ Requirement 1: Have the guy dying on the floor clarify that the other guy means 
         let result = RoswaalTest::compile(test, RoswaalCompileContext::empty()).unwrap();
         let expected_test = RoswaalTest::new(
             "I'm Insane, From Earth".to_string(),
+            None,
             vec![
                 RoswaalTestCommand::Step {
                     name: "He means Saiyan".to_string(),
@@ -698,6 +712,7 @@ Requirement 1: Have the guy dying on the floor ask why he didn't block that
         ).unwrap();
         let expected_test = RoswaalTest::new(
             "I'm Insane, From New York".to_string(),
+            None,
             vec![
                 RoswaalTestCommand::Step {
                     name: "Why didn't you block that".to_string(),
@@ -707,6 +722,35 @@ Requirement 1: Have the guy dying on the floor ask why he didn't block that
                 RoswaalTestCommand::Step {
                     name: "I thought you had it".to_string(),
                     requirement: "NAAAAHHHH".to_string()
+                }
+            ]
+        );
+        assert_eq!(result, expected_test)
+    }
+
+    #[test]
+    fn test_parse_returns_test_with_multiple_steps_and_abstracts() {
+        let test = "\
+New Test: A really cool test.
+Abstract: This is a test.
+Abstract: This is a super cool test.
+Step 1: A
+Requirement 1: B
+Step 2: C
+Requirement 2: D
+";
+        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty()).unwrap();
+        let expected_test = RoswaalTest::new(
+            "A really cool test.".to_string(),
+            Some("This is a super cool test.".to_string()),
+            vec![
+                RoswaalTestCommand::Step {
+                    name: "A".to_string(),
+                    requirement: "B".to_string()
+                },
+                RoswaalTestCommand::Step {
+                    name: "C".to_string(),
+                    requirement: "D".to_string()
                 }
             ]
         );

@@ -3,12 +3,17 @@ use super::location::RoswaalLocationName;
 #[derive(Debug, PartialEq, Eq)]
 pub struct RoswaalTest {
     name: String,
+    description: Option<String>,
     commands: Vec<RoswaalTestCommand>
 }
 
 impl RoswaalTest {
-    pub fn new(name: String, commands: Vec<RoswaalTestCommand>) -> Self {
-        Self { name, commands }
+    pub fn new(
+        name: String,
+        description: Option<String>,
+        commands: Vec<RoswaalTestCommand>
+    ) -> Self {
+        Self { name, description, commands }
     }
 }
 
