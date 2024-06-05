@@ -31,21 +31,48 @@ pub enum RoswaalCompilationDuplicateErrorCode {
     RequirementLabel
 }
 
+/// A struct that holds compilation information on a roswaal test script.
 pub struct RoswaalCompileContext {
     location_names: Vec<RoswaalLocationName>,
-    test_names: Vec<String>
+    test_names: Vec<String>,
+    errors: Vec<RoswaalCompilationError>,
+    test_name: Option<String>,
+    test_description: Option<String>,
+    matchable_steps: HashMap<String, MatchableCommandInfo>,
+    matchable_requirements: HashMap<String, MatchableCommandInfo>,
+    commands: Vec<CompiledCommand>
 }
 
 impl RoswaalCompileContext {
+    /// Creates a new empty context with no location or test names.
     pub fn empty() -> Self {
-        Self { location_names: vec![], test_names: vec![] }
+        Self {
+            location_names: vec![],
+            test_names: vec![],
+            errors: vec![],
+            test_name: None,
+            test_description: None,
+            matchable_steps: HashMap::new(),
+            matchable_requirements: HashMap::new(),
+            commands: vec![]
+        }
     }
 
+    /// Creates a new context with the specified location and test names.
     pub fn new(
         location_names: Vec<RoswaalLocationName>,
         test_names: Vec<String>
     ) -> Self {
-        Self { location_names, test_names }
+        Self {
+            location_names,
+            test_names,
+            errors: vec![],
+            test_name: None,
+            test_description: None,
+            matchable_steps: HashMap::new(),
+            matchable_requirements: HashMap::new(),
+            commands: vec![]
+        }
     }
 }
 
@@ -67,9 +94,8 @@ pub trait RoswaalCompile: Sized {
 impl RoswaalCompile for RoswaalTest {
     fn compile_syntax(
         syntax: RoswaalTestSyntax,
-        ctx: RoswaalCompileContext
+        mut ctx: RoswaalCompileContext
     ) -> Result<Self, Vec<RoswaalCompilationError>> {
-        let mut ctx = PrivateCompileContext::new(ctx);
         for line in syntax.lines() {
             let line_number = line.line_number();
             match line.content() {
@@ -141,57 +167,7 @@ impl RoswaalCompile for RoswaalTest {
     }
 }
 
-#[derive(Debug)]
-struct MatchableCommandInfo {
-    line_number: u32,
-    name: String,
-    description: String,
-    did_match: bool
-}
-
-trait AppendCompililationError {
-    fn append_error(&mut self, line_number: u32, code: RoswaalCompilationErrorCode);
-}
-
-impl AppendCompililationError for Vec<RoswaalCompilationError> {
-    fn append_error(&mut self, line_number: u32, code: RoswaalCompilationErrorCode) {
-        self.push(RoswaalCompilationError { line_number, code })
-    }
-}
-
-#[derive(Debug)]
-struct CompiledCommand {
-    line_number: u32,
-    command: RoswaalTestCommand
-}
-
-struct PrivateCompileContext {
-    location_names: Vec<RoswaalLocationName>,
-    test_names: Vec<String>,
-    errors: Vec<RoswaalCompilationError>,
-    test_name: Option<String>,
-    test_description: Option<String>,
-    matchable_steps: HashMap<String, MatchableCommandInfo>,
-    matchable_requirements: HashMap<String, MatchableCommandInfo>,
-    commands: Vec<CompiledCommand>
-}
-
-impl PrivateCompileContext {
-    fn new(ctx: RoswaalCompileContext) -> Self {
-        PrivateCompileContext {
-            location_names: ctx.location_names,
-            test_names: ctx.test_names,
-            errors: vec![],
-            test_name: None,
-            test_description: None,
-            matchable_steps: HashMap::new(),
-            matchable_requirements: HashMap::new(),
-            commands: vec![]
-        }
-    }
-}
-
-impl PrivateCompileContext {
+impl RoswaalCompileContext {
     fn append_location(&mut self, line_number: u32, location_name: RoswaalLocationName) {
         if !self.location_names.iter().any(|name| name.matches(&location_name)) {
             self.append_error(
@@ -307,6 +283,30 @@ impl PrivateCompileContext {
             )
         )
     }
+}
+
+#[derive(Debug)]
+struct MatchableCommandInfo {
+    line_number: u32,
+    name: String,
+    description: String,
+    did_match: bool
+}
+
+trait AppendCompililationError {
+    fn append_error(&mut self, line_number: u32, code: RoswaalCompilationErrorCode);
+}
+
+impl AppendCompililationError for Vec<RoswaalCompilationError> {
+    fn append_error(&mut self, line_number: u32, code: RoswaalCompilationErrorCode) {
+        self.push(RoswaalCompilationError { line_number, code })
+    }
+}
+
+#[derive(Debug)]
+struct CompiledCommand {
+    line_number: u32,
+    command: RoswaalTestCommand
 }
 
 #[cfg(test)]
