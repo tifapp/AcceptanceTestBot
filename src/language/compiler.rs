@@ -216,7 +216,6 @@ impl RoswaalCompileContext {
         }
         let mut did_match = false;
         if let Some(requirement_info) = self.matchable_requirements.get_mut(&label_key) {
-            if requirement_info.did_match { return }
             let command = RoswaalTestCommand::Step {
                 name: description.to_string(),
                 requirement: requirement_info.description.clone()
@@ -248,7 +247,6 @@ impl RoswaalCompileContext {
         }
         let mut did_match = false;
         if let Some(step_info) = self.matchable_steps.get_mut(&label_key) {
-            if step_info.did_match { return }
             let command = RoswaalTestCommand::Step {
                 name: step_info.description.clone(),
                 requirement: description.to_string()
