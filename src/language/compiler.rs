@@ -159,7 +159,7 @@ impl RoswaalCompile for RoswaalTest {
                 requirement_name: requirement_info.name.clone(),
                 requirement_description: requirement_info.description.clone()
             };
-            errors.push(RoswaalCompilationError { line_number: requirement_info.line_number, code })
+            errors.append_error(requirement_info.line_number, code);
         }
 
         ctx.errors.append(&mut errors);
