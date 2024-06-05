@@ -17,7 +17,6 @@ pub enum RoswaalCompilationErrorCode {
     NoRequirementStep { requirement_name: String, requirement_description: String },
     InvalidLocationName(String),
     InvalidCommandName(String),
-    DuplicateTestName(String),
     Duplicate {
       name: String,
       code: RoswaalCompilationDuplicateErrorCode
@@ -91,7 +90,7 @@ impl RoswaalCompile for RoswaalTest {
                         },
                         RoswaalTestSyntaxCommand::SetLocation { parse_result } => {
                             if let Some(location_name) = parse_result.as_ref().ok() {
-                                ctx.append_set_location(line_number, location_name.clone());
+                                ctx.append_location(line_number, location_name.clone());
                             }
                         },
                         RoswaalTestSyntaxCommand::UnknownCommand => {
@@ -122,14 +121,14 @@ impl RoswaalCompile for RoswaalTest {
             ctx.append_error(syntax.last_line_number(), RoswaalCompilationErrorCode::NoTestSteps);
         }
         let mut errors = Vec::new();
-        for step_info in ctx.unmatched_steps.values().filter(|info| !info.did_visit) {
+        for step_info in ctx.matchable_steps.values().filter(|info| !info.did_match) {
             let code = RoswaalCompilationErrorCode::NoStepRequirement {
                 step_name: step_info.name.clone(),
                 step_description: step_info.description.clone()
             };
             errors.append_error(step_info.line_number, code);
         }
-        for requirement_info in ctx.unmatched_requirements.values().filter(|info| !info.did_visit) {
+        for requirement_info in ctx.matchable_requirements.values().filter(|info| !info.did_match) {
             let code = RoswaalCompilationErrorCode::NoRequirementStep {
                 requirement_name: requirement_info.name.clone(),
                 requirement_description: requirement_info.description.clone()
@@ -143,11 +142,11 @@ impl RoswaalCompile for RoswaalTest {
 }
 
 #[derive(Debug)]
-struct UnmatchedCommandInfo {
+struct MatchableCommandInfo {
     line_number: u32,
     name: String,
     description: String,
-    did_visit: bool
+    did_match: bool
 }
 
 trait AppendCompililationError {
@@ -172,8 +171,8 @@ struct PrivateCompileContext {
     errors: Vec<RoswaalCompilationError>,
     test_name: Option<String>,
     test_description: Option<String>,
-    unmatched_steps: HashMap<String, UnmatchedCommandInfo>,
-    unmatched_requirements: HashMap<String, UnmatchedCommandInfo>,
+    matchable_steps: HashMap<String, MatchableCommandInfo>,
+    matchable_requirements: HashMap<String, MatchableCommandInfo>,
     commands: Vec<CompiledCommand>
 }
 
@@ -185,15 +184,15 @@ impl PrivateCompileContext {
             errors: vec![],
             test_name: None,
             test_description: None,
-            unmatched_steps: HashMap::new(),
-            unmatched_requirements: HashMap::new(),
+            matchable_steps: HashMap::new(),
+            matchable_requirements: HashMap::new(),
             commands: vec![]
         }
     }
 }
 
 impl PrivateCompileContext {
-    fn append_set_location(&mut self, line_number: u32, location_name: RoswaalLocationName) {
+    fn append_location(&mut self, line_number: u32, location_name: RoswaalLocationName) {
         if !self.location_names.iter().any(|name| name.matches(&location_name)) {
             self.append_error(
                 line_number,
@@ -215,7 +214,11 @@ impl PrivateCompileContext {
     fn try_set_test_name(&mut self, line_number: u32, name: &str) {
         let name = name.to_string();
         if self.test_names.contains(&name) {
-            self.append_error(line_number, RoswaalCompilationErrorCode::DuplicateTestName(name));
+            let code = RoswaalCompilationErrorCode::Duplicate {
+                name,
+                code: RoswaalCompilationDuplicateErrorCode::TestName
+            };
+            self.append_error(line_number, code);
         } else if self.test_name.is_some() {
             self.append_error(line_number, RoswaalCompilationErrorCode::TestNameAlreadyDeclared);
         } else {
@@ -225,7 +228,7 @@ impl PrivateCompileContext {
 
     fn append_step(&mut self, line_number: u32, name: &str, description: &str, label: &str) {
         let label_key = label.to_string();
-        if self.unmatched_steps.contains_key(&label_key) {
+        if self.matchable_steps.contains_key(&label_key) {
             self.append_error(
                 line_number,
                 RoswaalCompilationErrorCode::Duplicate {
@@ -235,29 +238,29 @@ impl PrivateCompileContext {
             );
             return
         }
-        let mut did_visit = false;
-        if let Some(requirement_info) = self.unmatched_requirements.get_mut(&label_key) {
-            if requirement_info.did_visit { return }
+        let mut did_match = false;
+        if let Some(requirement_info) = self.matchable_requirements.get_mut(&label_key) {
+            if requirement_info.did_match { return }
             let command = RoswaalTestCommand::Step {
                 name: description.to_string(),
                 requirement: requirement_info.description.clone()
             };
             self.commands.push(CompiledCommand { line_number, command });
-            requirement_info.did_visit = true;
-            did_visit = true;
+            requirement_info.did_match = true;
+            did_match = true;
         }
-        let info = UnmatchedCommandInfo {
+        let info = MatchableCommandInfo {
             line_number,
             name: name.to_string(),
             description: description.to_string(),
-            did_visit
+            did_match
         };
-        self.unmatched_steps.insert(label_key, info);
+        self.matchable_steps.insert(label_key, info);
     }
 
     fn append_requirment(&mut self, line_number: u32, name: &str, description: &str, label: &str) {
         let label_key = label.to_string();
-        if self.unmatched_requirements.contains_key(&label_key) {
+        if self.matchable_requirements.contains_key(&label_key) {
             self.append_error(
                 line_number,
                 RoswaalCompilationErrorCode::Duplicate {
@@ -267,24 +270,24 @@ impl PrivateCompileContext {
             );
             return
         }
-        let mut did_visit = false;
-        if let Some(step_info) = self.unmatched_steps.get_mut(&label_key) {
-            if step_info.did_visit { return }
+        let mut did_match = false;
+        if let Some(step_info) = self.matchable_steps.get_mut(&label_key) {
+            if step_info.did_match { return }
             let command = RoswaalTestCommand::Step {
                 name: step_info.description.clone(),
                 requirement: description.to_string()
             };
             self.commands.push(CompiledCommand { line_number: step_info.line_number, command });
-            step_info.did_visit = true;
-            did_visit = true;
+            step_info.did_match = true;
+            did_match = true;
         }
-        let info = UnmatchedCommandInfo {
+        let info = MatchableCommandInfo {
             line_number,
             name: name.to_string(),
             description: description.to_string(),
-            did_visit
+            did_match
         };
-        self.unmatched_requirements.insert(label_key, info);
+        self.matchable_requirements.insert(label_key, info);
     }
 
     fn finalize<'a>(mut self) -> Result<RoswaalTest, Vec<RoswaalCompilationError>> {
@@ -435,9 +438,10 @@ lsjkhadjkhasdfjkhasdjkfhkjsd
         );
         let error = RoswaalCompilationError {
             line_number: 1,
-            code: RoswaalCompilationErrorCode::DuplicateTestName(
-                test_name.to_string()
-            )
+            code: RoswaalCompilationErrorCode::Duplicate {
+                name: test_name.to_string(),
+                code: RoswaalCompilationDuplicateErrorCode::TestName
+            }
         };
         assert_contains_compile_error(&result, &error)
     }
