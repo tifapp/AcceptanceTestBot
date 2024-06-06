@@ -1,67 +1,62 @@
-use std::str::{FromStr, Lines};
+use std::str::FromStr;
 
-use super::{
-    location::{RoswaalLocationName, RoswaalLocationParsingResult},
-    normalize::RoswaalNormalize
-};
+use once_cell::sync::Lazy;
+use regex::{Regex, RegexBuilder};
+
+use super::location::{RoswaalLocationName, RoswaalLocationParsingResult};
 
 /// A token of roswaal test syntax.
 ///
 /// Each token represents a line of source code. See `RoswaalTestSyntax`.
 #[derive(Debug, PartialEq, Eq)]
-pub enum RoswaalTestSyntaxToken<'a> {
+pub enum RoswaalTestSyntaxCommand<'a> {
     /// A line denoting a "Step" command without its matching "Requirement"
     /// command.
-    Step { description: &'a str },
+    Step { label: &'a str },
     /// A line denoting the "Abstract" command.
-    Abstract { description: &'a str },
+    Abstract,
     /// A line denoting the "New Test" command.
-    NewTest { name: &'a str },
-    /// A line denoting the "SetLocation" command.
+    NewTest,
+    /// A line denoting the "Set Location" command.
     SetLocation { parse_result: RoswaalLocationParsingResult },
     /// A line denoting the "Requirement" command that is to be paired with a
     /// respective step command.
-    Requirement { description: &'a str },
+    Requirement { label: &'a str },
     /// A line which has proper command syntax, but the command is not known.
-    UnknownCommand { name: &'a str, description: &'a str },
-    /// A line which does not follow traditional command syntax.
-    Unknown { source: &'a str },
-    /// An empty line.
-    EmptyLine
+    UnknownCommand
 }
 
-impl <'a> From<&'a str> for RoswaalTestSyntaxToken<'a> {
-    fn from(line: &'a str) -> Self {
-        let (command, description) = match line.split_once(":") {
-            Some(split) => split,
-            None => {
-                return if line.is_empty() {
-                    Self::EmptyLine
-                } else {
-                    Self::Unknown { source: line }
-                }
-            }
+static KNOWN_COMMANDS_REGEX: Lazy<Regex> = Lazy::new(|| {
+    let regex = r"^ *(?:(?<setlocation>set +location)|(?<step>step)|(?<newtest>new +test)|(?<requirement>requirement)|(?<abstract>abstract))(?<label>.*)";
+    RegexBuilder::new(regex)
+        .case_insensitive(true)
+        .build()
+        .expect("Failed to compile known commands regex.")
+});
+
+impl <'a> RoswaalTestSyntaxCommand<'a> {
+    fn new(name: &'a str, description: &'a str) -> Self {
+        let captures = match KNOWN_COMMANDS_REGEX.captures(name) {
+            Some(c) => c,
+            None => return RoswaalTestSyntaxCommand::UnknownCommand
         };
-        let normalized_command = command.roswaal_normalize();
-        let description = description.trim();
-        if normalized_command.starts_with("step") {
-            return Self::Step { description }
-        } else if normalized_command.starts_with("setlocation") {
-            return Self::SetLocation {
-                parse_result: RoswaalLocationName::from_str(&description)
-            }
-        } else if normalized_command.starts_with("newtest") {
-            return Self::NewTest { name: description }
-        } else if normalized_command.starts_with("requirement") {
-            return Self::Requirement { description }
-        } else if normalized_command.starts_with("abstract") {
-            return Self::Abstract { description }
+        let label = captures.name("label")
+            .map(|lmatch| lmatch.as_str())
+            .unwrap_or("")
+            .trim();
+        if captures.name("setlocation").is_some() {
+            return RoswaalTestSyntaxCommand::SetLocation {
+                parse_result: RoswaalLocationName::from_str(description.trim())
+            };
+        } else if captures.name("step").is_some() {
+            return RoswaalTestSyntaxCommand::Step { label }
+        } else if captures.name("newtest").is_some() {
+            return RoswaalTestSyntaxCommand::NewTest
+        } else if captures.name("requirement").is_some() {
+            return RoswaalTestSyntaxCommand::Requirement { label }
         } else {
-            return Self::UnknownCommand {
-                name: command,
-                description
-            }
-        }
+            return RoswaalTestSyntaxCommand::Abstract
+         }
     }
 }
 
@@ -93,38 +88,84 @@ impl <'a> From<&'a str> for RoswaalTestSyntaxToken<'a> {
 /// Requirement 1: I am a requirement that matches step 1.
 /// Requirement 2: I am a requirement that is paired with step 2.
 /// ```
-pub struct RoswaalTestSyntax {
-    source_code: String
+pub struct RoswaalTestSyntax<'a> {
+    source_code: &'a str
 }
 
-impl RoswaalTestSyntax {
-    /// Returns the original source code of represented by the test syntax.
-    pub fn source_code(&self) -> &str {
-        &self.source_code
-    }
-
+impl <'a> RoswaalTestSyntax<'a> {
     /// Returns an iterator of syntax tokens for each line in the source code.
-    pub fn token_lines(&self) -> RoswaalTestTokenLines {
-        RoswaalTestTokenLines { lines: self.source_code().lines() }
+    pub fn lines(&self) -> impl Iterator<Item = RoswaalTestSyntaxLine> {
+        self.source_code.lines()
+            .enumerate()
+            .filter_map(|(i, line)| {
+                RoswaalTestSyntaxLineContent::from(line)
+                    .map(|content| {
+                        RoswaalTestSyntaxLine {
+                            line_number: (i + 1) as u32,
+                            content
+                        }
+                    })
+            })
+    }
+
+    /// Returns the last line number of this syntax.
+    ///
+    /// If the syntax is empty, line 1 is returned.
+    pub fn last_line_number(&self) -> u32 {
+        let line_count = self.source_code.lines().count();
+        return if line_count == 0 {
+            1
+        } else {
+            line_count as u32
+        }
     }
 }
 
-impl From<&str> for RoswaalTestSyntax {
-    fn from(source_code: &str) -> Self {
-        Self { source_code: source_code.to_string() }
+impl <'a> From<&'a str> for RoswaalTestSyntax<'a> {
+    fn from(source_code: &'a str) -> Self {
+        Self { source_code }
     }
 }
 
-/// An iterator of syntax tokens for each line in the source code.
-pub struct RoswaalTestTokenLines<'a> {
-    lines: Lines<'a>
+#[derive(Debug, PartialEq, Eq)]
+pub struct RoswaalTestSyntaxLine<'a> {
+    line_number: u32,
+    content: RoswaalTestSyntaxLineContent<'a>
 }
 
-impl <'a> Iterator for RoswaalTestTokenLines<'a> {
-    type Item = RoswaalTestSyntaxToken<'a>;
+impl <'a> RoswaalTestSyntaxLine<'a> {
+    pub fn line_number(&self) -> u32 { self.line_number }
+    pub fn content(&self) -> &RoswaalTestSyntaxLineContent<'a> { &self.content }
+}
 
-    fn next(&mut self) -> Option<Self::Item> {
-        self.lines.next().map(RoswaalTestSyntaxToken::from)
+#[derive(Debug, PartialEq, Eq)]
+pub enum RoswaalTestSyntaxLineContent<'a> {
+    Unknown(&'a str),
+    Command {
+        name: &'a str,
+        description: &'a str,
+        command: RoswaalTestSyntaxCommand<'a>
+    }
+}
+
+impl <'a> RoswaalTestSyntaxLineContent<'a> {
+    pub fn from(line: &'a str) -> Option<Self> {
+        let (name, description) = match line.split_once(":") {
+            Some(split) => split,
+            None => {
+                return if line.is_empty() {
+                    None
+                } else {
+                    Some(Self::Unknown(line))
+                }
+            }
+        };
+        let content = Self::Command {
+            name,
+            description: description.trim(),
+            command: RoswaalTestSyntaxCommand::new(name, description)
+        };
+        Some(content)
     }
 }
 
@@ -142,81 +183,128 @@ mod ast_tests {
 
         #[test]
         fn test_from_string_returns_empty_line_for_empty_string() {
-            let token = RoswaalTestSyntaxToken::from("");
-            assert_eq!(token, RoswaalTestSyntaxToken::EmptyLine)
+            assert_eq!(RoswaalTestSyntaxLineContent::from(""), None)
         }
 
         #[test]
         fn test_from_string_returns_unknown_for_jibberish() {
             let source = "Sorry King Kai! I didn't know where else to bring him!";
-            let token = RoswaalTestSyntaxToken::from(source);
-            assert_eq!(token, RoswaalTestSyntaxToken::Unknown { source })
+            let content = RoswaalTestSyntaxLineContent::from(source);
+            assert_eq!(
+                content,
+                Some(RoswaalTestSyntaxLineContent::Unknown(source))
+            )
         }
 
         #[test]
         fn test_from_string_returns_step_for_simple_step_commands() {
-            fn assert_step_description(line: &str, description: &str) {
-                let token = RoswaalTestSyntaxToken::from(line);
-                let expected_token = RoswaalTestSyntaxToken::Step {
-                    description
-                };
-                assert_eq!(token, expected_token)
+            fn assert_step_description(line: &str, name: &str, description: &str, label: &str) {
+                assert_command(line, name, description, RoswaalTestSyntaxCommand::Step { label })
             }
             assert_step_description(
                 "Step 1: Hello world this is a test",
-                "Hello world this is a test"
+                "Step 1",
+                "Hello world this is a test",
+                "1"
             );
             assert_step_description(
                 "Step: i am batman",
-                "i am batman"
+                "Step",
+                "i am batman",
+                ""
             );
             assert_step_description(
                 "step 1: Hello",
-                "Hello"
+                "step 1",
+                "Hello",
+                "1"
             );
             assert_step_description(
                 "   step    1   : Hello",
-                "Hello"
+                "   step    1   ",
+                "Hello",
+                "1"
             );
             assert_step_description(
                 "step one: Hello world this is a test",
-                "Hello world this is a test"
+                "step one",
+                "Hello world this is a test",
+                "one"
             );
             assert_step_description(
                 "step:",
+                "step",
+                "",
                 ""
             )
         }
 
         #[test]
         fn test_from_string_returns_set_location_for_set_location_commands() {
-            fn assert_set_location_name(line: &str, name: &str) {
-                let token = RoswaalTestSyntaxToken::from(line);
+            fn assert_set_location(line: &str, command_name: &str, name: &str) {
                 let parse_result = RoswaalLocationName::from_str(name);
-                let expected_token = RoswaalTestSyntaxToken::SetLocation {
-                    parse_result: RoswaalLocationName::from_str(name)
+                let command = RoswaalTestSyntaxCommand::SetLocation {
+                    parse_result: parse_result.clone()
                 };
-                assert_eq!(token, expected_token);
+                assert_command(line, command_name, name, command);
                 assert_eq!(name, parse_result.unwrap().name())
             }
 
-            fn assert_no_location_name(
+            fn assert_set_location_with_error(
                 line: &str,
                 error: RoswaalLocationNameParsingError
             ) {
-                let token = RoswaalTestSyntaxToken::from(line);
-                let expected_token = RoswaalTestSyntaxToken::SetLocation {
-                    parse_result: Err(error)
-                };
-                assert_eq!(token, expected_token)
+                let content = RoswaalTestSyntaxLineContent::from(line);
+                let result = match content {
+                    Some(
+                        RoswaalTestSyntaxLineContent::Command {
+                            name: _,
+                            description: _,
+                            command
+                        }
+                    ) => {
+                        Some(command)
+                    },
+                    _ => None
+                }
+                .and_then(|t| {
+                    match t {
+                        RoswaalTestSyntaxCommand::SetLocation { parse_result } => {
+                            Some(parse_result)
+                        },
+                        _ => None
+                    }
+                })
+                .unwrap();
+                assert_eq!(result, Err(error))
             }
 
-            assert_set_location_name("set location: Apple", "Apple");
-            assert_set_location_name("Set Location: Houston", "Houston");
-            assert_set_location_name("Set      location: A", "A");
-            assert_set_location_name("Set      location      : A", "A");
-            assert_set_location_name("   Set      location      : A", "A");
-            assert_no_location_name(
+            assert_set_location(
+                "set location: Apple",
+                "set location",
+                "Apple"
+            );
+            assert_set_location(
+                "Set Location: Houston",
+                "Set Location",
+                "Houston"
+            );
+            assert_set_location(
+                "Set      location: A",
+                "Set      location",
+                "A"
+            );
+            assert_set_location(
+                "Set      location      : A",
+                "Set      location      ",
+                "A"
+            );
+            assert_set_location(
+                "   Set      location      : A",
+                "   Set      location      ",
+                "A"
+            );
+            assert_set_location_with_error(
                 "set location:",
                 RoswaalLocationNameParsingError::Empty
             )
@@ -225,12 +313,7 @@ mod ast_tests {
         #[test]
         fn test_from_string_returns_unknown_command_for_random_commands() {
             fn assert_unknown_command(line: &str, name: &str, description: &str) {
-                let token = RoswaalTestSyntaxToken::from(line);
-                let expected_token = RoswaalTestSyntaxToken::UnknownCommand {
-                    name,
-                    description
-                };
-                assert_eq!(token, expected_token)
+                assert_command(line, name, description, RoswaalTestSyntaxCommand::UnknownCommand)
             }
 
             assert_unknown_command("dkjhkjdh: hello", "dkjhkjdh", "hello");
@@ -239,47 +322,97 @@ mod ast_tests {
 
         #[test]
         fn test_from_string_returns_new_test_for_new_test_command() {
-            fn assert_new_test(line: &str, name: &str) {
-                let token = RoswaalTestSyntaxToken::from(line);
-                let expected_token = RoswaalTestSyntaxToken::NewTest {
-                    name
-                };
-                assert_eq!(token, expected_token)
+            fn assert_new_test(line: &str, name: &str, test_name: &str) {
+                assert_command(line, name, test_name, RoswaalTestSyntaxCommand::NewTest)
             }
 
-            assert_new_test("New Test: Hello world", "Hello world");
-            assert_new_test("new test: test", "test");
-            assert_new_test(" new    tESt    : weird  ", "weird")
+            assert_new_test(
+                "New Test: Hello world",
+                "New Test",
+                "Hello world"
+            );
+            assert_new_test(
+                "new test: test",
+                "new test",
+                "test"
+            );
+            assert_new_test(
+                " new    tESt    : weird  ",
+                " new    tESt    ",
+                "weird"
+            )
         }
 
         #[test]
         fn test_from_string_returns_requirement_for_requirement_command() {
-            fn assert_requirement(line: &str, description: &str) {
-                let token = RoswaalTestSyntaxToken::from(line);
-                let expected_token = RoswaalTestSyntaxToken::Requirement {
-                    description
-                };
-                assert_eq!(token, expected_token)
+            fn assert_requirement(line: &str, name: &str, description: &str, label: &str) {
+                assert_command(line, name, description, RoswaalTestSyntaxCommand::Requirement { label })
             }
 
-            assert_requirement("Requirement 1: Hello world", "Hello world");
-            assert_requirement("requirement: test", "test");
-            assert_requirement(" requirement   4: weird  ", "weird")
+            assert_requirement(
+                "Requirement 1: Hello world",
+                "Requirement 1",
+                "Hello world",
+                "1"
+            );
+            assert_requirement(
+                "requirement: test",
+                "requirement",
+                "test",
+                ""
+            );
+            assert_requirement(
+                " requirement   4: weird  ",
+                " requirement   4",
+                "weird",
+                "4"
+            );
+            assert_requirement(
+                "requirement one: weird  ",
+                "requirement one",
+                "weird",
+                "one"
+            )
         }
 
         #[test]
         fn test_from_string_returns_abstract_for_abstract_command() {
-            fn assert_abstract(line: &str, description: &str) {
-                let token = RoswaalTestSyntaxToken::from(line);
-                let expected_token = RoswaalTestSyntaxToken::Abstract {
-                    description
-                };
-                assert_eq!(token, expected_token)
+            fn assert_abstract(line: &str, name: &str, description: &str) {
+                assert_command(line, name, description, RoswaalTestSyntaxCommand::Abstract)
             }
 
-            assert_abstract("Abstract 1: Hello world", "Hello world");
-            assert_abstract("abstract: test", "test");
-            assert_abstract(" abstract   4: weird  ", "weird")
+            assert_abstract(
+                "Abstract 1: Hello world",
+                "Abstract 1",
+                "Hello world"
+            );
+            assert_abstract(
+                "abstract: test",
+                "abstract",
+                "test"
+            );
+            assert_abstract(
+                " abstract   4: weird  ",
+                " abstract   4",
+                "weird"
+            )
+        }
+
+        fn assert_command(
+            line: &str,
+            name: &str,
+            description: &str,
+            command: RoswaalTestSyntaxCommand
+        ) {
+            let expected_content = RoswaalTestSyntaxLineContent::Command {
+                name,
+                description,
+                command
+            };
+            assert_eq!(
+                RoswaalTestSyntaxLineContent::from(line),
+                Some(expected_content)
+            )
         }
     }
 
@@ -287,9 +420,34 @@ mod ast_tests {
     mod syntax_tests {
         use std::str::FromStr;
 
-        use crate::language::ast::ast_tests::RoswaalLocationName;
+        use crate::language::ast::{ast_tests::RoswaalLocationName, RoswaalTestSyntaxLine, RoswaalTestSyntaxLineContent};
 
-        use super::{RoswaalTestSyntax, RoswaalTestSyntaxToken};
+        use super::{RoswaalTestSyntax, RoswaalTestSyntaxCommand};
+
+        #[test]
+        fn test_last_line_number_returns_1_when_empty() {
+            let syntax = RoswaalTestSyntax::from("");
+            assert_eq!(syntax.last_line_number(), 1)
+        }
+
+        #[test]
+        fn test_last_line_number_returns_1_when_single_line() {
+            let syntax = RoswaalTestSyntax::from("hello");
+            assert_eq!(syntax.last_line_number(), 1)
+        }
+
+        #[test]
+        fn test_last_line_number_returns_1_number_of_lines_in_code() {
+            let test = "\
+New Test: I am a test
+Step 1: Piccolo was the first to try
+Requirement 1: Have piccolo fight Android 17 and 18 all at once
+Step 2: And the first to die
+Requirement 2: Make sure that \"even Krillin\" can't be stopped by the dreadful duo
+";
+            let syntax = RoswaalTestSyntax::from(test);
+            assert_eq!(syntax.last_line_number(), 5)
+        }
 
         #[test]
         fn test_token_lines_iterator() {
@@ -299,28 +457,75 @@ Step 1: Write a step
 Step 2: Another step
 Set Location: Europe
 Big: chungus
+
 Requirement 1: Do the thing
 Requirement 2: Do the other thing
 ";
             let syntax = RoswaalTestSyntax::from(test);
             let tokens = syntax
-                .token_lines()
-                .collect::<Vec<RoswaalTestSyntaxToken>>();
+                .lines()
+                .collect::<Vec<RoswaalTestSyntaxLine>>();
             assert_eq!(
                 tokens,
                 vec!(
-                    RoswaalTestSyntaxToken::NewTest { name: "Something cool" },
-                    RoswaalTestSyntaxToken::Step { description: "Write a step" },
-                    RoswaalTestSyntaxToken::Step { description: "Another step" },
-                    RoswaalTestSyntaxToken::SetLocation {
-                        parse_result: RoswaalLocationName::from_str("Europe")
+                    RoswaalTestSyntaxLine {
+                        line_number: 1,
+                        content: RoswaalTestSyntaxLineContent::Command {
+                            name: "New Test",
+                            description: "Something cool",
+                            command: RoswaalTestSyntaxCommand::NewTest
+                        }
                     },
-                    RoswaalTestSyntaxToken::UnknownCommand {
-                        name: "Big",
-                        description: "chungus"
+                    RoswaalTestSyntaxLine {
+                        line_number: 2,
+                        content: RoswaalTestSyntaxLineContent::Command {
+                            name: "Step 1",
+                            description: "Write a step",
+                            command: RoswaalTestSyntaxCommand::Step { label: "1" }
+                        }
                     },
-                    RoswaalTestSyntaxToken::Requirement { description: "Do the thing" },
-                    RoswaalTestSyntaxToken::Requirement { description: "Do the other thing" }
+                    RoswaalTestSyntaxLine {
+                        line_number: 3,
+                        content: RoswaalTestSyntaxLineContent::Command {
+                            name: "Step 2",
+                            description: "Another step",
+                            command: RoswaalTestSyntaxCommand::Step { label: "2" }
+                        }
+                    },
+                    RoswaalTestSyntaxLine {
+                        line_number: 4,
+                        content: RoswaalTestSyntaxLineContent::Command {
+                            name: "Set Location",
+                            description: "Europe",
+                            command: RoswaalTestSyntaxCommand::SetLocation {
+                                parse_result: RoswaalLocationName::from_str("Europe")
+                            }
+                        }
+                    },
+                    RoswaalTestSyntaxLine {
+                        line_number: 5,
+                        content: RoswaalTestSyntaxLineContent::Command {
+                            name: "Big",
+                            description: "chungus",
+                            command: RoswaalTestSyntaxCommand::UnknownCommand
+                        }
+                    },
+                    RoswaalTestSyntaxLine {
+                        line_number: 7,
+                        content: RoswaalTestSyntaxLineContent::Command {
+                            name: "Requirement 1",
+                            description: "Do the thing",
+                            command: RoswaalTestSyntaxCommand::Requirement { label: "1" }
+                        }
+                    },
+                    RoswaalTestSyntaxLine {
+                        line_number: 8,
+                        content: RoswaalTestSyntaxLineContent::Command {
+                            name: "Requirement 2",
+                            description: "Do the other thing",
+                            command: RoswaalTestSyntaxCommand::Requirement { label: "2" }
+                        }
+                    }
                 )
             )
         }
