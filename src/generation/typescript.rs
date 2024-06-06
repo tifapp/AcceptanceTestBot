@@ -1,46 +1,49 @@
-use crate::{is_case, utils::string::{ToAsciiCamelCase, UppercaseFirstAsciiCharacter}};
+use crate::{is_case, language::test::{RoswaalTest, RoswaalTestCommand}, utils::string::{ToAsciiCamelCase, UppercaseFirstAsciiCharacter}};
 
-use super::location::RoswaalLocationName;
+pub struct GeneratedTypescript {
+    test_case_code: String,
+    test_action_code: String
+}
 
 /// A test command comes from plain-english like scripts describing an
 /// acceptance test, and describes how to generate the code for the test.
-pub trait RoswaalTestCommand {
+pub trait RoswaalTypescriptGenerate {
     /// The associated typescript code for this test command.
-    fn typescript(&self) -> String;
+    fn typescript(&self) -> GeneratedTypescript;
 }
 
-/// A command which represents a function in a TestActions.ts file.
-pub enum TestActionFunctionCommand {
-    Step { name: String, requirement: String },
-    SetLocation { location_name: RoswaalLocationName }
-}
-
-impl RoswaalTestCommand for TestActionFunctionCommand {
-    fn typescript(&self) -> String {
+impl RoswaalTypescriptGenerate for RoswaalTestCommand {
+    fn typescript(&self) -> GeneratedTypescript {
         match self {
             Self::Step { name, requirement } => {
                 let function_name = requirement.to_ascii_camel_case();
-                format!(
+                GeneratedTypescript {
+                    test_case_code: String::new(),
+                    test_action_code: format!(
 "\
 export const {} = async () => {{
   // {}
   throw new Error(\"TODO\")
 }}
 ",
-                    function_name,
-                    name
-                )
+                        function_name,
+                        name
+                    )
+                }
             }
             Self::SetLocation { location_name } => {
-                format!(
+                GeneratedTypescript {
+                    test_case_code: String::new(),
+                    test_action_code: format!(
 "\
 export const setLocationTo{} = async () => {{
   await setUserLocation(TestLocations.{})
 }}
 ",
-                    location_name.name().to_ascii_pascal_case(),
-                    location_name.name().to_ascii_pascal_case()
-                )
+                        location_name.name().to_ascii_pascal_case(),
+                        location_name.name().to_ascii_pascal_case()
+                    )
+                }
             }
         }
     }
@@ -48,7 +51,7 @@ export const setLocationTo{} = async () => {{
 
 /// A test action command that outputs a TestActions.ts file.
 pub struct TestActionsCommand {
-    commands: Vec<TestActionFunctionCommand>
+    commands: Vec<RoswaalTestCommand>
 }
 
 const LAUNCH_IMPORT: &str = "import { TestAppLaunchConfig } from \"../Launch\"\n";
@@ -61,11 +64,20 @@ export const beforeLaunch = async (): Promise<TestAppLaunchConfig> => {
 }
 ";
 
-impl RoswaalTestCommand for TestActionsCommand {
-    fn typescript(&self) -> String {
+impl RoswaalTypescriptGenerate for RoswaalTest {
+    fn typescript(&self) -> GeneratedTypescript {
+        GeneratedTypescript {
+            test_case_code: String::new(),
+            test_action_code: self.test_action_typescript()
+        }
+    }
+}
+
+impl RoswaalTest {
+    fn test_action_typescript(&self) -> String {
         let mut ts = LAUNCH_IMPORT.to_string();
-        let has_location_command = self.commands.iter()
-            .find(|c| is_case!(c, TestActionFunctionCommand::SetLocation))
+        let has_location_command = self.commands().iter()
+            .find(|c| is_case!(c, RoswaalTestCommand::SetLocation))
             .is_some();
         if has_location_command {
             ts.push_str(LOCATION_IMPORT)
@@ -73,10 +85,10 @@ impl RoswaalTestCommand for TestActionsCommand {
         ts.push_str("\n");
         ts.push_str(BEFORE_LAUNCH_FUNCTION);
         ts.push_str("\n");
-        return self.commands.iter().enumerate()
+        self.commands().iter().enumerate()
             .fold(ts, |mut acc, (i, command)| {
-                let suffix = if i < self.commands.len() - 1 { "\n" } else { "" };
-                acc.push_str(&(command.typescript() + suffix));
+                let suffix = if i < self.commands().len() - 1 { "\n" } else { "" };
+                acc.push_str(&(command.typescript().test_action_code + suffix));
                 return acc
             })
     }
@@ -86,11 +98,13 @@ impl RoswaalTestCommand for TestActionsCommand {
 mod roswaal_command_tests {
     use std::str::FromStr;
 
+    use crate::language::location::RoswaalLocationName;
+
     use super::*;
 
     #[test]
-    fn test_step_command_typescript() {
-        let command = TestActionFunctionCommand::Step {
+    fn test_step_command_action_typescript() {
+        let command = RoswaalTestCommand::Step {
             name: String::from("Anna is about to arrive at an event"),
             requirement: String::from("Mark Anna as being present at an event")
         };
@@ -101,12 +115,12 @@ export const markAnnaAsBeingPresentAtAnEvent = async () => {
   throw new Error(\"TODO\")
 }
 ";
-        assert_eq!(ts, String::from(expected_ts))
+        assert_eq!(ts.test_action_code, expected_ts.to_string())
     }
 
     #[test]
-    fn test_set_location_command_typescript() {
-        let command = TestActionFunctionCommand::SetLocation {
+    fn test_set_location_command_action_typescript() {
+        let command = RoswaalTestCommand::SetLocation {
             location_name: RoswaalLocationName::from_str("San Francisco")
                 .unwrap()
         };
@@ -116,23 +130,20 @@ export const setLocationToSanFrancisco = async () => {
   await setUserLocation(TestLocations.SanFrancisco)
 }
 ";
-        assert_eq!(ts, String::from(expected_ts))
+        assert_eq!(ts.test_action_code, expected_ts.to_string())
     }
 
     #[test]
     fn test_generate_test_actions_command_typescript_only_steps() {
-        let step1 = TestActionFunctionCommand::Step {
+        let step1 = RoswaalTestCommand::Step {
             name: "Johnny is signed in".to_string(),
             requirement: "Ensure Johnny is signed into his account".to_string()
         };
-        let step2 = TestActionFunctionCommand::Step {
+        let step2 = RoswaalTestCommand::Step {
             name: "Johnny is bored".to_string(),
             requirement: "Ensure that Johnny is not bored".to_string()
         };
-        let command = TestActionsCommand {
-            commands: vec!(step1, step2)
-        };
-        let ts = command.typescript();
+        let ts = RoswaalTest::new("A".to_string(), None, vec![step1, step2]).typescript();
         let expected_ts = "\
 import { TestAppLaunchConfig } from \"../Launch\"
 
@@ -152,22 +163,19 @@ export const ensureThatJohnnyIsNotBored = async () => {
   throw new Error(\"TODO\")
 }
 ";
-        assert_eq!(ts, expected_ts.to_string())
+        assert_eq!(ts.test_action_code, expected_ts.to_string())
     }
 
     #[test]
     fn test_generate_test_actions_command_typescript_steps_and_location_changes() {
-        let command1 = TestActionFunctionCommand::Step {
+        let command1 = RoswaalTestCommand::Step {
             name: "Johnny is signed in".to_string(),
             requirement: "Ensure Johnny is signed into his account".to_string()
         };
-        let command2 = TestActionFunctionCommand::SetLocation {
+        let command2 = RoswaalTestCommand::SetLocation {
             location_name: RoswaalLocationName::from_str("Oakland").unwrap()
         };
-        let command = TestActionsCommand {
-            commands: vec!(command1, command2)
-        };
-        let ts = command.typescript();
+        let ts = RoswaalTest::new("A".to_string(), None, vec![command1, command2]).typescript();
         let expected_ts = "\
 import { TestAppLaunchConfig } from \"../Launch\"
 import { TestLocations, setUserLocation } from \"../Location\"
@@ -187,6 +195,6 @@ export const setLocationToOakland = async () => {
   await setUserLocation(TestLocations.Oakland)
 }
 ";
-        assert_eq!(ts, expected_ts.to_string())
+        assert_eq!(ts.test_action_code, expected_ts.to_string())
     }
 }
