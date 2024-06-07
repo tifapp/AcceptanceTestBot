@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use super::normalize::RoswaalNormalize;
+use crate::utils::normalize::RoswaalNormalize;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum RoswaalLocationNameParsingError {

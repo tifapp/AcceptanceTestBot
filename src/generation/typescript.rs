@@ -143,7 +143,7 @@ impl RoswaalTest {
 mod roswaal_command_tests {
     use std::str::FromStr;
 
-    use crate::language::location::RoswaalLocationName;
+    use crate::location::name::RoswaalLocationName;
 
     use super::*;
 

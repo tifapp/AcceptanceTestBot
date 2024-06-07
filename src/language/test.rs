@@ -1,4 +1,4 @@
-use super::location::RoswaalLocationName;
+use crate::location::name::RoswaalLocationName;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct RoswaalTest {
