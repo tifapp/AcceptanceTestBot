@@ -1,23 +1,19 @@
 use crate::{is_case, language::test::{RoswaalTest, RoswaalTestCommand}, utils::string::{ToAsciiCamelCase, UppercaseFirstAsciiCharacter}};
 
+use super::interface::RoswaalTypescriptGenerate;
+
 /// An output of generating typescript code.
-pub struct GeneratedTypescript {
+pub struct TestCaseTypescript {
     test_case_code: String,
     test_action_code: String
 }
 
-/// A trait for transpiling into a GeneratedTypescript instance.
-pub trait RoswaalTypescriptGenerate {
-    /// The associated typescript code for this test command.
-    fn typescript(&self) -> GeneratedTypescript;
-}
-
-impl RoswaalTypescriptGenerate for RoswaalTestCommand {
-    fn typescript(&self) -> GeneratedTypescript {
+impl RoswaalTypescriptGenerate<TestCaseTypescript> for RoswaalTestCommand {
+    fn typescript(&self) -> TestCaseTypescript {
         match self {
             Self::Step { name, requirement } => {
                 let function_name = requirement.to_ascii_camel_case();
-                GeneratedTypescript {
+                TestCaseTypescript {
                     test_case_code: format!(
 "\
   // {}
@@ -40,7 +36,7 @@ export const {} = async () => {{
             }
             Self::SetLocation { location_name } => {
                 let function_name = format!("setLocationTo{}", location_name.name().to_ascii_pascal_case());
-                GeneratedTypescript {
+                TestCaseTypescript {
                     test_case_code: format!(
 "\
   // Set Location to {}
@@ -97,9 +93,9 @@ test(\"{}\", async () => {{
     )
 }
 
-impl RoswaalTypescriptGenerate for RoswaalTest {
-    fn typescript(&self) -> GeneratedTypescript {
-        GeneratedTypescript {
+impl RoswaalTypescriptGenerate<TestCaseTypescript> for RoswaalTest {
+    fn typescript(&self) -> TestCaseTypescript {
+        TestCaseTypescript {
             test_case_code: self.test_case_typescript(),
             test_action_code: self.test_action_typescript()
         }
