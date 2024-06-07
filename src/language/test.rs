@@ -17,6 +17,16 @@ impl RoswaalTest {
     }
 }
 
+impl RoswaalTest {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn commands(&self) -> &Vec<RoswaalTestCommand> {
+        &self.commands
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum RoswaalTestCommand {
     Step { name: String, requirement: String },
