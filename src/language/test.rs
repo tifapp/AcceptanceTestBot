@@ -18,6 +18,10 @@ impl RoswaalTest {
 }
 
 impl RoswaalTest {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     pub fn commands(&self) -> &Vec<RoswaalTestCommand> {
         &self.commands
     }
