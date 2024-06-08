@@ -3,7 +3,7 @@ use std::str::FromStr;
 use once_cell::sync::Lazy;
 use regex::{Regex, RegexBuilder};
 
-use super::location::{RoswaalLocationName, RoswaalLocationParsingResult};
+use crate::location::name::{RoswaalLocationName, RoswaalLocationParsingResult};
 
 /// A token of roswaal test syntax.
 ///
@@ -177,7 +177,7 @@ mod ast_tests {
     mod token_tests {
         use std::str::FromStr;
 
-        use crate::language::location::RoswaalLocationNameParsingError;
+        use crate::location::name::{RoswaalLocationName, RoswaalLocationNameParsingError};
 
         use super::*;
 
@@ -420,7 +420,7 @@ mod ast_tests {
     mod syntax_tests {
         use std::str::FromStr;
 
-        use crate::language::ast::{ast_tests::RoswaalLocationName, RoswaalTestSyntaxLine, RoswaalTestSyntaxLineContent};
+        use crate::{language::ast::{RoswaalTestSyntaxLine, RoswaalTestSyntaxLineContent}, location::name::RoswaalLocationName};
 
         use super::{RoswaalTestSyntax, RoswaalTestSyntaxCommand};
 

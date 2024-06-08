@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use super::{ast::{RoswaalTestSyntax, RoswaalTestSyntaxCommand, RoswaalTestSyntaxLineContent}, location::RoswaalLocationName, test::{RoswaalTest, RoswaalTestCommand}};
+use crate::location::name::RoswaalLocationName;
+
+use super::{ast::{RoswaalTestSyntax, RoswaalTestSyntaxCommand, RoswaalTestSyntaxLineContent}, test::{RoswaalTest, RoswaalTestCommand}};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct RoswaalCompilationError {
@@ -311,7 +313,7 @@ struct CompiledCommand {
 mod compiler_tests {
     use std::str::FromStr;
 
-    use crate::language::{location::RoswaalLocationName, test::RoswaalTestCommand};
+    use crate::{language::test::RoswaalTestCommand, location::name::RoswaalLocationName};
 
     use super::*;
 
