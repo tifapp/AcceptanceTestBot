@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use crate::utils::normalize::RoswaalNormalize;
+use crate::utils::{normalize::RoswaalNormalize, string::UppercaseFirstAsciiCharacter};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum RoswaalLocationNameParsingError {
@@ -47,6 +47,13 @@ impl RoswaalLocationName {
     /// ```
     pub fn matches(&self, other: &Self) -> bool {
         self.name().roswaal_normalize() == other.name().roswaal_normalize()
+    }
+}
+
+impl RoswaalLocationName {
+    /// Returns this name in `PascalCase` as a raw String.
+    pub fn to_ascii_pascal_case_string(&self) -> String {
+        self.name().to_ascii_pascal_case()
     }
 }
 
