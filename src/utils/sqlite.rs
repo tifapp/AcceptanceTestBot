@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use sqlx::{query, Pool, SqliteConnection, Transaction};
+use sqlx::{query, Executor, Pool, Transaction};
 use sqlx::sqlite::Sqlite;
 use anyhow::Result;
 use tokio::sync::{Mutex, MutexGuard};
@@ -58,7 +58,7 @@ pub struct RoswaalSqliteTransaction<'a> {
 
 impl <'a> RoswaalSqliteTransaction<'a> {
     /// Returns the underlying sqlx connection for this transaction.
-    pub fn connection(&mut self) -> &mut SqliteConnection {
+    pub fn connection(&mut self) -> impl Executor<Database = Sqlite> {
         self.transaction.as_mut()
     }
 
@@ -85,16 +85,16 @@ macro_rules! with_transaction {
         match $work.await {
             Ok(value) => {
                 let result = $transaction.commit().await;
-                if result.is_err() {
-                    result
+                if let Err(err) = result {
+                    Err(err)
                 } else {
                     Ok(value)
                 }
             },
             Err(error) => {
                 let result = $transaction.rollback().await;
-                if result.is_err() {
-                    result
+                if let Err(err) = result {
+                    Err(err)
                 } else {
                     Err(error)
                 }
