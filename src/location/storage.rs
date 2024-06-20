@@ -3,7 +3,7 @@ use sqlx::{prelude::FromRow, query, query_as, Sqlite};
 
 use crate::utils::sqlite::RoswaalSqliteTransaction;
 
-use super::{coordinate::LocationCoordinate2D, location::RoswaalLocation, name::RoswaalLocationName};
+use super::location::RoswaalLocation;
 
 impl <'a> RoswaalSqliteTransaction <'a> {
     pub async fn save_locations(&mut self, locations: &Vec<RoswaalLocation>) -> Result<()> {
@@ -30,12 +30,7 @@ impl <'a> RoswaalSqliteTransaction <'a> {
         .fetch_all(self.connection())
         .await?
         .iter()
-        .map(|l| {
-            RoswaalLocation::new(
-                RoswaalLocationName { raw_value: l.name.clone() },
-                LocationCoordinate2D { latitude: l.latitude, longitude: l.longitude }
-            )
-        })
+        .map(|l| RoswaalLocation::new_without_validation(&l.name, l.latitude, l.longitude))
         .collect();
         Ok(locations)
     }
@@ -50,23 +45,15 @@ struct SqliteLocation {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
-    use crate::{location::{coordinate::LocationCoordinate2D, location::RoswaalLocation, name::RoswaalLocationName}, utils::sqlite::{RoswaalSqlite, RoswaalSqliteTransaction}};
+    use crate::{location::location::RoswaalLocation, utils::sqlite::RoswaalSqlite};
 
     #[tokio::test]
     async fn test_add_and_load_locations_no_prior_locations() {
         let sqlite = RoswaalSqlite::in_memory().await.unwrap();
         let mut transaction = sqlite.transaction().await.unwrap();
         let locations = vec![
-            RoswaalLocation::new(
-                RoswaalLocationName::from_str("Antarctica").unwrap(),
-                LocationCoordinate2D::try_new(32.29873932, 122.3939839).unwrap()
-            ),
-            RoswaalLocation::new(
-                RoswaalLocationName::from_str("New York").unwrap(),
-                LocationCoordinate2D::try_new(45.0, 45.0).unwrap()
-            )
+            RoswaalLocation::new_without_validation("Antarctica", 32.29873932, 122.3939839),
+            RoswaalLocation::new_without_validation("New York", 45.0, 45.0)
         ];
         _ = transaction.save_locations(&locations).await;
         let saved_locations = transaction.locations_in_alphabetical_order().await.unwrap();
@@ -78,43 +65,22 @@ mod tests {
         let sqlite = RoswaalSqlite::in_memory().await.unwrap();
         let mut transaction = sqlite.transaction().await.unwrap();
         let mut locations = vec![
-            RoswaalLocation::new(
-                RoswaalLocationName::from_str("Antarctica").unwrap(),
-                LocationCoordinate2D::try_new(32.29873932, 122.3939839).unwrap()
-            ),
-            RoswaalLocation::new(
-                RoswaalLocationName::from_str("New York").unwrap(),
-                LocationCoordinate2D::try_new(45.0, 45.0).unwrap()
-            )
+            RoswaalLocation::new_without_validation("Antarctica", 32.29873932, 122.3939839),
+            RoswaalLocation::new_without_validation("New York", 45.0, 45.0)
         ];
         _ = transaction.save_locations(&locations).await;
         locations = vec![
-            RoswaalLocation::new(
-                RoswaalLocationName::from_str("Antarctica").unwrap(),
-                LocationCoordinate2D::try_new(50.0, 50.0).unwrap()
-            ),
-            RoswaalLocation::new(
-                RoswaalLocationName::from_str("Oakland").unwrap(),
-                LocationCoordinate2D::try_new(45.0, 45.0).unwrap()
-            )
+            RoswaalLocation::new_without_validation("Antarctica", 50.0, 50.0),
+            RoswaalLocation::new_without_validation("Oakland", 45.0, 45.0)
         ];
         _ = transaction.save_locations(&locations).await;
         let saved_locations = transaction.locations_in_alphabetical_order().await.unwrap();
         assert_eq!(
             saved_locations,
             vec![
-                RoswaalLocation::new(
-                    RoswaalLocationName::from_str("Antarctica").unwrap(),
-                    LocationCoordinate2D::try_new(50.0, 50.0).unwrap()
-                ),
-                RoswaalLocation::new(
-                    RoswaalLocationName::from_str("New York").unwrap(),
-                    LocationCoordinate2D::try_new(45.0, 45.0).unwrap()
-                ),
-                RoswaalLocation::new(
-                    RoswaalLocationName::from_str("Oakland").unwrap(),
-                    LocationCoordinate2D::try_new(45.0, 45.0).unwrap()
-                )
+                RoswaalLocation::new_without_validation("Antarctica", 50.0, 50.0),
+                RoswaalLocation::new_without_validation("New York", 45.0, 45.0),
+                RoswaalLocation::new_without_validation("Oakland", 45.0, 45.0)
             ]
         )
     }

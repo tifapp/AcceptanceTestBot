@@ -1,10 +1,14 @@
 use std::str::FromStr;
 
+use once_cell::sync::Lazy;
+use regex::{Regex, RegexBuilder};
+
 use crate::utils::{normalize::RoswaalNormalize, string::UppercaseFirstAsciiCharacter};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum RoswaalLocationNameParsingError {
-    Empty
+    Empty,
+    InvalidFormat
 }
 
 pub type RoswaalLocationParsingResult = Result<
@@ -27,12 +31,23 @@ impl RoswaalLocationName {
     }
 }
 
+static LOCATION_NAME_REGEX: Lazy<Regex> = Lazy::new(|| {
+    RegexBuilder::new(r"^(?:[a-zA-Z0-9_\s]*[a-zA-Z]+[a-zA-Z0-9_\s]*)$")
+        .build()
+        .expect("Failed to compile location name regex.")
+});
+
 impl FromStr for RoswaalLocationName {
     type Err = RoswaalLocationNameParsingError;
 
     fn from_str(s: &str) -> RoswaalLocationParsingResult {
-        if s.is_empty() { return Err(RoswaalLocationNameParsingError::Empty) }
-        Ok(Self { raw_value: s.to_string() })
+        if s.is_empty() {
+            Err(RoswaalLocationNameParsingError::Empty)
+        } else if LOCATION_NAME_REGEX.is_match(s) {
+            Ok(Self { raw_value: s.to_string() })
+        } else {
+            Err(RoswaalLocationNameParsingError::InvalidFormat)
+        }
     }
 }
 
@@ -68,9 +83,33 @@ mod roswaal_location_tests {
     }
 
     #[test]
+    fn test_from_str_returns_error_when_invalid_format() {
+        let strings = [
+            ")(U(*U(*)",
+            "San, Francisco",
+            "|}{|DOJON SIBI",
+            "Santa | Cruz",
+            "Na(mek)",
+            "1234567890",
+            "     198397939"
+        ];
+        for str in strings {
+            let name = RoswaalLocationName::from_str(str);
+            assert_eq!(name, Err(RoswaalLocationNameParsingError::InvalidFormat))
+        }
+    }
+
+    #[test]
     fn test_from_str_returns_success_when_valid() {
-        let name = RoswaalLocationName::from_str("hello world").unwrap();
-        assert_eq!(name.name(), "hello world")
+        let strings = [
+            "hello world",
+            "San Francisco",
+            "    1 beach street"
+        ];
+        for str in strings {
+            let name = RoswaalLocationName::from_str(str).unwrap();
+            assert_eq!(name.name(), str);
+        }
     }
 
     #[test]
