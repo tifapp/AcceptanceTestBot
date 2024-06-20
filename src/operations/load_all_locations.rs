@@ -44,6 +44,7 @@ mod tests {
         ];
         let locations_str = "
 Test 1, 50.0, 50.0
+Invalid
 Test 2, -5.0, 5.0
             ";
         _ = AddLocationsResult::from_adding_locations(&locations_str, &sqlite).await.unwrap();
