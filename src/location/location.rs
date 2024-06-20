@@ -14,7 +14,7 @@ impl RoswaalLocation {
         Self { name, coordinate }
     }
 
-    pub(super) fn new_without_validation(name: &str, latitude: f32, longitude: f32) -> Self {
+    pub fn new_without_validation(name: &str, latitude: f32, longitude: f32) -> Self {
         let name = RoswaalLocationName { raw_value: name.to_string() };
         let coordinate = LocationCoordinate2D { latitude, longitude };
         Self::new(name, coordinate)
