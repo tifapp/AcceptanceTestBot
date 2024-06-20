@@ -1,5 +1,6 @@
 use anyhow::Result;
-use crate::{location::location::{FromRoswaalLocationsStr, RoswaalLocation, RoswaalLocationStringError}, utils::sqlite::RoswaalSqlite, with_transaction};
+
+use crate::{location::location::RoswaalStringLocations, utils::sqlite::RoswaalSqlite, with_transaction};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum AddLocationsResult {
@@ -15,17 +16,10 @@ impl AddLocationsResult {
         if locations_str.is_empty() {
             return Ok(Self::NoLocationsAdded)
         }
-        let mut locations_vec = Vec::<RoswaalLocation>::new();
-        let parsed_locations = Vec::<Result<RoswaalLocation, RoswaalLocationStringError>>
-            ::from_roswaal_locations_str(locations_str);
-        for result in parsed_locations {
-            if let Ok(location) = result {
-                locations_vec.push(location)
-            }
-        }
+        let string_locations = RoswaalStringLocations::from_roswaal_locations_str(locations_str);
         let mut transaction = sqlite.transaction().await?;
         with_transaction!(transaction, async {
-            transaction.save_locations(&locations_vec).await?;
+            transaction.save_locations(&string_locations.locations()).await?;
             Ok(Self::Success)
         })
     }
