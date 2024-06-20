@@ -65,12 +65,20 @@ impl FromStr for RoswaalLocation {
     }
 }
 
-pub trait FromRoswaalStr: Sized {
-    fn from_roswaal_str(str: &str) -> Self;
+/// A trait for parsing a user input string of roswaal locations.
+///
+/// A roswaal locations string is a new line-separated string that looks like so:
+/// ```
+/// <location name>, <latitude>, <longitude>
+/// ```
+///
+/// Empty lines are ignored.
+pub trait FromRoswaalLocationsStr: Sized {
+    fn from_roswaal_locations_str(str: &str) -> Self;
 }
 
-impl FromRoswaalStr for Vec<Result<RoswaalLocation, RoswaalLocationStringError>> {
-    fn from_roswaal_str(str: &str) -> Self {
+impl FromRoswaalLocationsStr for Vec<Result<RoswaalLocation, RoswaalLocationStringError>> {
+    fn from_roswaal_locations_str(str: &str) -> Self {
         str.lines()
             .filter(|l| !l.trim().is_empty())
             .map(RoswaalLocation::from_str)
@@ -81,11 +89,11 @@ impl FromRoswaalStr for Vec<Result<RoswaalLocation, RoswaalLocationStringError>>
 #[cfg(test)]
 mod tests {
     mod from_str_tests {
-        use crate::location::{location::{FromRoswaalStr, RoswaalLocation, RoswaalLocationStringError}, name::RoswaalLocationNameParsingError};
+        use crate::location::{location::{FromRoswaalLocationsStr, RoswaalLocation, RoswaalLocationStringError}, name::RoswaalLocationNameParsingError};
 
         #[test]
         fn test_returns_empty_vector_when_empty_string() {
-            let locations = Vec::<Result<RoswaalLocation, RoswaalLocationStringError>>::from_roswaal_str("");
+            let locations = Vec::<Result<RoswaalLocation, RoswaalLocationStringError>>::from_roswaal_locations_str("");
             assert_eq!(locations, vec![])
         }
 
@@ -99,7 +107,7 @@ San Francisco, 12.298739, 122.2989379
 Test 4, 0.0, 0.0
    Whitespace   ,      2.198   ,         3.1415
                 ";
-            let locations = Vec::<Result<RoswaalLocation, RoswaalLocationStringError>>::from_roswaal_str(str);
+            let locations = Vec::<Result<RoswaalLocation, RoswaalLocationStringError>>::from_roswaal_locations_str(str);
             let expected_locations = vec![
                 Ok(RoswaalLocation::new_without_validation("Antarctica", 50.0, 50.0)),
                 Ok(RoswaalLocation::new_without_validation("New York", 45.0, 45.0)),
@@ -120,7 +128,7 @@ Test 4, hello, 0.0
 Test 5, -80.0, world
 Test 6, -400.0, 400
                 ";
-            let locations = Vec::<Result<RoswaalLocation, RoswaalLocationStringError>>::from_roswaal_str(str);
+            let locations = Vec::<Result<RoswaalLocation, RoswaalLocationStringError>>::from_roswaal_locations_str(str);
             let expected_locations = vec![
                 Ok(RoswaalLocation::new_without_validation("Antarctica", 50.0, 50.0)),
                 Err(RoswaalLocationStringError::InvalidCoordinate { name: "New York".to_string() }),

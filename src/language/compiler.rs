@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::location::name::RoswaalLocationName;
+use crate::location::name::{RoswaalLocationName, RoswaalLocationNameParsingError};
 
 use super::{ast::{RoswaalTestSyntax, RoswaalTestSyntaxCommand, RoswaalTestSyntaxLineContent}, test::{RoswaalTest, RoswaalTestCommand}};
 
@@ -17,7 +17,8 @@ pub enum RoswaalCompilationErrorCode {
     NoCommandDescription { command_name: String },
     NoStepRequirement { step_name: String, step_description: String },
     NoRequirementStep { requirement_name: String, requirement_description: String },
-    InvalidLocationName(String),
+    UnknownLocationName(String),
+    InvalidLocationName(String, RoswaalLocationNameParsingError),
     InvalidCommandName(String),
     Duplicate {
       name: String,
@@ -48,16 +49,7 @@ pub struct RoswaalCompileContext {
 impl RoswaalCompileContext {
     /// Creates a new empty context with no location or test names.
     pub fn empty() -> Self {
-        Self {
-            location_names: vec![],
-            test_names: vec![],
-            errors: vec![],
-            test_name: None,
-            test_description: None,
-            matchable_steps: HashMap::new(),
-            matchable_requirements: HashMap::new(),
-            commands: vec![]
-        }
+        Self::new(vec![], vec![])
     }
 
     /// Creates a new context with the specified location and test names.
@@ -117,8 +109,17 @@ impl RoswaalCompile for RoswaalTest {
                             ctx.test_description = Some(description.to_string())
                         },
                         RoswaalTestSyntaxCommand::SetLocation { parse_result } => {
-                            if let Some(location_name) = parse_result.as_ref().ok() {
-                                ctx.append_location(line_number, location_name.clone());
+                            match parse_result {
+                                Ok(location_name) => {
+                                    ctx.append_location(line_number, location_name.clone());
+                                },
+                                Err(err) => {
+                                    let code = RoswaalCompilationErrorCode::InvalidLocationName(
+                                        description.to_string(),
+                                        err.clone()
+                                    );
+                                    ctx.append_error(line_number, code)
+                                }
                             }
                         },
                         RoswaalTestSyntaxCommand::UnknownCommand => {
@@ -174,7 +175,7 @@ impl RoswaalCompileContext {
         if !self.location_names.iter().any(|name| name.matches(&location_name)) {
             self.append_error(
                 line_number,
-                RoswaalCompilationErrorCode::InvalidLocationName(location_name.name().to_string())
+                RoswaalCompilationErrorCode::UnknownLocationName(location_name.name().to_string())
             )
         } else {
             let command = CompiledCommand {
@@ -508,7 +509,7 @@ Set Location:
     }
 
     #[test]
-    fn test_parse_returns_invalid_location_when_location_name_is_not_in_locations_list() {
+    fn test_parse_returns_unknown_location_when_location_name_is_not_in_locations_list() {
         let location_names = vec!(RoswaalLocationName::from_str("Hello").unwrap());
         let test = "\
 New test: This is an acceptance test
@@ -520,7 +521,30 @@ Set Location: world
         );
         let error = RoswaalCompilationError {
             line_number: 2,
-            code: RoswaalCompilationErrorCode::InvalidLocationName("world".to_string())
+            code: RoswaalCompilationErrorCode::UnknownLocationName("world".to_string())
+        };
+        assert_contains_compile_error(&result, &error);
+    }
+
+    #[test]
+    fn test_parse_returns_invalid_location_when_location_name_is_poorly_formatted() {
+        let location_names = vec!(RoswaalLocationName::from_str("Hello").unwrap());
+        let test = "\
+New test: This is an acceptance test
+Step 1: do the thing
+Set Location: 29783987
+Requirement 1: sure, do the thing
+";
+        let result = RoswaalTest::compile(
+            test,
+            RoswaalCompileContext::new(location_names, vec![])
+        );
+        let error = RoswaalCompilationError {
+            line_number: 3,
+            code: RoswaalCompilationErrorCode::InvalidLocationName(
+                "29783987".to_string(),
+                RoswaalLocationNameParsingError::InvalidFormat
+            )
         };
         assert_contains_compile_error(&result, &error);
     }
