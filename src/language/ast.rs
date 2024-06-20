@@ -247,7 +247,7 @@ mod ast_tests {
                     parse_result: parse_result.clone()
                 };
                 assert_command(line, command_name, name, command);
-                assert_eq!(name, parse_result.unwrap().name())
+                assert_eq!(name, parse_result.unwrap().raw_name())
             }
 
             fn assert_set_location_with_error(

@@ -73,6 +73,7 @@ impl FromStr for RoswaalLocation {
 /// ```
 ///
 /// Empty lines are ignored.
+#[derive(Debug, PartialEq)]
 pub struct RoswaalStringLocations {
     results: Vec<Result<RoswaalLocation, RoswaalLocationStringError>>
 }

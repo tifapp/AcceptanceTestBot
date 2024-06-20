@@ -2,9 +2,9 @@ use anyhow::Result;
 
 use crate::{location::location::RoswaalStringLocations, utils::sqlite::RoswaalSqlite, with_transaction};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub enum AddLocationsResult {
-    Success,
+    Success(RoswaalStringLocations),
     NoLocationsAdded
 }
 
@@ -20,20 +20,31 @@ impl AddLocationsResult {
         let mut transaction = sqlite.transaction().await?;
         with_transaction!(transaction, async {
             transaction.save_locations(&string_locations.locations()).await?;
-            Ok(Self::Success)
+            Ok(Self::Success(string_locations))
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{operations::add_locations::AddLocationsResult, utils::sqlite::RoswaalSqlite};
+    use crate::{location::location::RoswaalStringLocations, operations::add_locations::AddLocationsResult, utils::sqlite::RoswaalSqlite};
 
     #[tokio::test]
     async fn test_success_when_adding_locations_smoothly() {
+        let str = "Test, 50.0, 50.0";
         let sqlite = RoswaalSqlite::in_memory().await.unwrap();
-        let result = AddLocationsResult::from_adding_locations("Test, 50.0, 50.0", &sqlite).await;
-        assert_eq!(result.ok(), Some(AddLocationsResult::Success))
+        let result = AddLocationsResult::from_adding_locations(str, &sqlite).await;
+        let str_locations = RoswaalStringLocations::from_roswaal_locations_str(str);
+        assert_eq!(result.ok(), Some(AddLocationsResult::Success(str_locations)))
+    }
+
+    #[tokio::test]
+    async fn test_success_mixes_proper_and_invalid_locations() {
+        let str = "Test, 50.0, 50.0\n29879";
+        let sqlite = RoswaalSqlite::in_memory().await.unwrap();
+        let result = AddLocationsResult::from_adding_locations(str, &sqlite).await;
+        let str_locations = RoswaalStringLocations::from_roswaal_locations_str(str);
+        assert_eq!(result.ok(), Some(AddLocationsResult::Success(str_locations)))
     }
 
     #[tokio::test]

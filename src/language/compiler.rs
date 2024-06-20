@@ -175,7 +175,7 @@ impl RoswaalCompileContext {
         if !self.location_names.iter().any(|name| name.matches(&location_name)) {
             self.append_error(
                 line_number,
-                RoswaalCompilationErrorCode::UnknownLocationName(location_name.name().to_string())
+                RoswaalCompilationErrorCode::UnknownLocationName(location_name.raw_name().to_string())
             )
         } else {
             let command = CompiledCommand {
