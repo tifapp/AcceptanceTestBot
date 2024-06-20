@@ -1,8 +1,8 @@
 /// A latitude-longitude coordinate that assumes a spherical-earth.
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct LocationCoordinate2D {
-    latitude: f32,
-    longitude: f32
+    pub(super) latitude: f32,
+    pub(super) longitude: f32
 }
 
 impl LocationCoordinate2D {

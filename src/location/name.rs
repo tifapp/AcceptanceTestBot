@@ -18,7 +18,7 @@ pub type RoswaalLocationParsingResult = Result<
 /// for formatting the name in different contexts.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct RoswaalLocationName {
-    raw_value: String
+    pub(super) raw_value: String
 }
 
 impl RoswaalLocationName {
