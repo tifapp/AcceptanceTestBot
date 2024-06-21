@@ -42,7 +42,7 @@ export const {} = async () => {{
   // Set Location to {}
   testCase.appendAction(TestActions.{})
 ",
-                        location_name.name(),
+                        location_name.raw_name(),
                         function_name
                     ),
                     test_action_code: format!(

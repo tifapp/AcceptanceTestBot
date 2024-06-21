@@ -26,7 +26,7 @@ pub struct RoswaalLocationName {
 }
 
 impl RoswaalLocationName {
-    pub fn name(&self) -> &str {
+    pub fn raw_name(&self) -> &str {
         &self.raw_value
     }
 }
@@ -61,14 +61,14 @@ impl RoswaalLocationName {
     /// assert!(name.matches("  Hello  World  "))
     /// ```
     pub fn matches(&self, other: &Self) -> bool {
-        self.name().roswaal_normalize() == other.name().roswaal_normalize()
+        self.raw_name().roswaal_normalize() == other.raw_name().roswaal_normalize()
     }
 }
 
 impl RoswaalLocationName {
     /// Returns this name in `PascalCase` as a raw String.
     pub fn to_ascii_pascal_case_string(&self) -> String {
-        self.name().to_ascii_pascal_case()
+        self.raw_name().to_ascii_pascal_case()
     }
 }
 
@@ -108,7 +108,7 @@ mod roswaal_location_tests {
         ];
         for str in strings {
             let name = RoswaalLocationName::from_str(str).unwrap();
-            assert_eq!(name.name(), str);
+            assert_eq!(name.raw_name(), str);
         }
     }
 
