@@ -4,8 +4,9 @@ use anyhow::Result;
 use reqwest::{header::CONTENT_TYPE, Client};
 use serde::Serialize;
 
-use crate::location::location::{RoswaalLocationStringError, RoswaalStringLocations};
+use crate::{language::ast::RoswaalTestSyntax, location::location::{RoswaalLocationStringError, RoswaalStringLocations}};
 
+/// A serializeable type for a pull request on github.
 #[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct GithubPullRequest {
     title: String,
@@ -22,7 +23,14 @@ impl GithubPullRequest {
     /// Creates a PR for the main frontend repo.
     pub fn for_tif_react_frontend(title: String, body: String, head_branch: String) -> Self {
         Self {
-            body,
+            body: format!(
+"{}
+
+## Tickets
+
+Since I am Roswaaaaaaal, I do not need to specify any tiiiiiiiickets!
+", body
+            ),
             title: format!("Roswaal: {}", title),
             owner: "tifapp".to_string(),
             repo: "FitnessProject".to_string(),
@@ -63,6 +71,24 @@ impl GithubPullRequest {
                 body.push_str("\n")
             }
         }
+        Self::for_tif_react_frontend(title, body, head_branch)
+    }
+
+    /// Creates a PR for test case creation on the frontend repo.
+    pub fn for_test_cases_tif_react_frontend<'a>(
+        test_names_with_syntax: Vec<(&str, RoswaalTestSyntax<'a>)>,
+        head_branch: String
+    ) -> Self {
+        let joined_names = test_names_with_syntax.iter()
+            .map(|(name, _)| name.to_string())
+            .collect::<Vec<String>>()
+            .join("\", \"");
+        let title = format!("Add Tests \"{}\"", joined_names);
+        let joined_test_cases = test_names_with_syntax.iter()
+            .map(|(_, syntax)| format!("```\n{}\n```", syntax.source_code()))
+            .collect::<Vec<String>>()
+            .join("\n");
+        let body = format!("Adds the following teeeeeests!\n\n{}", joined_test_cases);
         Self::for_tif_react_frontend(title, body, head_branch)
     }
 }
@@ -106,7 +132,7 @@ impl GithubPullRequestOpen for Client {
 
 #[cfg(test)]
 mod tests {
-    use crate::location::location::RoswaalStringLocations;
+    use crate::{language::ast::RoswaalTestSyntax, location::location::RoswaalStringLocations};
 
     use super::GithubPullRequest;
 
@@ -160,5 +186,47 @@ Test 2, -78.290782973, 54.309983793
 - **Test 2** (Latitude: -78.2907867431640625, Longitude: 54.3099822998046875)
 ";
         assert!(pr.body.contains(expected_body));
+    }
+
+    #[test]
+    fn test_from_multiple_test_cases() {
+        let test1 = "New Test: I am the test
+Step 1: Stuff
+Step 2: More Stuff
+Set Location: Antarctica
+Step 3: More Stuff
+Requirement 1: Do stuff
+Requirement 2: Do more stuff
+Requirement 3: Do more stuff";
+        let test2 = "New Test: I am the next test
+Step 1: A
+Requirement 1: B";
+        let tests_with_names = vec![
+            ("I am the test", RoswaalTestSyntax::from(test1)),
+            ("I am the next test", RoswaalTestSyntax::from(test2))
+        ];
+        let pr = GithubPullRequest::for_test_cases_tif_react_frontend(
+            tests_with_names,
+            "test".to_string()
+        );
+        assert_eq!(pr.title, "Roswaal: Add Tests \"I am the test\", \"I am the next test\"");
+        let expected_body = "Adds the following teeeeeests!
+
+```
+New Test: I am the test
+Step 1: Stuff
+Step 2: More Stuff
+Set Location: Antarctica
+Step 3: More Stuff
+Requirement 1: Do stuff
+Requirement 2: Do more stuff
+Requirement 3: Do more stuff
+```
+```
+New Test: I am the next test
+Step 1: A
+Requirement 1: B
+```";
+        assert!(pr.body.contains(expected_body))
     }
 }
