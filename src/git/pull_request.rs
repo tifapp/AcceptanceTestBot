@@ -67,6 +67,20 @@ impl GithubPullRequest {
     }
 }
 
+impl GithubPullRequest {
+    /// Designates this PR specifically for testing and adjusts the title and body to disclaim
+    /// that it should not be merged.
+    ///
+    /// This is useful for E2E tests.
+    pub fn for_testing_do_not_merge(self) -> Self {
+        Self {
+            title: format!("[Test - DO NOT MERGE] {}", self.title),
+            body: format!("This is a test PR, please do not meeeeeeerge!!!\n\n{}", self.body),
+            ..self
+        }
+    }
+}
+
 pub trait GithubPullRequestOpen {
     /// Opens a PR on github, and returns true if it was created successfully.
     async fn open(&self, pull_request: &GithubPullRequest) -> Result<bool>;
@@ -95,6 +109,18 @@ mod tests {
     use crate::location::location::RoswaalStringLocations;
 
     use super::GithubPullRequest;
+
+    #[test]
+    fn test_do_not_merge_specifies_do_not_merge_in_title_and_body() {
+        let pr = GithubPullRequest::for_tif_react_frontend(
+            "Hello".to_string(),
+            "World".to_string(),
+            "test".to_string()
+        )
+        .for_testing_do_not_merge();
+        assert_eq!(pr.title, "[Test - DO NOT MERGE] Roswaal: Hello");
+        assert!(pr.body.starts_with("This is a test PR, please do not meeeeeeerge!!!\n\n"))
+    }
 
     #[test]
     fn test_from_string_locations_with_invalid_locations() {
