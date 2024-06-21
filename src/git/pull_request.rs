@@ -75,8 +75,8 @@ Since I am Roswaaaaaaal, I do not need to specify any tiiiiiiiickets!
     }
 
     /// Creates a PR for test case creation on the frontend repo.
-    pub fn for_test_cases_tif_react_frontend<'a>(
-        test_names_with_syntax: Vec<(&str, RoswaalTestSyntax<'a>)>,
+    pub fn for_test_cases_tif_react_frontend<'a, 'b>(
+        test_names_with_syntax: Vec<(&'a str, RoswaalTestSyntax<'b>)>,
         head_branch: String
     ) -> Self {
         let joined_names = test_names_with_syntax.iter()
