@@ -31,10 +31,20 @@ impl RoswaalLocation {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum RoswaalLocationStringError {
     InvalidName(String, RoswaalLocationNameParsingError),
     InvalidCoordinate { name: String }
+}
+
+impl RoswaalLocationStringError {
+    /// Returns the raw stringified location name associated with this error.
+    pub fn raw_associated_location_name(&self) -> &str {
+        match self {
+            Self::InvalidName(name, _) => name,
+            Self::InvalidCoordinate { name } => name
+        }
+    }
 }
 
 impl FromStr for RoswaalLocation {
@@ -89,16 +99,40 @@ impl RoswaalStringLocations {
 }
 
 impl RoswaalStringLocations {
+    /// Returns the successfully parsed locations in their original string order.
     pub fn locations(&self) -> Vec<RoswaalLocation> {
         self.results()
             .iter()
             .filter_map(|r| r.as_ref().ok())
             .map(|l| l.clone())
-            .collect::<Vec<RoswaalLocation>>()
+            .collect()
     }
 
+    /// Returns the errors of unsuccessfully parsed locations in their original string order.
+    pub fn errors(&self) -> Vec<RoswaalLocationStringError> {
+        self.results()
+            .iter()
+            .filter_map(|r| r.as_ref().err())
+            .map(|err| err.clone())
+            .collect()
+    }
+
+    /// Returns the parse result of each location in their original string order.
     pub fn results(&self) -> &Vec<Result<RoswaalLocation, RoswaalLocationStringError>> {
         &self.results
+    }
+}
+
+impl RoswaalStringLocations {
+    /// Returns a vector of the raw location names of each location line.
+    pub fn raw_names(&self) -> Vec<&str> {
+        self.results().iter().map(|r| {
+            match r {
+                Ok(l) => l.name().raw_name(),
+                Err(err) => err.raw_associated_location_name()
+            }
+        })
+        .collect()
     }
 }
 

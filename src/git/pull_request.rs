@@ -4,6 +4,9 @@ use anyhow::Result;
 use reqwest::{header::CONTENT_TYPE, Client};
 use serde::Serialize;
 
+use crate::{language::ast::RoswaalTestSyntax, location::location::{RoswaalLocationStringError, RoswaalStringLocations}};
+
+/// A serializeable type for a pull request on github.
 #[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct GithubPullRequest {
     title: String,
@@ -20,12 +23,86 @@ impl GithubPullRequest {
     /// Creates a PR for the main frontend repo.
     pub fn for_tif_react_frontend(title: String, body: String, head_branch: String) -> Self {
         Self {
-            body,
+            body: format!(
+"{}
+
+## Tickets
+
+Since I am Roswaaaaaaal, I do not need to specify any tiiiiiiiickets!
+", body
+            ),
             title: format!("Roswaal: {}", title),
             owner: "tifapp".to_string(),
             repo: "FitnessProject".to_string(),
             base: "development".to_string(),
             head: format!("roswaal:{}", head_branch)
+        }
+    }
+
+    /// Creates a PR associated with adding new locations to the main frontend repo.
+    pub fn for_locations_tif_react_frontend(
+        string_locations: RoswaalStringLocations,
+        head_branch: String
+    ) -> Self {
+        let title = format!("Add Locations ({})", string_locations.raw_names().join(", "));
+        let mut body = "Adds the following locations to the acceptance teeeeeeeeeests:\n".to_string();
+        for location in string_locations.locations() {
+            let line = format!(
+                "- **{}** (Latitude: {:.16}, Longitude: {:.16})\n",
+                location.name().raw_name(),
+                location.coordinate().latitude(),
+                location.coordinate().longitude()
+            );
+            body.push_str(&line)
+        }
+        let errors = string_locations.errors();
+        if !errors.is_empty() {
+            body.push_str("\nThe following locations were specified in the slack command, but are invaaaaaaaalid:\n");
+            for error in errors {
+                body.push_str(&format!("- **{}** ", error.raw_associated_location_name()));
+                match error {
+                    RoswaalLocationStringError::InvalidName(_, _) => {
+                        body.push_str("(Invalid Name)")
+                    },
+                    RoswaalLocationStringError::InvalidCoordinate { name: _ } => {
+                        body.push_str("(Invalid Coordinate)")
+                    }
+                };
+                body.push_str("\n")
+            }
+        }
+        Self::for_tif_react_frontend(title, body, head_branch)
+    }
+
+    /// Creates a PR for test case creation on the frontend repo.
+    pub fn for_test_cases_tif_react_frontend<'a, 'b>(
+        test_names_with_syntax: Vec<(&'a str, RoswaalTestSyntax<'b>)>,
+        head_branch: String
+    ) -> Self {
+        let joined_names = test_names_with_syntax.iter()
+            .map(|(name, _)| name.to_string())
+            .collect::<Vec<String>>()
+            .join("\", \"");
+        let title = format!("Add Tests \"{}\"", joined_names);
+        let joined_test_cases = test_names_with_syntax.iter()
+            .map(|(_, syntax)| format!("```\n{}\n```", syntax.source_code()))
+            .collect::<Vec<String>>()
+            .join("\n");
+        let body = format!("Adds the following teeeeeests!\n\n{}", joined_test_cases);
+        Self::for_tif_react_frontend(title, body, head_branch)
+    }
+}
+
+impl GithubPullRequest {
+    /// Designates this PR specifically for testing and adjusts the title and body to disclaim
+    /// that it should not be merged.
+    ///
+    /// This is useful for E2E tests.
+    pub fn for_testing_do_not_merge(self) -> Self {
+        Self {
+            title: format!("[Test - DO NOT MERGE] {}", self.title),
+            body: format!("This is a test PR, please do not meeeeeeerge!!!\n\n{}", self.body),
+            ..self
         }
     }
 }
@@ -50,5 +127,106 @@ impl GithubPullRequestOpen for Client {
             .send()
             .await?;
         Ok(response.status() == 201)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{language::ast::RoswaalTestSyntax, location::location::RoswaalStringLocations};
+
+    use super::GithubPullRequest;
+
+    #[test]
+    fn test_do_not_merge_specifies_do_not_merge_in_title_and_body() {
+        let pr = GithubPullRequest::for_tif_react_frontend(
+            "Hello".to_string(),
+            "World".to_string(),
+            "test".to_string()
+        )
+        .for_testing_do_not_merge();
+        assert_eq!(pr.title, "[Test - DO NOT MERGE] Roswaal: Hello");
+        assert!(pr.body.starts_with("This is a test PR, please do not meeeeeeerge!!!\n\n"))
+    }
+
+    #[test]
+    fn test_from_string_locations_with_invalid_locations() {
+        let locations_str = "
+Test 1, 45.0, 4.0
+908308
+Test 2, -78.290782973, 54.309983793
+Invalid, hello, world
+            ";
+        let string_locations = RoswaalStringLocations::from_roswaal_locations_str(locations_str);
+        let branch_name = "test-locations-branch".to_string();
+        let pr = GithubPullRequest::for_locations_tif_react_frontend(string_locations, branch_name);
+        assert_eq!(pr.title, "Roswaal: Add Locations (Test 1, 908308, Test 2, Invalid)".to_string());
+        let expected_body = "Adds the following locations to the acceptance teeeeeeeeeests:
+- **Test 1** (Latitude: 45.0000000000000000, Longitude: 4.0000000000000000)
+- **Test 2** (Latitude: -78.2907867431640625, Longitude: 54.3099822998046875)
+
+The following locations were specified in the slack command, but are invaaaaaaaalid:
+- **908308** (Invalid Name)
+- **Invalid** (Invalid Coordinate)
+";
+        assert!(pr.body.contains(expected_body));
+    }
+
+    #[test]
+    fn test_from_string_locations_only_valid_locations_omits_invalid_section() {
+        let locations_str = "
+Test 1, 45.0, 4.0
+Test 2, -78.290782973, 54.309983793
+            ";
+        let string_locations = RoswaalStringLocations::from_roswaal_locations_str(locations_str);
+        let branch_name = "test-locations-branch".to_string();
+        let pr = GithubPullRequest::for_locations_tif_react_frontend(string_locations, branch_name);
+        assert_eq!(pr.title, "Roswaal: Add Locations (Test 1, Test 2)".to_string());
+        let expected_body = "Adds the following locations to the acceptance teeeeeeeeeests:
+- **Test 1** (Latitude: 45.0000000000000000, Longitude: 4.0000000000000000)
+- **Test 2** (Latitude: -78.2907867431640625, Longitude: 54.3099822998046875)
+";
+        assert!(pr.body.contains(expected_body));
+    }
+
+    #[test]
+    fn test_from_multiple_test_cases() {
+        let test1 = "New Test: I am the test
+Step 1: Stuff
+Step 2: More Stuff
+Set Location: Antarctica
+Step 3: More Stuff
+Requirement 1: Do stuff
+Requirement 2: Do more stuff
+Requirement 3: Do more stuff";
+        let test2 = "New Test: I am the next test
+Step 1: A
+Requirement 1: B";
+        let tests_with_names = vec![
+            ("I am the test", RoswaalTestSyntax::from(test1)),
+            ("I am the next test", RoswaalTestSyntax::from(test2))
+        ];
+        let pr = GithubPullRequest::for_test_cases_tif_react_frontend(
+            tests_with_names,
+            "test".to_string()
+        );
+        assert_eq!(pr.title, "Roswaal: Add Tests \"I am the test\", \"I am the next test\"");
+        let expected_body = "Adds the following teeeeeests!
+
+```
+New Test: I am the test
+Step 1: Stuff
+Step 2: More Stuff
+Set Location: Antarctica
+Step 3: More Stuff
+Requirement 1: Do stuff
+Requirement 2: Do more stuff
+Requirement 3: Do more stuff
+```
+```
+New Test: I am the next test
+Step 1: A
+Requirement 1: B
+```";
+        assert!(pr.body.contains(expected_body))
     }
 }

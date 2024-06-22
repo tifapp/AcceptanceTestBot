@@ -119,6 +119,10 @@ impl <'a> RoswaalTestSyntax<'a> {
             line_count as u32
         }
     }
+
+    pub fn source_code(&self) -> &str {
+        &self.source_code
+    }
 }
 
 impl <'a> From<&'a str> for RoswaalTestSyntax<'a> {
