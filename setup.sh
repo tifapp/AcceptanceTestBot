@@ -21,7 +21,4 @@ if [ $? -ne 0 ]; then
 fi
 echo "✅ Successfully pulled latest development branch"
 cd ..
-echo "🔵 Creating test repo (this is used as an isolated environment for integration tests)"
-mkdir -p FitnessProjectTest/roswaal
-touch FitnessProjectTest/roswaal/Locations.ts
-echo "✅ Successfully setup test repo"
+./setup_test_repo.sh

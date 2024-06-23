@@ -6,7 +6,7 @@ use serde::Serialize;
 
 use crate::{language::ast::RoswaalTestSyntax, location::location::{RoswaalLocationStringError, RoswaalStringLocations}};
 
-use super::branch_name::RoswaalGitBranchName;
+use super::branch_name::RoswaalOwnedGitBranchName;
 
 /// A serializeable type for a pull request on github.
 #[derive(Debug, PartialEq, Eq, Serialize)]
@@ -26,7 +26,7 @@ impl GithubPullRequest {
     pub fn for_tif_react_frontend(
         title: String,
         body: String,
-        head_branch: RoswaalGitBranchName
+        head_branch: RoswaalOwnedGitBranchName
     ) -> Self {
         Self {
             body: format!(
@@ -48,7 +48,7 @@ Since I am Roswaaaaaaal, I do not need to specify any tiiiiiiiickets!
     /// Creates a PR associated with adding new locations to the main frontend repo.
     pub fn for_locations_tif_react_frontend(
         string_locations: RoswaalStringLocations,
-        head_branch: RoswaalGitBranchName
+        head_branch: RoswaalOwnedGitBranchName
     ) -> Self {
         let title = format!("Add Locations ({})", string_locations.raw_names().join(", "));
         let mut body = "Adds the following locations to the acceptance teeeeeeeeeests:\n".to_string();
@@ -83,7 +83,7 @@ Since I am Roswaaaaaaal, I do not need to specify any tiiiiiiiickets!
     /// Creates a PR for test case creation on the frontend repo.
     pub fn for_test_cases_tif_react_frontend<'a, 'b>(
         test_names_with_syntax: Vec<(&'a str, RoswaalTestSyntax<'b>)>,
-        head_branch: RoswaalGitBranchName
+        head_branch: RoswaalOwnedGitBranchName
     ) -> Self {
         let joined_names = test_names_with_syntax.iter()
             .map(|(name, _)| name.to_string())
@@ -138,7 +138,7 @@ impl GithubPullRequestOpen for Client {
 
 #[cfg(test)]
 mod tests {
-    use crate::{git::branch_name::RoswaalGitBranchName, language::ast::RoswaalTestSyntax, location::location::RoswaalStringLocations};
+    use crate::{git::branch_name::RoswaalOwnedGitBranchName, language::ast::RoswaalTestSyntax, location::location::RoswaalStringLocations};
 
     use super::GithubPullRequest;
 
@@ -147,7 +147,7 @@ mod tests {
         let pr = GithubPullRequest::for_tif_react_frontend(
             "Hello".to_string(),
             "World".to_string(),
-            RoswaalGitBranchName::new("test-branch")
+            RoswaalOwnedGitBranchName::new("test-branch")
         )
         .for_testing_do_not_merge();
         assert_eq!(pr.title, "[Test - DO NOT MERGE] Roswaal: Hello");
@@ -163,7 +163,7 @@ Test 2, -78.290782973, 54.309983793
 Invalid, hello, world
             ";
         let string_locations = RoswaalStringLocations::from_roswaal_locations_str(locations_str);
-        let branch_name = RoswaalGitBranchName::new("test-locations-branch");
+        let branch_name = RoswaalOwnedGitBranchName::new("test-locations-branch");
         let pr = GithubPullRequest::for_locations_tif_react_frontend(string_locations, branch_name);
         assert_eq!(pr.title, "Roswaal: Add Locations (Test 1, 908308, Test 2, Invalid)".to_string());
         let expected_body = "Adds the following locations to the acceptance teeeeeeeeeests:
@@ -184,7 +184,7 @@ Test 1, 45.0, 4.0
 Test 2, -78.290782973, 54.309983793
             ";
         let string_locations = RoswaalStringLocations::from_roswaal_locations_str(locations_str);
-        let branch_name = RoswaalGitBranchName::new("test-locations-branch");
+        let branch_name = RoswaalOwnedGitBranchName::new("test-locations-branch");
         let pr = GithubPullRequest::for_locations_tif_react_frontend(string_locations, branch_name);
         assert_eq!(pr.title, "Roswaal: Add Locations (Test 1, Test 2)".to_string());
         let expected_body = "Adds the following locations to the acceptance teeeeeeeeeests:
@@ -213,7 +213,7 @@ Requirement 1: B";
         ];
         let pr = GithubPullRequest::for_test_cases_tif_react_frontend(
             tests_with_names,
-            RoswaalGitBranchName::new("test-cases")
+            RoswaalOwnedGitBranchName::new("test-cases")
         );
         assert_eq!(pr.title, "Roswaal: Add Tests \"I am the test\", \"I am the next test\"");
         let expected_body = "Adds the following teeeeeests!
