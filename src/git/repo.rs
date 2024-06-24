@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::{io, path::Path, sync::Arc};
 use git2::{build::CheckoutBuilder, Cred, FetchOptions, IndexAddOption, PushOptions, RemoteCallbacks, Repository, ResetType};
-use tokio::{fs::remove_file, join, spawn, sync::{Mutex, MutexGuard}};
+use tokio::{fs::remove_file, join, spawn, sync::{Mutex, MutexGuard}, try_join};
 
 use crate::utils::fs::remove_dir_all_empty;
 
@@ -127,11 +127,15 @@ impl RoswaalGitRepositoryClient for LibGit2RepositoryClient {
 
     async fn clean_all_untracked(&self) -> Result<()> {
         let statuses = self.repo.statuses(None)?;
-        for entry in statuses.iter() {
-            let status = entry.status();
-            if let (Some(entry_path), true) = (entry.path(), status.is_wt_new()) {
-                remove_file(self.repo.workdir().unwrap().join(entry_path)).await?;
-            }
+        let futures = statuses.iter()
+            .filter_map(|entry| {
+                if let (Some(entry_path), true) = (entry.path(), entry.status().is_wt_new()) {
+                    return Some(spawn(remove_file(self.repo.workdir().unwrap().join(entry_path))))
+                }
+                None
+            });
+        for f in futures {
+            f.await??;
         }
         remove_dir_all_empty(self.metadata.relative_path(".")).await?;
         Ok(())
