@@ -1,7 +1,7 @@
 use anyhow::Result;
-use std::{io, path::Path, sync::Arc};
-use git2::{build::CheckoutBuilder, Cred, FetchOptions, IndexAddOption, PushOptions, RemoteCallbacks, Repository, ResetType};
-use tokio::{fs::remove_file, join, spawn, sync::{Mutex, MutexGuard}, try_join};
+use std::{path::Path, sync::Arc};
+use git2::{build::CheckoutBuilder, BranchType, Cred, FetchOptions, IndexAddOption, PushOptions, RemoteCallbacks, Repository, ResetType};
+use tokio::{fs::remove_file, spawn, sync::{Mutex, MutexGuard}};
 
 use crate::utils::fs::remove_dir_all_empty;
 
@@ -56,6 +56,11 @@ pub trait RoswaalGitRepositoryClient: Sized {
 
     /// Peforms the equivalent of a `git push origin <branch>`.
     async fn push_changes(&self, branch_name: &RoswaalOwnedGitBranchName) -> Result<()>;
+
+    /// Performs the equivalent of a `git branch -d <branch>`.
+    ///
+    /// Returns true if the deletion was successful.
+    async fn delete_local_branch(&self, branch_name: &RoswaalOwnedGitBranchName) -> Result<bool>;
 }
 
 /// A `RoswaalGitRepositoryClient` implementation using lib2git and the git2 crate.
@@ -140,6 +145,24 @@ impl RoswaalGitRepositoryClient for LibGit2RepositoryClient {
         remove_dir_all_empty(self.metadata.relative_path(".")).await?;
         Ok(())
     }
+
+    async fn delete_local_branch(&self, branch_name: &RoswaalOwnedGitBranchName) -> Result<bool> {
+        let branch = self.repo.branches(Some(BranchType::Local))?
+            .filter_map(|branch_result| {
+                branch_result.ok().map(|(branch, _)| branch)
+            })
+            .find(|branch| {
+                branch.name().ok()
+                    .map(|name| name == Some(&branch_name.to_string()))
+                    .unwrap_or(false)
+            });
+        if let Some(mut branch) = branch {
+            branch.delete()?;
+            return Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
 }
 
 impl LibGit2RepositoryClient {
@@ -190,6 +213,10 @@ impl RoswaalGitRepositoryClient for NoopGitRepositoryClient {
     async fn clean_all_untracked(&self) -> Result<()> {
         Ok(())
     }
+
+    async fn delete_local_branch(&self, _: &RoswaalOwnedGitBranchName) -> Result<bool> {
+        Ok(true)
+    }
 }
 
 #[cfg(test)]
@@ -202,8 +229,7 @@ mod tests {
     #[tokio::test]
     async fn test_add_commit_push_pull() {
         with_clean_test_repo_access(async {
-            let metadata = RoswaalGitRepositoryMetadata::for_testing();
-            let repo = RoswaalGitRepository::<LibGit2RepositoryClient>::open(&metadata).await?;
+            let (repo, metadata) = repo_with_metadata().await?;
             let transaction = repo.transaction().await;
             let branch_name = RoswaalOwnedGitBranchName::new("test");
             transaction.checkout_new_branch(&branch_name).await?;
@@ -234,8 +260,7 @@ mod tests {
     #[tokio::test]
     async fn test_reset_hard_to_head() {
         with_clean_test_repo_access(async {
-            let metadata = RoswaalGitRepositoryMetadata::for_testing();
-            let repo = RoswaalGitRepository::<LibGit2RepositoryClient>::open(&metadata).await?;
+            let (repo, metadata) = repo_with_metadata().await?;
             let transaction = repo.transaction().await;
 
             let mut file = File::create(metadata.relative_path("roswaal/Locations.ts")).await?;
@@ -256,8 +281,7 @@ mod tests {
     #[tokio::test]
     async fn test_clean_all_untracked() {
         with_clean_test_repo_access(async {
-            let metadata = RoswaalGitRepositoryMetadata::for_testing();
-            let repo = RoswaalGitRepository::<LibGit2RepositoryClient>::open(&metadata).await?;
+            let (repo, metadata) = repo_with_metadata().await?;
             let transaction = repo.transaction().await;
 
             File::create(metadata.relative_path("test.txt")).await?;
@@ -274,5 +298,48 @@ mod tests {
             Ok(())
         })
         .await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_delete_local_branch_that_exists_returns_true_when_deleted_properly() {
+        with_clean_test_repo_access(async {
+            let (repo, _) = repo_with_metadata().await?;
+            let transaction = repo.transaction().await;
+
+            let branch_name = RoswaalOwnedGitBranchName::new("test");
+            transaction.checkout_new_branch(&branch_name).await?;
+            transaction.switch_branch("main").await?;
+            let did_remove = transaction.delete_local_branch(&branch_name).await?;
+            assert!(did_remove);
+            let switch_to_deleted = transaction.switch_branch(&branch_name.to_string()).await;
+            assert!(switch_to_deleted.is_err());
+
+            Ok(())
+        })
+        .await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_delete_local_branch_returns_false_for_non_existent_branch() {
+        with_clean_test_repo_access(async {
+            let (repo, _) = repo_with_metadata().await?;
+            let transaction = repo.transaction().await;
+
+            let branch_name = RoswaalOwnedGitBranchName::new("test");
+            let did_remove = transaction.delete_local_branch(&branch_name).await?;
+            assert!(!did_remove);
+
+            Ok(())
+        })
+        .await.unwrap();
+    }
+
+    async fn repo_with_metadata() -> Result<(
+        RoswaalGitRepository::<LibGit2RepositoryClient>,
+        RoswaalGitRepositoryMetadata
+    )> {
+        let metadata = RoswaalGitRepositoryMetadata::for_testing();
+        let repo = RoswaalGitRepository::<LibGit2RepositoryClient>::open(&metadata).await?;
+        Ok((repo, metadata))
     }
 }
