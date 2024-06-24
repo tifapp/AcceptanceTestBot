@@ -31,6 +31,12 @@ impl <Client> RoswaalGitRepository<Client>
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum PullBranchStatus {
+    Success,
+    MergeConflict
+}
+
 /// A git client trait.
 pub trait RoswaalGitRepositoryClient: Sized {
     /// Attempts to create this client from metadata.
@@ -46,7 +52,7 @@ pub trait RoswaalGitRepositoryClient: Sized {
     async fn switch_branch(&self, name: &str) -> Result<()>;
 
     /// Performs the equivalent of a `git pull origin <branch>`.
-    async fn pull_branch(&self, name: &str) -> Result<()>;
+    async fn pull_branch(&self, name: &str) -> Result<PullBranchStatus>;
 
     /// Performs the equivalent of a `git commit -am <message>`.
     async fn commit_all(&self, message: &str) -> Result<()>;
@@ -88,7 +94,7 @@ impl RoswaalGitRepositoryClient for LibGit2RepositoryClient {
         Ok(())
     }
 
-    async fn pull_branch(&self, name: &str) -> Result<()> {
+    async fn pull_branch(&self, name: &str) -> Result<PullBranchStatus> {
         let mut remote = self.repo.find_remote("origin")?;
         let mut fetch_options = FetchOptions::new();
         fetch_options.remote_callbacks(self.remote_callbacks());
@@ -96,7 +102,11 @@ impl RoswaalGitRepositoryClient for LibGit2RepositoryClient {
         let fetch_head = self.repo.find_reference("FETCH_HEAD")?;
         let fetch_commit = self.repo.reference_to_annotated_commit(&fetch_head)?;
         self.repo.merge(&[&fetch_commit], None, None)?;
-        Ok(())
+        if self.repo.index()?.has_conflicts() {
+            Ok(PullBranchStatus::MergeConflict)
+        } else {
+            Ok(PullBranchStatus::Success)
+        }
     }
 
     async fn commit_all(&self, message: &str) -> Result<()> {
@@ -169,8 +179,8 @@ impl LibGit2RepositoryClient {
     fn remote_callbacks(&self) -> RemoteCallbacks {
         let mut callbacks = RemoteCallbacks::new();
         callbacks.credentials(|_, user, _| {
-            let private_key_path = self.metadata.ssh_private_key_path();
-            Cred::ssh_key(user.unwrap(), None, Path::new(&private_key_path), None)
+            let path = self.metadata.ssh_private_key_path();
+            Cred::ssh_key(user.unwrap(), None, Path::new(&path), None)
         });
         callbacks
     }
@@ -194,8 +204,8 @@ impl RoswaalGitRepositoryClient for NoopGitRepositoryClient {
         Ok(())
     }
 
-    async fn pull_branch(&self, _: &str) -> Result<()> {
-        Ok(())
+    async fn pull_branch(&self, _: &str) -> Result<PullBranchStatus> {
+        Ok(PullBranchStatus::Success)
     }
 
     async fn commit_all(&self, _: &str) -> Result<()> {
@@ -235,10 +245,7 @@ mod tests {
             transaction.checkout_new_branch(&branch_name).await?;
 
             let expected_file_contents = "In this world, all life will walk towards the future, hand in hand.";
-            let mut file = File::create(metadata.relative_path("test.txt")).await?;
-            file.write(expected_file_contents.as_bytes()).await?;
-            file.flush().await?;
-            drop(file);
+            write_string(&metadata.relative_path("test.txt"), expected_file_contents).await?;
 
             transaction.commit_all("I like this!").await?;
             transaction.push_changes(&branch_name).await?;
@@ -246,13 +253,11 @@ mod tests {
 
             assert!(!try_exists(metadata.relative_path("test.txt")).await?);
 
-            transaction.pull_branch(&branch_name.to_string()).await?;
+            let status = transaction.pull_branch(&branch_name.to_string()).await?;
+            assert_eq!(status, PullBranchStatus::Success);
 
-            file = File::open(metadata.relative_path("test.txt")).await?;
-            let mut file_contents = String::new();
-            file.read_to_string(&mut file_contents).await?;
-
-            assert_eq!(file_contents, expected_file_contents);
+            let contents = read_string(&metadata.relative_path("test.txt")).await?;
+            assert_eq!(contents, expected_file_contents);
             Ok(())
         }).await.unwrap();
     }
@@ -263,17 +268,11 @@ mod tests {
             let (repo, metadata) = repo_with_metadata().await?;
             let transaction = repo.transaction().await;
 
-            let mut file = File::create(metadata.relative_path("roswaal/Locations.ts")).await?;
-            file.write("console.log(\"Hello world\")".as_bytes()).await?;
-            file.flush().await?;
-            drop(file);
+            write_string(metadata.locations_path(), "console.log(\"Hello world\")").await?;
 
             transaction.hard_reset_to_head().await?;
 
-            file = File::open(metadata.relative_path("roswaal/Locations.ts")).await?;
-            let mut contents = String::new();
-            file.read_to_string(&mut contents).await?;
-            assert!(contents.is_empty());
+            assert!(read_string(metadata.locations_path()).await?.is_empty());
             Ok(())
         }).await.unwrap();
     }
@@ -332,6 +331,51 @@ mod tests {
             Ok(())
         })
         .await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_pull_merge_conflict() {
+        with_clean_test_repo_access(async {
+            let (repo, metadata) = repo_with_metadata().await?;
+            let transaction = repo.transaction().await;
+
+            let b1 = RoswaalOwnedGitBranchName::new("test");
+            let b2 = RoswaalOwnedGitBranchName::new("test2");
+
+            transaction.checkout_new_branch(&b1).await?;
+
+            write_string(metadata.locations_path(), "console.log(\"Hello world\")").await?;
+
+            transaction.commit_all("console.log").await?;
+            transaction.switch_branch(metadata.base_branch_name()).await?;
+            transaction.checkout_new_branch(&b2).await?;
+
+            write_string(metadata.locations_path(), "console.log(\"Goodbye world\")").await?;
+
+            transaction.commit_all("console.log").await?;
+            transaction.push_changes(&b2).await?;
+            transaction.switch_branch(&b1.to_string()).await?;
+
+            let status = transaction.pull_branch(&b2.to_string()).await?;
+            assert_eq!(status, PullBranchStatus::MergeConflict);
+
+            Ok(())
+        })
+        .await.unwrap();
+    }
+
+    async fn write_string(path: &str, contents: &str) -> Result<()> {
+        let mut file = File::create(path).await?;
+        file.write(contents.as_bytes()).await?;
+        file.flush().await?;
+        Ok(drop(file))
+    }
+
+    async fn read_string(path: &str) -> Result<String> {
+        let mut file = File::open(path).await?;
+        let mut contents = String::new();
+        file.read_to_string(&mut contents).await?;
+        Ok(contents)
     }
 
     async fn repo_with_metadata() -> Result<(
