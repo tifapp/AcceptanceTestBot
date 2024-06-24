@@ -1,7 +1,9 @@
 use anyhow::Result;
-use std::{path::Path, sync::Arc};
+use std::{io, path::Path, sync::Arc};
 use git2::{build::CheckoutBuilder, Cred, FetchOptions, IndexAddOption, PushOptions, RemoteCallbacks, Repository, ResetType};
-use tokio::sync::{Mutex, MutexGuard};
+use tokio::{fs::remove_file, join, spawn, sync::{Mutex, MutexGuard}};
+
+use crate::utils::fs::remove_dir_all_empty;
 
 use super::{branch_name::RoswaalOwnedGitBranchName, metadata::RoswaalGitRepositoryMetadata};
 
@@ -37,6 +39,9 @@ pub trait RoswaalGitRepositoryClient: Sized {
     /// Performs the equivalent of a `git reset --hard HEAD`.
     async fn hard_reset_to_head(&self) -> Result<()>;
 
+    /// Performs the equivalent of a `git clean -fd`.
+    async fn clean_all_untracked(&self) -> Result<()>;
+
     /// Performs the equivalent of a `git switch <branch>`.
     async fn switch_branch(&self, name: &str) -> Result<()>;
 
@@ -68,10 +73,6 @@ impl RoswaalGitRepositoryClient for LibGit2RepositoryClient {
     async fn hard_reset_to_head(&self) -> Result<()> {
         let obj = self.repo.revparse_single("HEAD")?;
         self.repo.reset(&obj, ResetType::Hard, None)?;
-        Ok(())
-    }
-
-    async fn clean_all_untracked() -> Result<()> {
         Ok(())
     }
 
@@ -123,6 +124,18 @@ impl RoswaalGitRepositoryClient for LibGit2RepositoryClient {
         remote.push(&[format!("refs/heads/{}", branch_name.to_string())], Some(&mut push_options))?;
         Ok(())
     }
+
+    async fn clean_all_untracked(&self) -> Result<()> {
+        let statuses = self.repo.statuses(None)?;
+        for entry in statuses.iter() {
+            let status = entry.status();
+            if let (Some(entry_path), true) = (entry.path(), status.is_wt_new()) {
+                remove_file(self.repo.workdir().unwrap().join(entry_path)).await?;
+            }
+        }
+        remove_dir_all_empty(self.metadata.relative_path(".")).await?;
+        Ok(())
+    }
 }
 
 impl LibGit2RepositoryClient {
@@ -150,10 +163,6 @@ impl RoswaalGitRepositoryClient for NoopGitRepositoryClient {
         Ok(())
     }
 
-    async fn clean_all_untracked() -> Result<()> {
-        Ok(())
-    }
-
     async fn switch_branch(&self, _: &str) -> Result<()> {
         Ok(())
     }
@@ -173,18 +182,22 @@ impl RoswaalGitRepositoryClient for NoopGitRepositoryClient {
     async fn push_changes(&self, _: &RoswaalOwnedGitBranchName) -> Result<()> {
         Ok(())
     }
+
+    async fn clean_all_untracked(&self) -> Result<()> {
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::{fs::File, io::{AsyncReadExt, AsyncWriteExt}};
+    use tokio::{fs::{create_dir_all, try_exists, File}, io::{AsyncReadExt, AsyncWriteExt}};
 
-    use crate::{git::{branch_name::RoswaalOwnedGitBranchName, metadata::RoswaalGitRepositoryMetadata, repo::RoswaalGitRepository}, utils::test_support::with_test_repo_access};
+    use crate::{git::{branch_name::RoswaalOwnedGitBranchName, metadata::RoswaalGitRepositoryMetadata, repo::RoswaalGitRepository}, utils::test_support::with_clean_test_repo_access};
 
     #[tokio::test]
     async fn test_add_commit_push_pull() {
-        with_test_repo_access(async {
+        with_clean_test_repo_access(async {
             let metadata = RoswaalGitRepositoryMetadata::for_testing();
             let repo = RoswaalGitRepository::<LibGit2RepositoryClient>::open(&metadata).await?;
             let transaction = repo.transaction().await;
@@ -201,7 +214,7 @@ mod tests {
             transaction.push_changes(&branch_name).await?;
             transaction.switch_branch(metadata.base_branch_name()).await?;
 
-            assert!(File::open(metadata.relative_path("test.txt")).await.is_err());
+            assert!(!try_exists(metadata.relative_path("test.txt")).await?);
 
             transaction.pull_branch(&branch_name.to_string()).await?;
 
@@ -216,7 +229,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_reset_hard_to_head() {
-        with_test_repo_access(async {
+        with_clean_test_repo_access(async {
             let metadata = RoswaalGitRepositoryMetadata::for_testing();
             let repo = RoswaalGitRepository::<LibGit2RepositoryClient>::open(&metadata).await?;
             let transaction = repo.transaction().await;
@@ -234,5 +247,28 @@ mod tests {
             assert!(contents.is_empty());
             Ok(())
         }).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_clean_all_untracked() {
+        with_clean_test_repo_access(async {
+            let metadata = RoswaalGitRepositoryMetadata::for_testing();
+            let repo = RoswaalGitRepository::<LibGit2RepositoryClient>::open(&metadata).await?;
+            let transaction = repo.transaction().await;
+
+            File::create(metadata.relative_path("test.txt")).await?;
+            create_dir_all(metadata.relative_path("roswaal/nested/test-clean")).await?;
+            File::create(metadata.relative_path("roswaal/nested/test-clean/test2.txt")).await?;
+
+            transaction.clean_all_untracked().await?;
+
+            assert!(!try_exists(metadata.relative_path("test.txt")).await?);
+            assert!(!try_exists(metadata.relative_path("roswaal/nested/test-clean/test2.txt")).await?);
+            assert!(!try_exists(metadata.relative_path("roswaal/nested/test-clean")).await?);
+            assert!(!try_exists(metadata.relative_path("roswaal/nested")).await?);
+            assert!(try_exists(metadata.relative_path("roswaal")).await?);
+            Ok(())
+        })
+        .await.unwrap();
     }
 }

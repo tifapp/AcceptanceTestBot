@@ -12,9 +12,12 @@ use tokio::sync::Mutex;
 #[cfg(test)]
 static LOCK: Lazy<Arc<Mutex<()>>> = Lazy::new(|| Arc::new(Mutex::new(())));
 
+/// Cleans and serializes access to the test repo for the duration of the future.
 #[cfg(test)]
-pub async fn with_test_repo_access(work: impl Future<Output = Result<()>>) -> Result<()> {
-    _ = LOCK.lock().await;
+pub async fn with_clean_test_repo_access(work: impl Future<Output = Result<()>>) -> Result<()> {
+    let guard = LOCK.lock().await;
     Command::new("./setup_test_repo.sh").spawn()?.wait().await?;
-    work.await
+    let result = work.await;
+    drop(guard);
+    result
 }
