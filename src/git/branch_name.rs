@@ -4,7 +4,7 @@ use nanoid::nanoid;
 ///
 /// Each branch name contains a 10 character nano id as its suffix in order to make each instance
 /// unique. This uniqueness ensures that duplicate branch names do not clash with each other.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct RoswaalOwnedGitBranchName {
     raw_name: String
 }

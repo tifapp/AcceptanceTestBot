@@ -1,7 +1,7 @@
 use anyhow::Result;
-use std::{path::Path, sync::Arc};
+use std::{path::{Path, PathBuf}, sync::{mpsc::{channel, Receiver, Sender}, Arc}, thread};
 use git2::{build::CheckoutBuilder, BranchType, Cred, FetchOptions, IndexAddOption, PushOptions, RemoteCallbacks, Repository, ResetType};
-use tokio::{fs::remove_file, spawn, sync::{Mutex, MutexGuard}};
+use tokio::{fs::remove_file, spawn, sync::{oneshot, Mutex, MutexGuard}, task::spawn_blocking};
 
 use crate::utils::fs::remove_dir_all_empty;
 
@@ -71,84 +71,75 @@ pub trait RoswaalGitRepositoryClient: Sized {
 
 /// A `RoswaalGitRepositoryClient` implementation using lib2git and the git2 crate.
 pub struct LibGit2RepositoryClient {
-    repo: Repository,
+    sender: Sender<LibGit2ThreadRequest>,
     metadata: RoswaalGitRepositoryMetadata
+}
+
+enum LibGit2ThreadRequest {
+    HardResetToHead { sender: oneshot::Sender<Result<()>> },
+    SwitchBranch { name: String, sender: oneshot::Sender<Result<()>> },
+    PullBranch { name: String, sender: oneshot::Sender<Result<PullBranchStatus>> },
+    CommitAll { message: String, sender: oneshot::Sender<Result<()>> },
+    CheckoutNewBranch { name: RoswaalOwnedGitBranchName, sender: oneshot::Sender<Result<()>> },
+    PushChanges { name: RoswaalOwnedGitBranchName, sender: oneshot::Sender<Result<()>> },
+    Statuses { sender: oneshot::Sender<Result<Vec<LibGit2StatusEntry>>> },
+    DeleteLocalBranch { name: RoswaalOwnedGitBranchName, sender: oneshot::Sender<Result<bool>> }
+}
+
+struct LibGit2StatusEntry {
+    path: PathBuf
 }
 
 impl RoswaalGitRepositoryClient for LibGit2RepositoryClient {
     async fn try_new(metadata: &RoswaalGitRepositoryMetadata) -> Result<Self> {
-        let repo = Repository::open(metadata.relative_path("."))?;
-        Ok(Self { repo, metadata: metadata.clone() })
+        let m1 = metadata.clone();
+        let (tx, rx) = channel::<LibGit2ThreadRequest>();
+        let repo = spawn_blocking(move || Repository::open(m1.relative_path("."))).await??;
+        Self::thread(repo, metadata, rx);
+        Ok(Self { sender: tx, metadata: metadata.clone() })
     }
 
     async fn hard_reset_to_head(&self) -> Result<()> {
-        let obj = self.repo.revparse_single("HEAD")?;
-        self.repo.reset(&obj, ResetType::Hard, None)?;
-        Ok(())
+        let (sender, receiver) = oneshot::channel::<Result<()>>();
+        self.sender.send(LibGit2ThreadRequest::HardResetToHead { sender })?;
+        receiver.await?
     }
 
     async fn switch_branch(&self, name: &str) -> Result<()> {
-        self.repo.set_head(&format!("refs/heads/{}", name))?;
-        let mut checkout_builder = CheckoutBuilder::new();
-        self.repo.checkout_head(Some(&mut checkout_builder.force()))?;
-        Ok(())
+        let (sender, receiver) = oneshot::channel::<Result<()>>();
+        self.sender.send(LibGit2ThreadRequest::SwitchBranch { name: name.to_string(), sender })?;
+        receiver.await?
     }
 
     async fn pull_branch(&self, name: &str) -> Result<PullBranchStatus> {
-        let mut remote = self.repo.find_remote("origin")?;
-        let mut fetch_options = FetchOptions::new();
-        fetch_options.remote_callbacks(self.remote_callbacks());
-        remote.fetch(&[name], Some(&mut fetch_options), None)?;
-        let fetch_head = self.repo.find_reference("FETCH_HEAD")?;
-        let fetch_commit = self.repo.reference_to_annotated_commit(&fetch_head)?;
-        self.repo.merge(&[&fetch_commit], None, None)?;
-        if self.repo.index()?.has_conflicts() {
-            Ok(PullBranchStatus::MergeConflict)
-        } else {
-            Ok(PullBranchStatus::Success)
-        }
+        let (sender, receiver) = oneshot::channel::<Result<PullBranchStatus>>();
+        self.sender.send(LibGit2ThreadRequest::PullBranch { name: name.to_string(), sender })?;
+        receiver.await?
     }
 
     async fn commit_all(&self, message: &str) -> Result<()> {
-        let mut index = self.repo.index()?;
-        index.add_all(["*"].iter(), IndexAddOption::DEFAULT, None)?;
-        index.write()?;
-        let oid = index.write_tree()?;
-        let signature = self.repo.signature()?;
-        let parent_commit = self.repo.head()?.peel_to_commit()?;
-        let tree = self.repo.find_tree(oid)?;
-        self.repo.commit(Some("HEAD"), &signature, &signature, message, &tree, &[&parent_commit])?;
-        Ok(())
+        let (sender, receiver) = oneshot::channel::<Result<()>>();
+        self.sender.send(LibGit2ThreadRequest::CommitAll { message: message.to_string(), sender })?;
+        receiver.await?
     }
 
     async fn checkout_new_branch(&self, name: &RoswaalOwnedGitBranchName) -> Result<()> {
-        let commit = self.repo.head()?.peel_to_commit()?;
-        _ = self.repo.branch(&name.to_string(), &commit, false)?;
-        let (object, reference) = self.repo.revparse_ext(&name.to_string())?;
-        self.repo.checkout_tree(&object, None)?;
-        if let Some(name) = reference.and_then(|r| r.name().map(|s| s.to_string())) {
-            self.repo.set_head(&name)?;
-        }
-        Ok(())
+        let (sender, receiver) = oneshot::channel::<Result<()>>();
+        self.sender.send(LibGit2ThreadRequest::CheckoutNewBranch { name: name.clone(), sender })?;
+        receiver.await?
     }
 
     async fn push_changes(&self, branch_name: &RoswaalOwnedGitBranchName) -> Result<()> {
-        let mut remote = self.repo.find_remote("origin")?;
-        let mut push_options = PushOptions::new();
-        push_options.remote_callbacks(self.remote_callbacks());
-        remote.push(&[format!("refs/heads/{}", branch_name.to_string())], Some(&mut push_options))?;
-        Ok(())
+        let (sender, receiver) = oneshot::channel::<Result<()>>();
+        self.sender.send(LibGit2ThreadRequest::PushChanges { name: branch_name.clone(), sender })?;
+        receiver.await?
     }
 
     async fn clean_all_untracked(&self) -> Result<()> {
-        let statuses = self.repo.statuses(None)?;
-        let futures = statuses.iter()
-            .filter_map(|entry| {
-                if let (Some(entry_path), true) = (entry.path(), entry.status().is_wt_new()) {
-                    return Some(spawn(remove_file(self.repo.workdir().unwrap().join(entry_path))))
-                }
-                None
-            });
+        let (sender, receiver) = oneshot::channel::<Result<Vec<LibGit2StatusEntry>>>();
+        self.sender.send(LibGit2ThreadRequest::Statuses { sender })?;
+        let entries = receiver.await??;
+        let futures = entries.iter().map(|entry| spawn(remove_file(entry.path.clone())));
         for f in futures {
             f.await??;
         }
@@ -157,7 +148,118 @@ impl RoswaalGitRepositoryClient for LibGit2RepositoryClient {
     }
 
     async fn delete_local_branch(&self, branch_name: &RoswaalOwnedGitBranchName) -> Result<bool> {
-        let branch = self.repo.branches(Some(BranchType::Local))?
+        let (sender, receiver) = oneshot::channel::<Result<bool>>();
+        self.sender.send(LibGit2ThreadRequest::DeleteLocalBranch { name: branch_name.clone(), sender })?;
+        receiver.await?
+    }
+}
+
+// NB: libgit2 is not thread safe. In order to avoid blocking the cooperative thread pool, we'll
+// need to run all operations on a separate thread.
+impl LibGit2RepositoryClient {
+    fn thread(
+        repo: Repository,
+        metadata: &RoswaalGitRepositoryMetadata,
+        receiver: Receiver<LibGit2ThreadRequest>
+    ) {
+        let metadata = metadata.clone();
+        thread::spawn(move || {
+            for request in receiver {
+                match request {
+                    LibGit2ThreadRequest::HardResetToHead { sender } => {
+                        _ = sender.send(Self::hard_reset_to_head(&repo));
+                    },
+                    LibGit2ThreadRequest::SwitchBranch { name, sender } => {
+                        _ = sender.send(Self::switch_branch(&repo, &name));
+                    },
+                    LibGit2ThreadRequest::PullBranch { name, sender } => {
+                        _ = sender.send(Self::pull_branch(&repo, &name, metadata.remote_callbacks()));
+                    },
+                    LibGit2ThreadRequest::CommitAll { message, sender } => {
+                        _ = sender.send(Self::commit_all(&repo, &message));
+                    },
+                    LibGit2ThreadRequest::CheckoutNewBranch { name, sender } => {
+                        _ = sender.send(Self::checkout_new_branch(&repo, &name));
+                    },
+                    LibGit2ThreadRequest::PushChanges { name, sender } => {
+                        _ = sender.send(Self::push_changes(&repo, &name, metadata.remote_callbacks()));
+                    },
+                    LibGit2ThreadRequest::Statuses { sender } => {
+                        _ = sender.send(Self::statuses(&repo));
+                    },
+                    LibGit2ThreadRequest::DeleteLocalBranch { name, sender } => {
+                        _ = sender.send(Self::delete_local_branch(&repo, &name));
+                    },
+                }
+            }
+        });
+    }
+
+    fn hard_reset_to_head(repo: &Repository) -> Result<()> {
+        let obj = repo.revparse_single("HEAD")?;
+        repo.reset(&obj, ResetType::Hard, None)?;
+        Ok(())
+    }
+
+    fn switch_branch(repo: &Repository, name: &str) -> Result<()> {
+        repo.set_head(&format!("refs/heads/{}", name))?;
+        let mut checkout_builder = CheckoutBuilder::new();
+        repo.checkout_head(Some(&mut checkout_builder.force()))?;
+        Ok(())
+    }
+
+    fn pull_branch(repo: &Repository, name: &str, callbacks: RemoteCallbacks) -> Result<PullBranchStatus> {
+        let mut remote = repo.find_remote("origin")?;
+        let mut fetch_options = FetchOptions::new();
+        fetch_options.remote_callbacks(callbacks);
+        remote.fetch(&[name], Some(&mut fetch_options), None)?;
+        let fetch_head = repo.find_reference("FETCH_HEAD")?;
+        let fetch_commit = repo.reference_to_annotated_commit(&fetch_head)?;
+        repo.merge(&[&fetch_commit], None, None)?;
+        if repo.index()?.has_conflicts() {
+            Ok(PullBranchStatus::MergeConflict)
+        } else {
+            Ok(PullBranchStatus::Success)
+        }
+    }
+
+    fn commit_all(repo: &Repository, message: &str) -> Result<()> {
+        let mut index = repo.index()?;
+        index.add_all(["*"].iter(), IndexAddOption::DEFAULT, None)?;
+        index.write()?;
+        let oid = index.write_tree()?;
+        let signature = repo.signature()?;
+        let parent_commit = repo.head()?.peel_to_commit()?;
+        let tree = repo.find_tree(oid)?;
+        repo.commit(Some("HEAD"), &signature, &signature, message, &tree, &[&parent_commit])?;
+        Ok(())
+    }
+
+    fn checkout_new_branch(repo: &Repository, name: &RoswaalOwnedGitBranchName) -> Result<()> {
+        let commit = repo.head()?.peel_to_commit()?;
+        _ = repo.branch(&name.to_string(), &commit, false)?;
+        let (object, reference) = repo.revparse_ext(&name.to_string())?;
+        repo.checkout_tree(&object, None)?;
+        if let Some(name) = reference.and_then(|r| r.name().map(|s| s.to_string())) {
+            repo.set_head(&name)?;
+        }
+        Ok(())
+    }
+
+    fn push_changes(
+        repo: &Repository,
+        branch_name: &RoswaalOwnedGitBranchName,
+        callbacks: RemoteCallbacks
+    ) -> Result<()> {
+        let mut remote = repo.find_remote("origin")?;
+        let mut push_options = PushOptions::new();
+        push_options.remote_callbacks(callbacks);
+        remote.push(&[format!("refs/heads/{}", branch_name.to_string())], Some(&mut push_options))?;
+        Ok(())
+    }
+
+    fn delete_local_branch(repo: &Repository, branch_name: &RoswaalOwnedGitBranchName) -> Result<bool> {
+        let branch = repo.branches(Some(BranchType::Local))?
             .filter_map(|branch_result| {
                 branch_result.ok().map(|(branch, _)| branch)
             })
@@ -173,13 +275,27 @@ impl RoswaalGitRepositoryClient for LibGit2RepositoryClient {
             Ok(false)
         }
     }
+
+    fn statuses(repo: &Repository) -> Result<Vec<LibGit2StatusEntry>> {
+        let statuses = repo.statuses(None)?
+            .iter()
+            .filter_map(|entry| {
+                if let (Some(entry_path), true) = (entry.path(), entry.status().is_wt_new()) {
+                    Some(LibGit2StatusEntry { path: repo.workdir().unwrap().join(entry_path) })
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<LibGit2StatusEntry>>();
+        Ok(statuses)
+    }
 }
 
-impl LibGit2RepositoryClient {
+impl RoswaalGitRepositoryMetadata {
     fn remote_callbacks(&self) -> RemoteCallbacks {
         let mut callbacks = RemoteCallbacks::new();
         callbacks.credentials(|_, user, _| {
-            let path = self.metadata.ssh_private_key_path();
+            let path = self.ssh_private_key_path();
             Cred::ssh_key(user.unwrap(), None, Path::new(&path), None)
         });
         callbacks
