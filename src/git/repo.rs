@@ -1,6 +1,6 @@
 use anyhow::Result;
 use std::{path::{Path, PathBuf}, sync::{mpsc::{channel, Receiver, Sender}, Arc}, thread};
-use git2::{build::CheckoutBuilder, BranchType, Cred, FetchOptions, IndexAddOption, PushOptions, RemoteCallbacks, Repository, ResetType};
+use git2::{build::CheckoutBuilder, AnnotatedCommit, BranchType, Cred, FetchOptions, IndexAddOption, PushOptions, RemoteCallbacks, Repository, ResetType};
 use tokio::{fs::remove_file, spawn, sync::{oneshot, Mutex, MutexGuard}, task::spawn_blocking};
 
 use crate::utils::fs::remove_dir_all_empty;
@@ -36,6 +36,8 @@ pub enum PullBranchStatus {
     Success,
     MergeConflict
 }
+
+type MergeBranchStatus = PullBranchStatus;
 
 /// A git client trait.
 pub trait RoswaalGitRepositoryClient: Sized {
@@ -155,7 +157,8 @@ impl RoswaalGitRepositoryClient for LibGit2RepositoryClient {
 }
 
 // NB: libgit2 is not thread safe. In order to avoid blocking the cooperative thread pool, we'll
-// need to run all operations on a separate thread.
+// need to run all operations on a dedicated background thread. spawn_blocking does not work since
+// `Repository` does not implment Sync.
 impl LibGit2RepositoryClient {
     fn thread(
         repo: Repository,
@@ -209,17 +212,81 @@ impl LibGit2RepositoryClient {
     }
 
     fn pull_branch(repo: &Repository, name: &str, callbacks: RemoteCallbacks) -> Result<PullBranchStatus> {
+        Self::merge(repo, name, &Self::fetch(repo, name, callbacks)?)
+    }
+
+    fn fetch<'a>(
+        repo: &'a Repository,
+        branch_name: &str,
+        callbacks: RemoteCallbacks
+    ) -> Result<AnnotatedCommit<'a>> {
         let mut remote = repo.find_remote("origin")?;
         let mut fetch_options = FetchOptions::new();
         fetch_options.remote_callbacks(callbacks);
-        remote.fetch(&[name], Some(&mut fetch_options), None)?;
+        remote.fetch(&[branch_name], Some(&mut fetch_options), None)?;
         let fetch_head = repo.find_reference("FETCH_HEAD")?;
-        let fetch_commit = repo.reference_to_annotated_commit(&fetch_head)?;
-        repo.merge(&[&fetch_commit], None, None)?;
-        if repo.index()?.has_conflicts() {
-            Ok(PullBranchStatus::MergeConflict)
+        Ok(repo.reference_to_annotated_commit(&fetch_head)?)
+    }
+
+    fn merge(repo: &Repository, branch_name: &str, commit: &AnnotatedCommit) -> Result<MergeBranchStatus> {
+        let (analysis, _) = repo.merge_analysis(&[commit])?;
+        if analysis.is_fast_forward() {
+            Self::merge_fast_forward(repo, branch_name, commit)
+        } else if analysis.is_normal() {
+            Self::merge_normal(repo, commit)
         } else {
-            Ok(PullBranchStatus::Success)
+            Ok(MergeBranchStatus::Success)
+        }
+    }
+
+    fn merge_normal(repo: &Repository, commit: &AnnotatedCommit) -> Result<MergeBranchStatus> {
+        repo.merge(&[&commit], None, None)?;
+        Self::current_merge_status(repo)
+    }
+
+    fn merge_fast_forward(
+        repo: &Repository,
+        branch_name: &str,
+        commit: &AnnotatedCommit
+    ) -> Result<MergeBranchStatus> {
+        // NB: Adopted from https://github.com/rust-lang/git2-rs/blob/master/examples/pull.rs#L159
+        let branch_reference_name = format!("refs/heads/{}", branch_name);
+        match repo.find_reference(&branch_reference_name) {
+            Ok(mut branch_reference) => {
+                let name = match branch_reference.name() {
+                    Some(s) => s.to_string(),
+                    None => String::from_utf8_lossy(branch_reference.name_bytes()).to_string(),
+                };
+                let message = format!("Fast Forward: Setting {} to id: {}", name, commit.id());
+                branch_reference.set_target(commit.id(), &message)?;
+                repo.set_head(&name)?;
+                repo.checkout_head(Some(CheckoutBuilder::default().force()))?;
+                Self::current_merge_status(repo)
+            },
+            Err(_) => {
+                repo.reference(
+                    &branch_reference_name,
+                    commit.id(),
+                    true,
+                    &format!("Setting {} to {}", branch_name, commit.id()),
+                )?;
+                repo.set_head(&branch_reference_name)?;
+                repo.checkout_head(Some(
+                    CheckoutBuilder::default()
+                        .allow_conflicts(true)
+                        .conflict_style_merge(true)
+                        .force(),
+                ))?;
+                Self::current_merge_status(repo)
+            }
+        }
+    }
+
+    fn current_merge_status(repo: &Repository) -> Result<MergeBranchStatus> {
+        if repo.index()?.has_conflicts() {
+            Ok(MergeBranchStatus::MergeConflict)
+        } else {
+            Ok(MergeBranchStatus::Success)
         }
     }
 
@@ -302,60 +369,17 @@ impl RoswaalGitRepositoryMetadata {
     }
 }
 
-/// A `RoswaalGitRepositoryClient` implementation suitable for test-stubbing.
-#[cfg(test)]
-pub struct NoopGitRepositoryClient;
-
-#[cfg(test)]
-impl RoswaalGitRepositoryClient for NoopGitRepositoryClient {
-    async fn try_new(_: &RoswaalGitRepositoryMetadata) -> Result<Self> {
-        Ok(Self)
-    }
-
-    async fn hard_reset_to_head(&self) -> Result<()> {
-        Ok(())
-    }
-
-    async fn switch_branch(&self, _: &str) -> Result<()> {
-        Ok(())
-    }
-
-    async fn pull_branch(&self, _: &str) -> Result<PullBranchStatus> {
-        Ok(PullBranchStatus::Success)
-    }
-
-    async fn commit_all(&self, _: &str) -> Result<()> {
-        Ok(())
-    }
-
-    async fn checkout_new_branch(&self, _: &RoswaalOwnedGitBranchName) -> Result<()> {
-        Ok(())
-    }
-
-    async fn push_changes(&self, _: &RoswaalOwnedGitBranchName) -> Result<()> {
-        Ok(())
-    }
-
-    async fn clean_all_untracked(&self) -> Result<()> {
-        Ok(())
-    }
-
-    async fn delete_local_branch(&self, _: &RoswaalOwnedGitBranchName) -> Result<bool> {
-        Ok(true)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use tokio::{fs::{create_dir_all, try_exists, File}, io::{AsyncReadExt, AsyncWriteExt}};
 
-    use crate::{git::{branch_name::RoswaalOwnedGitBranchName, metadata::RoswaalGitRepositoryMetadata, repo::RoswaalGitRepository}, utils::test_support::with_clean_test_repo_access};
+    use crate::{git::{branch_name::RoswaalOwnedGitBranchName, test_support::repo_with_test_metadata}, utils::test_support::with_clean_test_repo_access};
 
     #[tokio::test]
     async fn test_add_commit_push_pull() {
         with_clean_test_repo_access(async {
-            let (repo, metadata) = repo_with_metadata().await?;
+            let (repo, metadata) = repo_with_test_metadata().await?;
             let transaction = repo.transaction().await;
             let branch_name = RoswaalOwnedGitBranchName::new("test");
             transaction.checkout_new_branch(&branch_name).await?;
@@ -381,7 +405,7 @@ mod tests {
     #[tokio::test]
     async fn test_reset_hard_to_head() {
         with_clean_test_repo_access(async {
-            let (repo, metadata) = repo_with_metadata().await?;
+            let (repo, metadata) = repo_with_test_metadata().await?;
             let transaction = repo.transaction().await;
 
             write_string(metadata.locations_path(), "console.log(\"Hello world\")").await?;
@@ -396,7 +420,7 @@ mod tests {
     #[tokio::test]
     async fn test_clean_all_untracked() {
         with_clean_test_repo_access(async {
-            let (repo, metadata) = repo_with_metadata().await?;
+            let (repo, metadata) = repo_with_test_metadata().await?;
             let transaction = repo.transaction().await;
 
             File::create(metadata.relative_path("test.txt")).await?;
@@ -418,7 +442,7 @@ mod tests {
     #[tokio::test]
     async fn test_delete_local_branch_that_exists_returns_true_when_deleted_properly() {
         with_clean_test_repo_access(async {
-            let (repo, _) = repo_with_metadata().await?;
+            let (repo, _) = repo_with_test_metadata().await?;
             let transaction = repo.transaction().await;
 
             let branch_name = RoswaalOwnedGitBranchName::new("test");
@@ -437,7 +461,7 @@ mod tests {
     #[tokio::test]
     async fn test_delete_local_branch_returns_false_for_non_existent_branch() {
         with_clean_test_repo_access(async {
-            let (repo, _) = repo_with_metadata().await?;
+            let (repo, _) = repo_with_test_metadata().await?;
             let transaction = repo.transaction().await;
 
             let branch_name = RoswaalOwnedGitBranchName::new("test");
@@ -452,7 +476,7 @@ mod tests {
     #[tokio::test]
     async fn test_pull_merge_conflict() {
         with_clean_test_repo_access(async {
-            let (repo, metadata) = repo_with_metadata().await?;
+            let (repo, metadata) = repo_with_test_metadata().await?;
             let transaction = repo.transaction().await;
 
             let b1 = RoswaalOwnedGitBranchName::new("test");
@@ -492,14 +516,5 @@ mod tests {
         let mut contents = String::new();
         file.read_to_string(&mut contents).await?;
         Ok(contents)
-    }
-
-    async fn repo_with_metadata() -> Result<(
-        RoswaalGitRepository::<LibGit2RepositoryClient>,
-        RoswaalGitRepositoryMetadata
-    )> {
-        let metadata = RoswaalGitRepositoryMetadata::for_testing();
-        let repo = RoswaalGitRepository::<LibGit2RepositoryClient>::open(&metadata).await?;
-        Ok((repo, metadata))
     }
 }

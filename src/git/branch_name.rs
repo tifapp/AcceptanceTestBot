@@ -11,7 +11,7 @@ pub struct RoswaalOwnedGitBranchName {
 
 impl RoswaalOwnedGitBranchName {
     pub fn new(name: &str) -> Self {
-        Self { raw_name: format!("roswaal_{}_{}", name, nanoid!(10)) }
+        Self { raw_name: format!("roswaal-{}-{}", name, nanoid!(10)) }
     }
 }
 

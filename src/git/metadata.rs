@@ -11,13 +11,13 @@ pub struct RoswaalGitRepositoryMetadata {
     ssh_private_key_home_path: String,
     test_cases_root_dir_path: String,
     add_test_cases_pr: fn(
-        test_names_with_syntax: Vec<(&str, RoswaalTestSyntax)>,
-        RoswaalOwnedGitBranchName
+        test_names_with_syntax: &Vec<(&str, RoswaalTestSyntax)>,
+        &RoswaalOwnedGitBranchName
     ) -> GithubPullRequest,
     locations_path: String,
     add_locations_pr: fn(
-        RoswaalStringLocations,
-        RoswaalOwnedGitBranchName
+        &RoswaalStringLocations,
+        &RoswaalOwnedGitBranchName
     ) -> GithubPullRequest
 }
 
