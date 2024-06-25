@@ -32,7 +32,7 @@ impl GithubPullRequestOpen for TestGithubPullRequestOpen {
     async fn open(&self, pull_request: &GithubPullRequest) -> Result<bool> {
         let mut pr = self.mutex.lock().await;
         *pr = Some(pull_request.clone());
-        Ok(self.should_fail)
+        Ok(!self.should_fail)
     }
 }
 
@@ -76,6 +76,12 @@ impl RoswaalGitRepositoryClient for NoopGitRepositoryClient {
 
     async fn delete_local_branch(&self, _: &RoswaalOwnedGitBranchName) -> Result<bool> {
         Ok(true)
+    }
+}
+
+impl RoswaalGitRepository<NoopGitRepositoryClient> {
+    pub async fn noop() -> Result<Self> {
+        Self::open(&RoswaalGitRepositoryMetadata::for_testing()).await
     }
 }
 

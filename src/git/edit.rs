@@ -27,17 +27,23 @@ impl EditGitRepositoryStatus {
         transaction.switch_branch(base_branch_name).await?;
         let did_delete_branch = transaction.delete_local_branch(new_branch_name).await?;
         drop(transaction);
-        pr_open.open(&pull_request).await?;
-        Ok(Self::Success { did_delete_branch })
+        let did_open = pr_open.open(&pull_request).await?;
+        if !did_open {
+            Ok(Self::FailedToOpenPullRequest)
+        } else {
+            Ok(Self::Success { did_delete_branch })
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::{error::Error, fmt::Display};
+
     use tokio::fs::{try_exists, File};
 
     use super::*;
-    use crate::{git::{repo::PullBranchStatus, test_support::{repo_with_test_metadata, TestGithubPullRequestOpen}}, utils::test_support::with_clean_test_repo_access};
+    use crate::{git::{metadata::RoswaalGitRepositoryMetadata, repo::{LibGit2RepositoryClient, PullBranchStatus}, test_support::{repo_with_test_metadata, TestGithubPullRequestOpen}}, utils::test_support::with_clean_test_repo_access};
 
     #[tokio::test]
     async fn test_basic_flow_returns_successfully_with_proper_pr_opened_and_correct_repo_state() {
@@ -58,22 +64,111 @@ mod tests {
                     Ok(ret_pr)
                 }
             ).await?;
-
-            assert_eq!(status, EditGitRepositoryStatus::Success { did_delete_branch: true });
-            assert_eq!(pr_open.most_recent_pr().await, Some(expected_pr));
-
-            let transaction = repo.transaction().await;
-
-            let switch_result = transaction.switch_branch(&new_branch_name.to_string()).await;
-            assert!(switch_result.is_err(), "The new local branch should've been deleted, so we cannot switch to it.");
-
-            assert!(!try_exists(&file_path).await?);
-            let status = transaction.pull_branch(&new_branch_name.to_string()).await?;
-            assert_eq!(status, PullBranchStatus::Success);
-            assert!(try_exists(&file_path).await?);
-
-            Ok(())
+            assert_successful_single_file_created_edit(
+                &status,
+                &new_branch_name,
+                &expected_pr,
+                &file_path,
+                &repo,
+                &pr_open
+            ).await
         })
         .await.unwrap()
     }
+
+    #[tokio::test]
+    async fn test_returns_pr_open_failed_when_pr_fails_to_open() {
+        let new_branch_name = RoswaalOwnedGitBranchName::new("test-edit");
+        let status = EditGitRepositoryStatus::from_editing_new_branch(
+            &new_branch_name,
+            RoswaalGitRepositoryMetadata::for_testing().base_branch_name(),
+            &RoswaalGitRepository::noop().await.unwrap(),
+            &TestGithubPullRequestOpen::new(true),
+            async {
+                Ok(GithubPullRequest::for_tif_react_frontend("Hello", "World", &new_branch_name))
+            }
+        ).await.unwrap();
+        assert_eq!(status, EditGitRepositoryStatus::FailedToOpenPullRequest);
+    }
+
+    #[tokio::test]
+    async fn test_recovers_from_previous_failed_edit() {
+        with_clean_test_repo_access(async {
+            let (repo, metadata) = repo_with_test_metadata().await?;
+            let pr_open = TestGithubPullRequestOpen::new(false);
+            let mut branch_name = RoswaalOwnedGitBranchName::new("test-edit-recovery-failure");
+            let failure_file_path = metadata.relative_path("test-failure.txt");
+            let mut edit_result = EditGitRepositoryStatus::from_editing_new_branch(
+                &branch_name,
+                metadata.base_branch_name(),
+                &repo,
+                &pr_open,
+                async {
+                    File::create(&failure_file_path).await?;
+                    Err(anyhow::Error::new(TestError))
+                }
+            ).await;
+            assert!(edit_result.is_err());
+            assert!(try_exists(failure_file_path).await?);
+
+            branch_name = RoswaalOwnedGitBranchName::new("test-edit-recovery-success");
+            let expected_pr = GithubPullRequest::for_tif_react_frontend("Test", "Test", &branch_name);
+            let edit_pr = expected_pr.clone();
+            let success_file_path = metadata.relative_path("test-success.txt");
+            edit_result = EditGitRepositoryStatus::from_editing_new_branch(
+                &branch_name,
+                metadata.base_branch_name(),
+                &repo,
+                &pr_open,
+                async {
+                    File::create(&success_file_path).await?;
+                    Ok(edit_pr)
+                }
+            ).await;
+            assert!(!try_exists(metadata.relative_path("test-failure.txt")).await?);
+            assert_successful_single_file_created_edit(
+                &edit_result.unwrap(),
+                &branch_name,
+                &expected_pr,
+                &success_file_path,
+                &repo,
+                &pr_open
+            ).await
+        })
+        .await.unwrap()
+    }
+
+    async fn assert_successful_single_file_created_edit(
+        status: &EditGitRepositoryStatus,
+        branch_name: &RoswaalOwnedGitBranchName,
+        expected_pr: &GithubPullRequest,
+        file_path: &str,
+        repo: &RoswaalGitRepository<LibGit2RepositoryClient>,
+        pr_open: &TestGithubPullRequestOpen
+    ) -> Result<()> {
+        assert_eq!(status, &EditGitRepositoryStatus::Success { did_delete_branch: true });
+        assert_eq!(pr_open.most_recent_pr().await, Some(expected_pr.clone()));
+
+        let transaction = repo.transaction().await;
+
+        let switch_result = transaction.switch_branch(&branch_name.to_string()).await;
+        assert!(switch_result.is_err(), "The new local branch should've been deleted, so we cannot switch to it.");
+
+        assert!(!try_exists(&file_path).await?);
+        let status = transaction.pull_branch(&branch_name.to_string()).await?;
+        assert_eq!(status, PullBranchStatus::Success);
+        assert!(try_exists(&file_path).await?);
+        Ok(())
+    }
+
+    #[derive(Debug)]
+    struct TestError;
+
+    impl Display for TestError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "TestError")
+        }
+    }
+
+    impl Error for TestError {}
 }
