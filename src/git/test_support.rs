@@ -1,5 +1,10 @@
 use std::sync::Arc;
+use tokio::fs::File;
 use anyhow::Result;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use once_cell::sync::Lazy;
+use std::future::Future;
+use tokio::process::Command;
 
 #[cfg(test)]
 use tokio::sync::Mutex;
@@ -93,4 +98,33 @@ pub async fn repo_with_test_metadata() -> Result<(
     let metadata = RoswaalGitRepositoryMetadata::for_testing();
     let repo = RoswaalGitRepository::<LibGit2RepositoryClient>::open(&metadata).await?;
     Ok((repo, metadata))
+}
+
+#[cfg(test)]
+pub async fn write_string(path: &str, contents: &str) -> Result<()> {
+    let mut file = File::create(path).await?;
+    file.write(contents.as_bytes()).await?;
+    file.flush().await?;
+    Ok(drop(file))
+}
+
+#[cfg(test)]
+pub async fn read_string(path: &str) -> Result<String> {
+    let mut file = File::open(path).await?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).await?;
+    Ok(contents)
+}
+
+#[cfg(test)]
+static TEST_REPO_LOCK: Lazy<Arc<Mutex<()>>> = Lazy::new(|| Arc::new(Mutex::new(())));
+
+/// Cleans and serializes access to the test repo for the duration of the future.
+#[cfg(test)]
+pub async fn with_clean_test_repo_access(work: impl Future<Output = Result<()>>) -> Result<()> {
+    let guard = TEST_REPO_LOCK.lock().await;
+    Command::new("./reset_test_repo.sh").spawn()?.wait().await?;
+    let result = work.await;
+    drop(guard);
+    result
 }

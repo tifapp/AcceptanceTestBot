@@ -372,9 +372,9 @@ impl RoswaalGitRepositoryMetadata {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::{fs::{create_dir_all, try_exists, File}, io::{AsyncReadExt, AsyncWriteExt}};
+    use tokio::fs::{create_dir_all, try_exists, File};
 
-    use crate::{git::{branch_name::RoswaalOwnedGitBranchName, test_support::repo_with_test_metadata}, utils::test_support::with_clean_test_repo_access};
+    use crate::git::{branch_name::RoswaalOwnedGitBranchName, test_support::{read_string, repo_with_test_metadata, write_string, with_clean_test_repo_access}};
 
     #[tokio::test]
     async fn test_add_commit_push_pull() {
@@ -502,19 +502,5 @@ mod tests {
             Ok(())
         })
         .await.unwrap();
-    }
-
-    async fn write_string(path: &str, contents: &str) -> Result<()> {
-        let mut file = File::create(path).await?;
-        file.write(contents.as_bytes()).await?;
-        file.flush().await?;
-        Ok(drop(file))
-    }
-
-    async fn read_string(path: &str) -> Result<String> {
-        let mut file = File::open(path).await?;
-        let mut contents = String::new();
-        file.read_to_string(&mut contents).await?;
-        Ok(contents)
     }
 }
