@@ -20,6 +20,10 @@ impl EditGitRepositoryStatus {
         edit: impl Future<Output = Result<GithubPullRequest>>
     ) -> Result<Self> {
         let transaction = repo.transaction().await;
+        transaction.hard_reset_to_head().await?;
+        transaction.clean_all_untracked().await?;
+        transaction.switch_branch(base_branch_name).await?;
+        transaction.pull_branch(base_branch_name).await?;
         transaction.checkout_new_branch(new_branch_name).await?;
         let pull_request = edit.await?;
         transaction.commit_all(pull_request.title()).await?;
@@ -134,6 +138,51 @@ mod tests {
                 &repo,
                 &pr_open
             ).await
+        })
+        .await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_resets_cleans_and_pulls_latest_changes_from_base_branch_before_edit() {
+        with_clean_test_repo_access(async {
+            let (repo, metadata) = repo_with_test_metadata().await?;
+            let pr_open = TestGithubPullRequestOpen::new(false);
+            let branch_name_1 = RoswaalOwnedGitBranchName::new("test-edit-pull-latest-1");
+            let file_path_1 = metadata.relative_path("test1.txt");
+            EditGitRepositoryStatus::from_editing_new_branch(
+                &branch_name_1,
+                metadata.base_branch_name(),
+                &repo,
+                &pr_open,
+                async {
+                    File::create(&file_path_1).await?;
+                    Ok(GithubPullRequest::for_tif_react_frontend("Test", "Test", &branch_name_1))
+                }
+            ).await?;
+
+            // NB: The edit would've deleted branch_name_1, so we'll need to add it back so we can
+            // switch to it when running the edit operation again.
+            let transaction = repo.transaction().await;
+            transaction.checkout_new_branch(&branch_name_1).await?;
+            transaction.switch_branch(metadata.base_branch_name()).await?;
+            drop(transaction);
+
+            let file_path_2 = metadata.relative_path("test2.txt");
+            File::create(&file_path_2).await?;
+
+            let branch_name_2 = RoswaalOwnedGitBranchName::new("test-edit-pull-latest-2");
+            EditGitRepositoryStatus::from_editing_new_branch(
+                &branch_name_2,
+                &branch_name_1.to_string(),
+                &repo,
+                &pr_open,
+                async {
+                    assert!(try_exists(&file_path_1).await?);
+                    assert!(!try_exists(&file_path_2).await?);
+                    Ok(GithubPullRequest::for_tif_react_frontend("Test", "Test", &branch_name_2))
+                }
+            ).await?;
+            Ok(())
         })
         .await.unwrap()
     }

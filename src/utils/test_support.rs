@@ -16,7 +16,7 @@ static LOCK: Lazy<Arc<Mutex<()>>> = Lazy::new(|| Arc::new(Mutex::new(())));
 #[cfg(test)]
 pub async fn with_clean_test_repo_access(work: impl Future<Output = Result<()>>) -> Result<()> {
     let guard = LOCK.lock().await;
-    Command::new("./setup_test_repo.sh").spawn()?.wait().await?;
+    Command::new("./reset_test_repo.sh").spawn()?.wait().await?;
     let result = work.await;
     drop(guard);
     result

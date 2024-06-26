@@ -5,7 +5,5 @@ cd FitnessProjectTest
 git init
 git remote add origin git@github.com:roswaaltifbot/FitnessProjectTest.git
 git branch -M main
-touch roswaal/Locations.ts
-git add .
-git commit -m "Add Locations.ts"
+git pull origin main
 echo "✅ Successfully setup test repo"
