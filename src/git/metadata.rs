@@ -11,13 +11,13 @@ pub struct RoswaalGitRepositoryMetadata {
     ssh_private_key_home_path: String,
     test_cases_root_dir_path: String,
     add_test_cases_pr: fn(
-        test_names_with_syntax: Vec<(&str, RoswaalTestSyntax)>,
-        RoswaalOwnedGitBranchName
+        test_names_with_syntax: &Vec<(&str, RoswaalTestSyntax)>,
+        &RoswaalOwnedGitBranchName
     ) -> GithubPullRequest,
     locations_path: String,
     add_locations_pr: fn(
-        RoswaalStringLocations,
-        RoswaalOwnedGitBranchName
+        &RoswaalStringLocations,
+        &RoswaalOwnedGitBranchName
     ) -> GithubPullRequest
 }
 
@@ -30,7 +30,7 @@ impl RoswaalGitRepositoryMetadata {
             ssh_private_key_home_path: "./.ssh/id_rsa".to_string(),
             test_cases_root_dir_path: "./FitnessProject/roswaal".to_string(),
             add_test_cases_pr: GithubPullRequest::for_test_cases_tif_react_frontend,
-            locations_path: "./FitnessProject/rosswaal/Locations.ts".to_string(),
+            locations_path: "./FitnessProject/roswaal/Locations.ts".to_string(),
             add_locations_pr: GithubPullRequest::for_locations_tif_react_frontend
         }
     }
@@ -46,7 +46,7 @@ impl RoswaalGitRepositoryMetadata {
                 GithubPullRequest::for_test_cases_tif_react_frontend(cases, head_branch)
                     .for_testing_do_not_merge()
             },
-            locations_path: "./FitnessProjectTest/rosswaal/Locations.ts".to_string(),
+            locations_path: "./FitnessProjectTest/roswaal/Locations.ts".to_string(),
             add_locations_pr: |locations, head_branch| {
                 GithubPullRequest::for_locations_tif_react_frontend(locations, head_branch)
                     .for_testing_do_not_merge()
@@ -71,5 +71,10 @@ impl RoswaalGitRepositoryMetadata {
     /// Returns a string path relative to the root directory of the repository.
     pub fn relative_path(&self, path: &str) -> String {
         format!("{}/{}", self.repo_root_dir_path, path)
+    }
+
+    /// Returns the path to the locations file.
+    pub fn locations_path(&self) -> &str {
+        &self.locations_path
     }
 }

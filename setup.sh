@@ -1,4 +1,3 @@
-rm -drf FitnessProjectTest > /dev/null
 echo "✅ Previous state cleared..."
 if [ -d "FitnessProject" ]; then
     echo "🔵 Main frontend repo found, skipping cloning step..."
