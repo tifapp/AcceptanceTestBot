@@ -29,7 +29,6 @@ pub enum RoswaalCompilationErrorCode {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum RoswaalCompilationDuplicateErrorCode {
-    TestName,
     StepLabel,
     RequirementLabel
 }
@@ -37,7 +36,6 @@ pub enum RoswaalCompilationDuplicateErrorCode {
 /// A struct that holds compilation information on a roswaal test script.
 pub struct RoswaalCompileContext {
     location_names: Vec<RoswaalLocationName>,
-    test_names: Vec<String>,
     errors: Vec<RoswaalCompilationError>,
     test_name: Option<String>,
     test_description: Option<String>,
@@ -49,17 +47,13 @@ pub struct RoswaalCompileContext {
 impl RoswaalCompileContext {
     /// Creates a new empty context with no location or test names.
     pub fn empty() -> Self {
-        Self::new(vec![], vec![])
+        Self::new(vec![])
     }
 
-    /// Creates a new context with the specified location and test names.
-    pub fn new(
-        location_names: Vec<RoswaalLocationName>,
-        test_names: Vec<String>
-    ) -> Self {
+    /// Creates a new context with the specified location names.
+    pub fn new(location_names: Vec<RoswaalLocationName>) -> Self {
         Self {
             location_names,
-            test_names,
             errors: vec![],
             test_name: None,
             test_description: None,
@@ -192,13 +186,7 @@ impl RoswaalCompileContext {
 
     fn try_set_test_name(&mut self, line_number: u32, name: &str) {
         let name = name.to_string();
-        if self.test_names.contains(&name) {
-            let code = RoswaalCompilationErrorCode::Duplicate {
-                name,
-                code: RoswaalCompilationDuplicateErrorCode::TestName
-            };
-            self.append_error(line_number, code);
-        } else if self.test_name.is_some() {
+        if self.test_name.is_some() {
             self.append_error(line_number, RoswaalCompilationErrorCode::TestNameAlreadyDeclared);
         } else {
             self.test_name = Some(name);
@@ -311,7 +299,7 @@ struct CompiledCommand {
 }
 
 #[cfg(test)]
-mod compiler_tests {
+mod tests {
     use std::str::FromStr;
 
     use crate::{language::test::RoswaalTestCommand, location::name::RoswaalLocationName};
@@ -430,24 +418,6 @@ lsjkhadjkhasdfjkhasdjkfhkjsd
     }
 
     #[test]
-    fn test_parse_returns_duplicate_test_name_when_new_test_matches_existing_test_name() {
-        let test = "new test: Test 1";
-        let test_name = "Test 1";
-        let result = RoswaalTest::compile(
-            test,
-            RoswaalCompileContext::new(vec![], vec![test_name.to_string()])
-        );
-        let error = RoswaalCompilationError {
-            line_number: 1,
-            code: RoswaalCompilationErrorCode::Duplicate {
-                name: test_name.to_string(),
-                code: RoswaalCompilationDuplicateErrorCode::TestName
-            }
-        };
-        assert_contains_compile_error(&result, &error)
-    }
-
-    #[test]
     fn test_parse_returns_test_name_declared_when_2_new_test_commands() {
         let test = "\
 New test: Test 1
@@ -517,7 +487,7 @@ Set Location: world
 ";
         let result = RoswaalTest::compile(
             test,
-            RoswaalCompileContext::new(location_names, vec![])
+            RoswaalCompileContext::new(location_names)
         );
         let error = RoswaalCompilationError {
             line_number: 2,
@@ -537,7 +507,7 @@ Requirement 1: sure, do the thing
 ";
         let result = RoswaalTest::compile(
             test,
-            RoswaalCompileContext::new(location_names, vec![])
+            RoswaalCompileContext::new(location_names)
         );
         let error = RoswaalCompilationError {
             line_number: 3,
@@ -776,7 +746,7 @@ Requirement 1: Have the guy dying on the floor ask why he didn't block that
 ";
         let result = RoswaalTest::compile(
             test,
-            RoswaalCompileContext::new(vec!["new york".parse().unwrap()], vec![])
+            RoswaalCompileContext::new(vec!["new york".parse().unwrap()])
         ).unwrap();
         let expected_test = RoswaalTest::new(
             "I'm Insane, From New York".to_string(),
