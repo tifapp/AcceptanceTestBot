@@ -57,7 +57,7 @@ mod tests {
     use tokio::fs::{try_exists, File};
 
     use super::*;
-    use crate::git::{metadata::RoswaalGitRepositoryMetadata, repo::{LibGit2RepositoryClient, PullBranchStatus}, test_support::{repo_with_test_metadata, write_string, TestGithubPullRequestOpen, with_clean_test_repo_access}};
+    use crate::git::{metadata::RoswaalGitRepositoryMetadata, repo::{LibGit2RepositoryClient, PullBranchStatus, RoswaalGitRepository}, test_support::{repo_with_test_metadata, with_clean_test_repo_access, write_string, TestGithubPullRequestOpen}};
 
     #[tokio::test]
     async fn test_basic_flow_returns_successfully_with_proper_pr_opened_and_correct_repo_state() {

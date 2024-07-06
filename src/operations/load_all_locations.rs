@@ -2,12 +2,12 @@ use anyhow::Result;
 use crate::{location::location::RoswaalLocation, utils::sqlite::RoswaalSqlite, with_transaction};
 
 #[derive(Debug, PartialEq)]
-pub enum LoadAllLocationsResult {
+pub enum LoadAllLocationsStatus {
     Success(Vec<RoswaalLocation>),
     NoLocations
 }
 
-impl LoadAllLocationsResult {
+impl LoadAllLocationsStatus {
     pub async fn from_stored_locations(
         sqlite: &RoswaalSqlite
     ) -> Result<Self> {
@@ -26,13 +26,13 @@ impl LoadAllLocationsResult {
 
 #[cfg(test)]
 mod tests {
-    use crate::{location::location::RoswaalLocation, operations::{add_locations::AddLocationsResult, load_all_locations::LoadAllLocationsResult}, utils::sqlite::RoswaalSqlite};
+    use crate::{location::location::RoswaalLocation, operations::{add_locations::AddLocationsStatus, load_all_locations::LoadAllLocationsStatus}, utils::sqlite::RoswaalSqlite};
 
     #[tokio::test]
     async fn test_returns_no_locations_when_no_saved_locations() {
         let sqlite = RoswaalSqlite::in_memory().await.unwrap();
-        let result = LoadAllLocationsResult::from_stored_locations(&sqlite).await.unwrap();
-        assert_eq!(result, LoadAllLocationsResult::NoLocations)
+        let status = LoadAllLocationsStatus::from_stored_locations(&sqlite).await.unwrap();
+        assert_eq!(status, LoadAllLocationsStatus::NoLocations)
     }
 
     #[tokio::test]
@@ -47,8 +47,8 @@ Test 1, 50.0, 50.0
 Invalid
 Test 2, -5.0, 5.0
             ";
-        _ = AddLocationsResult::from_adding_locations(&locations_str, &sqlite).await.unwrap();
-        let result = LoadAllLocationsResult::from_stored_locations(&sqlite).await.unwrap();
-        assert_eq!(result, LoadAllLocationsResult::Success(locations))
+        _ = AddLocationsStatus::from_adding_locations(&locations_str, &sqlite).await.unwrap();
+        let status = LoadAllLocationsStatus::from_stored_locations(&sqlite).await.unwrap();
+        assert_eq!(status, LoadAllLocationsStatus::Success(locations))
     }
 }
