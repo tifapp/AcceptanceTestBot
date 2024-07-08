@@ -17,7 +17,7 @@ impl LoadAllLocationsStatus {
                 if locations.is_empty() {
                     Self::NoLocations
                 } else {
-                    Self::Success(locations)
+                    Self::Success(locations.iter().map(|l| l.location().clone()).collect())
                 }
             })
         })
