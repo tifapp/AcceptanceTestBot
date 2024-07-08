@@ -30,7 +30,9 @@ CREATE TABLE IF NOT EXISTS Locations (
     id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     latitude DOUBLE NOT NULL,
     longitude DOUBLE NOT NULL,
-    name TEXT NOT NULL UNIQUE
+    name TEXT NOT NULL,
+    unmerged_branch_name TEXT,
+    UNIQUE(name, unmerged_branch_name)
 )
             "
         )

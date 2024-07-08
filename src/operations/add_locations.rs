@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use crate::{location::location::RoswaalStringLocations, utils::sqlite::RoswaalSqlite, with_transaction};
+use crate::{git::branch_name::{self, RoswaalOwnedGitBranchName}, location::location::RoswaalStringLocations, utils::sqlite::RoswaalSqlite, with_transaction};
 
 #[derive(Debug, PartialEq)]
 pub enum AddLocationsStatus {
@@ -19,7 +19,8 @@ impl AddLocationsStatus {
         let string_locations = RoswaalStringLocations::from_roswaal_locations_str(locations_str);
         let mut transaction = sqlite.transaction().await?;
         with_transaction!(transaction, async {
-            transaction.save_locations(&string_locations.locations()).await?;
+            let branch_name = RoswaalOwnedGitBranchName::new("add-locations");
+            transaction.save_locations(&string_locations.locations(), &branch_name).await?;
             Ok(Self::Success(string_locations))
         })
     }
