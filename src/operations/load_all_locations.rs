@@ -1,9 +1,9 @@
 use anyhow::Result;
-use crate::{location::location::RoswaalLocation, utils::sqlite::RoswaalSqlite, with_transaction};
+use crate::{location::storage::RoswaalStoredLocation, utils::sqlite::RoswaalSqlite, with_transaction};
 
 #[derive(Debug, PartialEq)]
 pub enum LoadAllLocationsStatus {
-    Success(Vec<RoswaalLocation>),
+    Success(Vec<RoswaalStoredLocation>),
     NoLocations
 }
 
@@ -17,7 +17,7 @@ impl LoadAllLocationsStatus {
                 if locations.is_empty() {
                     Self::NoLocations
                 } else {
-                    Self::Success(locations.iter().map(|l| l.location().clone()).collect())
+                    Self::Success(locations)
                 }
             })
         })
@@ -26,7 +26,7 @@ impl LoadAllLocationsStatus {
 
 #[cfg(test)]
 mod tests {
-    use crate::{location::location::RoswaalLocation, operations::{add_locations::AddLocationsStatus, load_all_locations::LoadAllLocationsStatus}, utils::sqlite::RoswaalSqlite};
+    use crate::{is_case, location::location::RoswaalLocation, operations::{add_locations::AddLocationsStatus, load_all_locations::LoadAllLocationsStatus}, utils::sqlite::RoswaalSqlite};
 
     #[tokio::test]
     async fn test_returns_no_locations_when_no_saved_locations() {
@@ -38,7 +38,7 @@ mod tests {
     #[tokio::test]
     async fn test_returns_locations_from_add_operation() {
         let sqlite = RoswaalSqlite::in_memory().await.unwrap();
-        let locations = vec![
+        let expected_locations = vec![
             RoswaalLocation::new_without_validation("Test 1", 50.0, 50.0),
             RoswaalLocation::new_without_validation("Test 2", -5.0, 5.0)
         ];
@@ -49,6 +49,16 @@ Test 2, -5.0, 5.0
             ";
         _ = AddLocationsStatus::from_adding_locations(&locations_str, &sqlite).await.unwrap();
         let status = LoadAllLocationsStatus::from_stored_locations(&sqlite).await.unwrap();
-        assert_eq!(status, LoadAllLocationsStatus::Success(locations))
+        assert!(is_case!(status, LoadAllLocationsStatus::Success));
+        assert_eq!(status.locations(), expected_locations)
+    }
+
+    impl LoadAllLocationsStatus {
+        fn locations(&self) -> Vec<RoswaalLocation> {
+            match self {
+                Self::Success(locations) => locations.iter().map(|l| l.location().clone()).collect(),
+                _ => panic!("Must be a success status")
+            }
+        }
     }
 }
