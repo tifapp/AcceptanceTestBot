@@ -19,7 +19,7 @@ impl AddLocationsStatus {
         let string_locations = RoswaalStringLocations::from_roswaal_locations_str(locations_str);
         let mut transaction = sqlite.transaction().await?;
         with_transaction!(transaction, async {
-            let branch_name = RoswaalOwnedGitBranchName::new("add-locations");
+            let branch_name = RoswaalOwnedGitBranchName::for_adding_locations();
             transaction.save_locations(&string_locations.locations(), &branch_name).await?;
             Ok(Self::Success(string_locations))
         })
