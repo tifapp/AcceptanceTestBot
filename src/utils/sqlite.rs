@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS Locations (
     longitude DOUBLE NOT NULL,
     name TEXT NOT NULL,
     unmerged_branch_name TEXT,
+    creation_date DATETIME NOT NULL DEFAULT (unixepoch()),
     UNIQUE(name, unmerged_branch_name)
 );
 CREATE TABLE IF NOT EXISTS Tests (
@@ -39,6 +40,7 @@ CREATE TABLE IF NOT EXISTS Tests (
     name TEXT NOT NULL,
     description TEXT,
     unmerged_branch_name TEXT,
+    creation_date DATETIME NOT NULL DEFAULT (unixepoch()),
     UNIQUE(name, unmerged_branch_name)
 );
 CREATE TABLE IF NOT EXISTS TestSteps (
@@ -47,6 +49,7 @@ CREATE TABLE IF NOT EXISTS TestSteps (
     content TEXT NOT_NULL,
     did_pass INT2 NOT NULL DEFAULT FALSE,
     unmerged_branch_name TEXT,
+    creation_date DATETIME NOT NULL DEFAULT (unixepoch()),
     CONSTRAINT fk_test FOREIGN KEY(test_id) REFERENCES Tests(id)
 );
             "
