@@ -24,10 +24,14 @@ impl RoswaalOwnedGitBranchName {
     pub fn for_adding_locations() -> Self {
         Self::new("add-locations")
     }
+}
 
-    pub fn for_removing_locations() -> Self {
-        Self::new("remove-locations")
-    }
+/// A specific type of branch created by this tool.
+#[derive(Debug, PartialEq, Eq)]
+pub enum RoswaalOwnedBranchKind {
+    AddLocations,
+    AddTests,
+    RemoveTests
 }
 
 impl RoswaalOwnedGitBranchName {
@@ -40,20 +44,18 @@ impl RoswaalOwnedGitBranchName {
         &self.0[start..end] == name
     }
 
-    pub fn is_for_adding_tests(&self) -> bool {
-        self.is_named("add-tests")
-    }
-
-    pub fn is_for_removing_tests(&self) -> bool {
-        self.is_named("remove-tests")
-    }
-
-    pub fn is_for_adding_locations(&self) -> bool {
-        self.is_named("add-locations")
-    }
-
-    pub fn is_for_removing_locations(&self) -> bool {
-        self.is_named("remove-locations")
+    /// Returns the kind of branch that this name represents, or none if it does not represent a
+    /// production purpose of this tool.
+    pub fn kind(&self) -> Option<RoswaalOwnedBranchKind> {
+        if self.is_named("add-tests") {
+            Some(RoswaalOwnedBranchKind::AddTests)
+        } else if self.is_named("add-locations") {
+            Some(RoswaalOwnedBranchKind::AddLocations)
+        } else if self.is_named("remove-tests") {
+            Some(RoswaalOwnedBranchKind::RemoveTests)
+        } else {
+            None
+        }
     }
 }
 
@@ -71,6 +73,8 @@ impl Type<Sqlite> for RoswaalOwnedGitBranchName {
 
 #[cfg(test)]
 mod tests {
+    use crate::git::branch_name::RoswaalOwnedBranchKind;
+
     use super::RoswaalOwnedGitBranchName;
 
     #[test]
@@ -82,6 +86,21 @@ mod tests {
         assert!(!branch_name.is_named("-"));
         assert!(!branch_name.is_named("test"));
         assert!(!branch_name.is_named("branch"));
+        assert!(!branch_name.is_named(&branch_name.to_string()));
         assert!(branch_name.is_named("test-branch"));
+    }
+
+    #[test]
+    fn test_kind() {
+        let names_to_kind = vec![
+            (RoswaalOwnedGitBranchName::new("test-branch"), None),
+            (RoswaalOwnedGitBranchName::for_adding_tests(), Some(RoswaalOwnedBranchKind::AddTests)),
+            (RoswaalOwnedGitBranchName::for_removing_tests(), Some(RoswaalOwnedBranchKind::RemoveTests)),
+            (RoswaalOwnedGitBranchName::for_adding_locations(), Some(RoswaalOwnedBranchKind::AddLocations)),
+            (RoswaalOwnedGitBranchName::new("i-am-groot"), None),
+        ];
+        for (name, kind) in names_to_kind {
+            assert_eq!(name.kind(), kind)
+        }
     }
 }
