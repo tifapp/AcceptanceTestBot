@@ -37,8 +37,13 @@ impl RoswaalGitRepositoryMetadata {
 
     /// Metadata for a local testing repo.
     pub fn for_testing() -> Self {
+        Self::for_testing_with_custom_base_branch(TEST_REPO_BASE_BRANCH_NAME)
+    }
+
+    /// Metadata for a local testing repo with a custom base branch name.
+    pub fn for_testing_with_custom_base_branch(base_branch_name: &str) -> Self {
         Self {
-            base_branch_name: "main".to_string(),
+            base_branch_name: base_branch_name.to_string(),
             repo_root_dir_path: "./FitnessProjectTest".to_string(),
             ssh_private_key_home_path: "./.ssh/id_mhayes".to_string(),
             test_cases_root_dir_path: "./FitnessProjectTest/roswaal".to_string(),
@@ -54,6 +59,8 @@ impl RoswaalGitRepositoryMetadata {
         }
     }
 }
+
+pub const TEST_REPO_BASE_BRANCH_NAME: &str = "main";
 
 impl RoswaalGitRepositoryMetadata {
     /// Returns the name of the branch that changes are primarily merged to (eg. development).
