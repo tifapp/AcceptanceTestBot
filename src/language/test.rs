@@ -1,6 +1,8 @@
+use serde::{Deserialize, Serialize};
+
 use crate::location::name::RoswaalLocationName;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct RoswaalTest {
     name: String,
     description: Option<String>,
@@ -25,9 +27,13 @@ impl RoswaalTest {
     pub fn commands(&self) -> &Vec<RoswaalTestCommand> {
         &self.commands
     }
+
+    pub fn description(&self) -> Option<&String> {
+        self.description.as_ref()
+    }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum RoswaalTestCommand {
     Step { name: String, requirement: String },
     SetLocation { location_name: RoswaalLocationName }

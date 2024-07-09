@@ -33,7 +33,22 @@ CREATE TABLE IF NOT EXISTS Locations (
     name TEXT NOT NULL,
     unmerged_branch_name TEXT,
     UNIQUE(name, unmerged_branch_name)
-)
+);
+CREATE TABLE IF NOT EXISTS Tests (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    unmerged_branch_name TEXT,
+    UNIQUE(name, unmerged_branch_name)
+);
+CREATE TABLE IF NOT EXISTS TestSteps (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    test_id INTEGER NOT NULL,
+    content TEXT NOT_NULL,
+    did_pass INT2 NOT NULL DEFAULT FALSE,
+    unmerged_branch_name TEXT,
+    CONSTRAINT fk_test FOREIGN KEY(test_id) REFERENCES Tests(id)
+);
             "
         )
         .execute(pool)

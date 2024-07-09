@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use once_cell::sync::Lazy;
 use regex::{Regex, RegexBuilder};
+use serde::{Deserialize, Serialize};
 
 use crate::utils::{normalize::RoswaalNormalize, string::UppercaseFirstAsciiCharacter};
 
@@ -20,7 +21,7 @@ pub type RoswaalLocationParsingResult = Result<
 ///
 /// This type contains helpers for matching the name against a query, and
 /// for formatting the name in different contexts.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct RoswaalLocationName {
     pub(super) raw_value: String
 }

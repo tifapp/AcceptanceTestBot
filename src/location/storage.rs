@@ -22,7 +22,7 @@ impl RoswaalStoredLocation {
 }
 
 const SAVE_STATEMENT: &str = "
-INSERT INTO Locations (
+INSERT OR REPLACE INTO Locations (
     latitude,
     longitude,
     name,
@@ -102,7 +102,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_add_same_locations_on_same_branch_throws_error() {
+    async fn test_add_same_locations_on_same_branch_replaces_previous() {
         let branch_name = RoswaalOwnedGitBranchName::new("test");
         let sqlite = RoswaalSqlite::in_memory().await.unwrap();
         let mut transaction = sqlite.transaction().await.unwrap();
@@ -113,8 +113,12 @@ mod tests {
         locations = vec![
             RoswaalLocation::new_without_validation("Antarctica", 45.20982, 78.209782972)
         ];
-        let result = transaction.save_locations(&locations, &branch_name).await;
-        assert!(result.is_err())
+        _ = transaction.save_locations(&locations, &branch_name).await;
+        let saved_locations = transaction.locations_in_alphabetical_order().await.unwrap();
+        let expected_locations = vec![
+            RoswaalStoredLocation { location: locations[0].clone(), branch_name: Some(branch_name) }
+        ];
+        assert_eq!(saved_locations, expected_locations);
     }
 
     #[tokio::test]
