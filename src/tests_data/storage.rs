@@ -26,7 +26,7 @@ impl <'a> RoswaalSqliteTransaction<'a> {
         let sqlite_location_names = query_as::<Sqlite, SqliteTestName>(
             "SELECT name FROM Tests WHERE unmerged_branch_name = ?;"
         )
-        .bind(branch_name.to_string())
+        .bind(branch_name)
         .fetch_all(self.connection())
         .await?;
         let update_statements = sqlite_location_names.iter().map(|_| UPDATE_MERGE_UNMERGED_STATEMENT)
@@ -35,7 +35,7 @@ impl <'a> RoswaalSqliteTransaction<'a> {
         let mut update_query = query::<Sqlite>(&update_statements);
         for sqlite_name in sqlite_location_names.iter() {
             update_query = update_query.bind(sqlite_name.name.clone())
-                .bind(branch_name.to_string())
+                .bind(branch_name)
                 .bind(sqlite_name.name.clone());
         }
         update_query.execute(self.connection()).await?;
@@ -59,7 +59,7 @@ impl <'a> RoswaalSqliteTransaction<'a> {
         for test in tests.iter() {
             tests_insert_query = tests_insert_query.bind(test.name())
                 .bind(test.description())
-                .bind(branch_name.to_string());
+                .bind(branch_name);
         }
         let id_rows = tests_insert_query.fetch_all(self.connection()).await?;
         let command_insert_statements = tests.iter()
