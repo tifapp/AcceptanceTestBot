@@ -48,9 +48,9 @@ CREATE TABLE IF NOT EXISTS TestSteps (
     test_id INTEGER NOT NULL,
     content TEXT NOT_NULL,
     did_pass INT2 NOT NULL DEFAULT FALSE,
-    unmerged_branch_name TEXT,
     creation_date DATETIME NOT NULL DEFAULT (unixepoch()),
-    CONSTRAINT fk_test FOREIGN KEY(test_id) REFERENCES Tests(id)
+    UNIQUE(test_id, content),
+    CONSTRAINT fk_test FOREIGN KEY(test_id) REFERENCES Tests(id) ON DELETE CASCADE
 );
             "
         )
