@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS TestSteps (
     id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     test_id INTEGER NOT NULL,
     content TEXT NOT_NULL,
+    ordinal INTEGER NOT NULL,
     did_pass INT2 NOT NULL DEFAULT FALSE,
     creation_date DATETIME NOT NULL DEFAULT (unixepoch()),
     UNIQUE(test_id, content),

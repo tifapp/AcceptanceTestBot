@@ -65,15 +65,16 @@ impl <'a> RoswaalSqliteTransaction<'a> {
         let command_insert_statements = tests.iter()
             .flat_map(|t| t.commands())
             .map(|_| {
-                "INSERT INTO TestSteps (test_id, content) VALUES (?, ?);"
+                "INSERT INTO TestSteps (test_id, content, ordinal) VALUES (?, ?, ?);"
             })
             .collect::<Vec<&str>>()
             .join("\n");
         let mut commands_insert_query = query::<Sqlite>(&command_insert_statements);
         for (test, id_row) in zip(tests.iter(), id_rows.iter()) {
-            for command in test.commands() {
+            for (ordinal, command) in test.commands().iter().enumerate() {
                 commands_insert_query = commands_insert_query.bind(id_row.id)
-                    .bind(serde_json::to_string(&command)?);
+                    .bind(serde_json::to_string(&command)?)
+                    .bind(ordinal as i32);
             }
         }
         commands_insert_query.execute(self.connection()).await?;
@@ -122,7 +123,7 @@ SELECT
     c.did_pass
 FROM Tests t
 INNER JOIN TestSteps c ON t.id = c.test_id
-ORDER BY test_name;
+ORDER BY test_name, c.ordinal;
 ";
 
 
