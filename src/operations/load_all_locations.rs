@@ -1,5 +1,5 @@
 use anyhow::Result;
-use crate::{location::storage::RoswaalStoredLocation, utils::sqlite::RoswaalSqlite, with_transaction};
+use crate::{location::storage::{LoadLocationsFilter, RoswaalStoredLocation}, utils::sqlite::RoswaalSqlite, with_transaction};
 
 #[derive(Debug, PartialEq)]
 pub enum LoadAllLocationsStatus {
@@ -11,13 +11,15 @@ impl LoadAllLocationsStatus {
     pub async fn from_stored_locations(sqlite: &RoswaalSqlite) -> Result<Self> {
         let mut transaction = sqlite.transaction().await?;
         with_transaction!(transaction, async {
-            transaction.locations_in_alphabetical_order().await.map(|locations| {
-                if locations.is_empty() {
-                    Self::NoLocations
-                } else {
-                    Self::Success(locations)
-                }
-            })
+            transaction.locations_in_alphabetical_order(LoadLocationsFilter::All)
+                .await
+                .map(|locations| {
+                    if locations.is_empty() {
+                        Self::NoLocations
+                    } else {
+                        Self::Success(locations)
+                    }
+                })
         })
     }
 }

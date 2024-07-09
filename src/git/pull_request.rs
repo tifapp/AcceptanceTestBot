@@ -17,7 +17,7 @@ pub struct GithubPullRequest {
     owner: String,
     #[serde(skip)]
     repo: String,
-    head: String,
+    head: RoswaalOwnedGitBranchName,
     base: String
 }
 
@@ -41,7 +41,7 @@ Since I am Roswaaaaaaal, I do not need to specify any tiiiiiiiickets!
             owner: "tifapp".to_string(),
             repo: "FitnessProject".to_string(),
             base: "development".to_string(),
-            head: head_branch.to_string()
+            head: head_branch.clone()
         }
     }
 
@@ -103,6 +103,11 @@ impl GithubPullRequest {
     /// Returns the title of this PR.
     pub fn title(&self) -> &str {
         &self.title
+    }
+
+    /// Returns the head branch of this PR.
+    pub fn head_branch(&self) -> &RoswaalOwnedGitBranchName {
+        &self.head
     }
 
     /// Designates this PR specifically for testing and adjusts the title and body to disclaim

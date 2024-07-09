@@ -70,7 +70,6 @@ mod tests {
             let file_path = metadata.relative_path("test-thing.txt");
             let status = EditGitRepositoryStatus::from_editing_new_branch(
                 &new_branch_name,
-                // metadata.base_branch_name(),
                 repo.transaction().await,
                 &pr_open,
                 async {
@@ -95,7 +94,6 @@ mod tests {
         let new_branch_name = RoswaalOwnedGitBranchName::new("test-edit");
         let status = EditGitRepositoryStatus::from_editing_new_branch(
             &new_branch_name,
-            // RoswaalGitRepositoryMetadata::for_testing().base_branch_name(),
             RoswaalGitRepository::noop().await.unwrap().transaction().await,
             &TestGithubPullRequestOpen::new(true),
             async {
