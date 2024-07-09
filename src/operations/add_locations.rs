@@ -1,7 +1,7 @@
 use anyhow::Result;
 use tokio::{fs::File, io::AsyncWriteExt};
 
-use crate::{generation::interface::RoswaalTypescriptGenerate, git::{branch_name::RoswaalOwnedGitBranchName, edit::EditGitRepositoryStatus, pull_request::GithubPullRequestOpen, repo::{RoswaalGitRepository, RoswaalGitRepositoryClient}}, location::{location::{RoswaalLocation, RoswaalStringLocations}, storage::RoswaalStoredLocation}, utils::sqlite::RoswaalSqlite, with_transaction};
+use crate::{generation::interface::RoswaalTypescriptGenerate, git::{branch_name::RoswaalOwnedGitBranchName, edit::EditGitRepositoryStatus, pull_request::GithubPullRequestOpen, repo::{RoswaalGitRepository, RoswaalGitRepositoryClient}}, location::{location::{RoswaalLocation, RoswaalStringLocations}, storage::{LoadLocationsFilter, RoswaalStoredLocation}}, utils::sqlite::RoswaalSqlite, with_transaction};
 
 #[derive(Debug, PartialEq)]
 pub enum AddLocationsStatus {
@@ -25,7 +25,9 @@ impl AddLocationsStatus {
         let branch_name = RoswaalOwnedGitBranchName::for_adding_locations();
         let mut transaction = sqlite.transaction().await?;
         let (stored_locations, git_transaction) = with_transaction!(transaction, async {
-            let locations = transaction.locations_in_alphabetical_order().await?;
+            let locations = transaction.locations_in_alphabetical_order(
+                LoadLocationsFilter::MergedOnly
+            ).await?;
             Ok((locations, git_repository.transaction().await))
         })?;
 
@@ -81,7 +83,7 @@ impl AddLocationsStatus {
 
 #[cfg(test)]
 mod tests {
-    use crate::{git::{metadata::{self, RoswaalGitRepositoryMetadata}, repo::RoswaalGitRepository, test_support::{read_string, with_clean_test_repo_access, TestGithubPullRequestOpen}}, is_case, location::location::RoswaalStringLocations, operations::add_locations::AddLocationsStatus, utils::sqlite::RoswaalSqlite};
+    use crate::{git::{metadata::{self, RoswaalGitRepositoryMetadata}, repo::RoswaalGitRepository, test_support::{read_string, with_clean_test_repo_access, TestGithubPullRequestOpen}}, is_case, location::location::RoswaalStringLocations, operations::{add_locations::AddLocationsStatus, merge_branch::MergeBranchStatus}, utils::sqlite::RoswaalSqlite};
 
     #[tokio::test]
     async fn test_success_when_adding_locations_smoothly() {
@@ -136,21 +138,31 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_creates_code_file_with_existing_locations() {
+    async fn test_creates_code_file_with_existing_merged_locations() {
         with_clean_test_repo_access(async {
             let metadata = RoswaalGitRepositoryMetadata::for_testing();
             let sqlite = RoswaalSqlite::in_memory().await.unwrap();
+            let pr_open = TestGithubPullRequestOpen::new(false);
+            let repo = RoswaalGitRepository::noop().await?;
             _ = AddLocationsStatus::from_adding_locations(
-                "Test, 50.0, 50.0",
-                &RoswaalGitRepository::noop().await.unwrap(),
+                "Hello, 50.0, 50.0",
+                &repo,
                 &sqlite,
-                &TestGithubPullRequestOpen::new(false)
+                &pr_open
             ).await;
             _ = AddLocationsStatus::from_adding_locations(
-                "Test 2, 45.0, 45.0",
-                &RoswaalGitRepository::noop().await.unwrap(),
+                "Test, 50.0, 50.0",
+                &repo,
                 &sqlite,
-                &TestGithubPullRequestOpen::new(false)
+                &pr_open
+            ).await;
+            let branch_name = pr_open.most_recent_head_branch_name().await.unwrap();
+            _ = MergeBranchStatus::from_merging_branch_with_name(&branch_name, &sqlite).await?;
+            _ = AddLocationsStatus::from_adding_locations(
+                "Test 2, 45.0, 45.0",
+                &repo,
+                &sqlite,
+                &pr_open
             ).await;
             let content = read_string(metadata.locations_path()).await?;
             let expected_content = "\

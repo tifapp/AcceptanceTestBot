@@ -30,6 +30,10 @@ impl TestGithubPullRequestOpen {
         let pr = self.mutex.lock().await;
         pr.clone()
     }
+
+    pub async fn most_recent_head_branch_name(&self) -> Option<RoswaalOwnedGitBranchName> {
+        self.most_recent_pr().await.map(|pr| pr.head_branch().clone())
+    }
 }
 
 #[cfg(test)]
