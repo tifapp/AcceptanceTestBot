@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use crate::{git::branch_name::{self, RoswaalOwnedGitBranchName}, location::location::RoswaalStringLocations, utils::sqlite::RoswaalSqlite, with_transaction};
+use crate::{git::{branch_name::{self, RoswaalOwnedGitBranchName}, repo::{RoswaalGitRepository, RoswaalGitRepositoryClient}}, location::location::RoswaalStringLocations, utils::sqlite::RoswaalSqlite, with_transaction};
 
 #[derive(Debug, PartialEq)]
 pub enum AddLocationsStatus {
@@ -11,6 +11,7 @@ pub enum AddLocationsStatus {
 impl AddLocationsStatus {
     pub async fn from_adding_locations(
         locations_str: &str,
+        git_repository: RoswaalGitRepository<impl RoswaalGitRepositoryClient>,
         sqlite: &RoswaalSqlite
     ) -> Result<Self> {
         if locations_str.is_empty() {
@@ -28,30 +29,54 @@ impl AddLocationsStatus {
 
 #[cfg(test)]
 mod tests {
-    use crate::{location::location::RoswaalStringLocations, operations::add_locations::AddLocationsStatus, utils::sqlite::RoswaalSqlite};
+    use crate::{git::{repo::RoswaalGitRepository, test_support::with_clean_test_repo_access}, location::location::RoswaalStringLocations, operations::add_locations::AddLocationsStatus, utils::sqlite::RoswaalSqlite};
 
     #[tokio::test]
     async fn test_success_when_adding_locations_smoothly() {
-        let str = "Test, 50.0, 50.0";
-        let sqlite = RoswaalSqlite::in_memory().await.unwrap();
-        let result = AddLocationsStatus::from_adding_locations(str, &sqlite).await;
-        let str_locations = RoswaalStringLocations::from_roswaal_locations_str(str);
-        assert_eq!(result.ok(), Some(AddLocationsStatus::Success(str_locations)))
+        with_clean_test_repo_access(async {
+            let str = "Test, 50.0, 50.0";
+            let sqlite = RoswaalSqlite::in_memory().await?;
+            let result = AddLocationsStatus::from_adding_locations(
+                str,
+                RoswaalGitRepository::noop().await?,
+                &sqlite
+            ).await;
+            let str_locations = RoswaalStringLocations::from_roswaal_locations_str(str);
+            assert_eq!(result.ok(), Some(AddLocationsStatus::Success(str_locations)));
+            Ok(())
+        })
+        .await.unwrap()
     }
 
     #[tokio::test]
     async fn test_success_mixes_proper_and_invalid_locations() {
-        let str = "Test, 50.0, 50.0\n29879";
-        let sqlite = RoswaalSqlite::in_memory().await.unwrap();
-        let result = AddLocationsStatus::from_adding_locations(str, &sqlite).await;
-        let str_locations = RoswaalStringLocations::from_roswaal_locations_str(str);
-        assert_eq!(result.ok(), Some(AddLocationsStatus::Success(str_locations)))
+        with_clean_test_repo_access(async {
+            let str = "Test, 50.0, 50.0\n29879";
+            let sqlite = RoswaalSqlite::in_memory().await.unwrap();
+            let result = AddLocationsStatus::from_adding_locations(
+                str,
+                RoswaalGitRepository::noop().await.unwrap(),
+                &sqlite
+            ).await;
+            let str_locations = RoswaalStringLocations::from_roswaal_locations_str(str);
+            assert_eq!(result.ok(), Some(AddLocationsStatus::Success(str_locations)));
+            Ok(())
+        })
+        .await.unwrap();
     }
 
     #[tokio::test]
     async fn test_no_locations_added_when_empty_vector() {
-        let sqlite = RoswaalSqlite::in_memory().await.unwrap();
-        let result = AddLocationsStatus::from_adding_locations("", &sqlite).await;
-        assert_eq!(result.ok(), Some(AddLocationsStatus::NoLocationsAdded))
+        with_clean_test_repo_access(async {
+            let sqlite = RoswaalSqlite::in_memory().await.unwrap();
+            let result = AddLocationsStatus::from_adding_locations(
+                "",
+                RoswaalGitRepository::noop().await.unwrap(),
+                &sqlite
+            ).await;
+            assert_eq!(result.ok(), Some(AddLocationsStatus::NoLocationsAdded));
+            Ok(())
+        })
+        .await.unwrap();
     }
 }
