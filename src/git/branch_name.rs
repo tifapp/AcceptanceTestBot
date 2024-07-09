@@ -1,11 +1,12 @@
 use nanoid::nanoid;
+use serde::{Deserialize, Serialize};
 use sqlx::{sqlite::SqliteTypeInfo, Decode, Sqlite, Type};
 
 /// A type for a git branch name that is created by roswaal.
 ///
 /// Each branch name contains a 10 character nano id as its suffix in order to make each instance
 /// unique. This uniqueness ensures that duplicate branch names do not clash with each other.
-#[derive(Debug, PartialEq, Eq, Clone, Decode)]
+#[derive(Debug, PartialEq, Eq, Clone, Decode, Serialize, Deserialize)]
 pub struct RoswaalOwnedGitBranchName(String);
 
 impl RoswaalOwnedGitBranchName {
@@ -100,7 +101,7 @@ mod tests {
             (RoswaalOwnedGitBranchName::new("i-am-groot"), None),
         ];
         for (name, kind) in names_to_kind {
-            assert_eq!(name.kind(), kind)
+            assert_eq!(name.kind(), kind);
         }
     }
 }
