@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::location::name::RoswaalLocationName;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct RoswaalTest {
     name: String,
     description: Option<String>,

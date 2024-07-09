@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS Tests (
     id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     description TEXT,
-    unmerged_branch_name TEXT
+    unmerged_branch_name TEXT,
+    UNIQUE(name, unmerged_branch_name)
 );
 CREATE TABLE IF NOT EXISTS TestSteps (
     id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
