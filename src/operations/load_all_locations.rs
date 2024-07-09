@@ -8,9 +8,7 @@ pub enum LoadAllLocationsStatus {
 }
 
 impl LoadAllLocationsStatus {
-    pub async fn from_stored_locations(
-        sqlite: &RoswaalSqlite
-    ) -> Result<Self> {
+    pub async fn from_stored_locations(sqlite: &RoswaalSqlite) -> Result<Self> {
         let mut transaction = sqlite.transaction().await?;
         with_transaction!(transaction, async {
             transaction.locations_in_alphabetical_order().await.map(|locations| {
@@ -26,7 +24,7 @@ impl LoadAllLocationsStatus {
 
 #[cfg(test)]
 mod tests {
-    use crate::{is_case, location::location::RoswaalLocation, operations::{add_locations::AddLocationsStatus, load_all_locations::LoadAllLocationsStatus}, utils::sqlite::RoswaalSqlite};
+    use crate::{git::{repo::RoswaalGitRepository, test_support::{with_clean_test_repo_access, TestGithubPullRequestOpen}}, is_case, location::location::RoswaalLocation, operations::{add_locations::AddLocationsStatus, load_all_locations::LoadAllLocationsStatus}, utils::sqlite::RoswaalSqlite};
 
     #[tokio::test]
     async fn test_returns_no_locations_when_no_saved_locations() {
@@ -37,20 +35,78 @@ mod tests {
 
     #[tokio::test]
     async fn test_returns_locations_from_add_operation() {
-        let sqlite = RoswaalSqlite::in_memory().await.unwrap();
-        let expected_locations = vec![
-            RoswaalLocation::new_without_validation("Test 1", 50.0, 50.0),
-            RoswaalLocation::new_without_validation("Test 2", -5.0, 5.0)
-        ];
-        let locations_str = "
+        with_clean_test_repo_access(async {
+            let sqlite = RoswaalSqlite::in_memory().await.unwrap();
+            let expected_locations = vec![
+                RoswaalLocation::new_without_validation("Test 1", 50.0, 50.0),
+                RoswaalLocation::new_without_validation("Test 2", -5.0, 5.0)
+            ];
+            let locations_str = "
 Test 1, 50.0, 50.0
 Invalid
+Test 2, -15.0, 15.0
 Test 2, -5.0, 5.0
-            ";
-        _ = AddLocationsStatus::from_adding_locations(&locations_str, &sqlite).await.unwrap();
-        let status = LoadAllLocationsStatus::from_stored_locations(&sqlite).await.unwrap();
-        assert!(is_case!(status, LoadAllLocationsStatus::Success));
-        assert_eq!(status.locations(), expected_locations)
+                ";
+            _ = AddLocationsStatus::from_adding_locations(
+                &locations_str,
+                &RoswaalGitRepository::noop().await?,
+                &sqlite,
+                &TestGithubPullRequestOpen::new(false)
+            ).await?;
+            let status = LoadAllLocationsStatus::from_stored_locations(&sqlite).await.unwrap();
+            assert!(is_case!(status, LoadAllLocationsStatus::Success));
+            assert_eq!(status.locations(), expected_locations);
+            Ok(())
+        })
+        .await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_returns_no_locations_when_opening_add_locations_pr_fails() {
+        with_clean_test_repo_access(async {
+            let sqlite = RoswaalSqlite::in_memory().await.unwrap();
+            let locations_str = "
+Test 1, 50.0, 50.0
+Test 2, -5.0, 5.0
+                ";
+            let pr_open = TestGithubPullRequestOpen::new(true);
+            _ = AddLocationsStatus::from_adding_locations(
+                &locations_str,
+                &RoswaalGitRepository::noop().await?,
+                &sqlite,
+                &pr_open
+            ).await?;
+            let status = LoadAllLocationsStatus::from_stored_locations(&sqlite).await.unwrap();
+            assert_eq!(status, LoadAllLocationsStatus::NoLocations);
+            Ok(())
+        })
+        .await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_returns_no_locations_when_add_locations_merge_conflict_occurs() {
+        with_clean_test_repo_access(async {
+            let sqlite = RoswaalSqlite::in_memory().await.unwrap();
+            let locations_str = "
+Test 1, 50.0, 50.0
+Test 2, -5.0, 5.0
+                ";
+            let repo = RoswaalGitRepository::noop().await?;
+            let mut transaction = repo.transaction().await;
+            transaction.ensure_merge_conflict();
+            drop(transaction);
+            let pr_open = TestGithubPullRequestOpen::new(false);
+            _ = AddLocationsStatus::from_adding_locations(
+                &locations_str,
+                &repo,
+                &sqlite,
+                &pr_open
+            ).await?;
+            let status = LoadAllLocationsStatus::from_stored_locations(&sqlite).await.unwrap();
+            assert_eq!(status, LoadAllLocationsStatus::NoLocations);
+            Ok(())
+        })
+        .await.unwrap();
     }
 
     impl LoadAllLocationsStatus {

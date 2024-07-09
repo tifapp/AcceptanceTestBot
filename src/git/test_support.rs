@@ -44,13 +44,20 @@ impl GithubPullRequestOpen for TestGithubPullRequestOpen {
 /// A `RoswaalGitRepositoryClient` implementation suitable for test-stubbing.
 #[cfg(test)]
 pub struct NoopGitRepositoryClient {
-    metadata: RoswaalGitRepositoryMetadata
+    metadata: RoswaalGitRepositoryMetadata,
+    should_merge_conflict: bool
+}
+
+impl NoopGitRepositoryClient {
+    pub fn ensure_merge_conflict(&mut self) {
+        self.should_merge_conflict = true
+    }
 }
 
 #[cfg(test)]
 impl RoswaalGitRepositoryClient for NoopGitRepositoryClient {
     async fn try_new(metadata: &RoswaalGitRepositoryMetadata) -> Result<Self> {
-        Ok(Self { metadata: metadata.clone() })
+        Ok(Self { metadata: metadata.clone(), should_merge_conflict: false })
     }
 
     fn metadata(&self) -> &RoswaalGitRepositoryMetadata {
@@ -66,7 +73,11 @@ impl RoswaalGitRepositoryClient for NoopGitRepositoryClient {
     }
 
     async fn pull_branch(&self, _: &str) -> Result<PullBranchStatus> {
-        Ok(PullBranchStatus::Success)
+        if self.should_merge_conflict {
+            Ok(PullBranchStatus::MergeConflict)
+        } else {
+            Ok(PullBranchStatus::Success)
+        }
     }
 
     async fn commit_all(&self, _: &str) -> Result<()> {
