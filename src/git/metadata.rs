@@ -84,4 +84,12 @@ impl RoswaalGitRepositoryMetadata {
     pub fn locations_path(&self) -> &str {
         &self.locations_path
     }
+
+    pub fn add_locations_pull_request(
+        &self,
+        locations: &RoswaalStringLocations,
+        branch_name: &RoswaalOwnedGitBranchName
+    ) -> GithubPullRequest {
+        (self.add_locations_pr)(locations, branch_name)
+    }
 }
