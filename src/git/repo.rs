@@ -44,6 +44,9 @@ pub trait RoswaalGitRepositoryClient: Sized {
     /// Attempts to create this client from metadata.
     async fn try_new(metadata: &RoswaalGitRepositoryMetadata) -> Result<Self>;
 
+    /// Returns the metadata associated with this client.
+    fn metadata(&self) -> &RoswaalGitRepositoryMetadata;
+
     /// Performs the equivalent of a `git reset --hard HEAD`.
     async fn hard_reset_to_head(&self) -> Result<()>;
 
@@ -99,6 +102,10 @@ impl RoswaalGitRepositoryClient for LibGit2RepositoryClient {
         let repo = spawn_blocking(move || Repository::open(m1.relative_path("."))).await??;
         Self::thread(repo, metadata, rx);
         Ok(Self { sender: tx, metadata: metadata.clone() })
+    }
+
+    fn metadata(&self) -> &RoswaalGitRepositoryMetadata {
+        &self.metadata
     }
 
     async fn hard_reset_to_head(&self) -> Result<()> {

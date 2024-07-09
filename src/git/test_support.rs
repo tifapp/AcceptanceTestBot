@@ -9,7 +9,7 @@ use tokio::process::Command;
 #[cfg(test)]
 use tokio::sync::Mutex;
 
-use super::{branch_name::RoswaalOwnedGitBranchName, metadata::RoswaalGitRepositoryMetadata, pull_request::{GithubPullRequest, GithubPullRequestOpen}, repo::{PullBranchStatus, RoswaalGitRepositoryClient, RoswaalGitRepository, LibGit2RepositoryClient}};
+use super::{branch_name::RoswaalOwnedGitBranchName, metadata::{self, RoswaalGitRepositoryMetadata}, pull_request::{GithubPullRequest, GithubPullRequestOpen}, repo::{LibGit2RepositoryClient, PullBranchStatus, RoswaalGitRepository, RoswaalGitRepositoryClient}};
 
 #[cfg(test)]
 pub struct TestGithubPullRequestOpen {
@@ -43,12 +43,18 @@ impl GithubPullRequestOpen for TestGithubPullRequestOpen {
 
 /// A `RoswaalGitRepositoryClient` implementation suitable for test-stubbing.
 #[cfg(test)]
-pub struct NoopGitRepositoryClient;
+pub struct NoopGitRepositoryClient {
+    metadata: RoswaalGitRepositoryMetadata
+}
 
 #[cfg(test)]
 impl RoswaalGitRepositoryClient for NoopGitRepositoryClient {
-    async fn try_new(_: &RoswaalGitRepositoryMetadata) -> Result<Self> {
-        Ok(Self)
+    async fn try_new(metadata: &RoswaalGitRepositoryMetadata) -> Result<Self> {
+        Ok(Self { metadata: metadata.clone() })
+    }
+
+    fn metadata(&self) -> &RoswaalGitRepositoryMetadata {
+        &self.metadata
     }
 
     async fn hard_reset_to_head(&self) -> Result<()> {
