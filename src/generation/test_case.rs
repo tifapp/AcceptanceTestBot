@@ -17,11 +17,8 @@ impl TestCaseTypescript {
         create_dir_all(dirpath).await?;
         let mut file = File::create(format!("{}/TestCase.test.ts", dirpath)).await?;
         file.write(self.test_case_code.as_bytes()).await?;
-        // file.flush().await?;
-
         file = File::create(format!("{}/TestActions.ts", dirpath)).await?;
         file.write(self.test_action_code.as_bytes()).await?;
-        // file.flush().await?;
         Ok(())
     }
 }
@@ -30,7 +27,8 @@ impl RoswaalTypescriptGenerate<TestCaseTypescript> for RoswaalTestCommand {
     fn typescript(&self) -> TestCaseTypescript {
         match self {
             Self::Step { name, requirement } => {
-                let function_name = requirement.to_ascii_camel_case();
+                let mut function_name = requirement.to_ascii_camel_case();
+                function_name.retain(|c| !r#"()$@#*,".;:'"#.contains(c));
                 TestCaseTypescript {
                     test_case_code: format!(
 "\
@@ -154,7 +152,7 @@ impl RoswaalTest {
 }
 
 #[cfg(test)]
-mod roswaal_command_tests {
+mod tests {
     use std::str::FromStr;
 
     use crate::location::name::RoswaalLocationName;
@@ -257,7 +255,7 @@ export const ensureThatJohnnyIsNotBored = async () => {
     fn test_generate_test_actions_command_typescript_steps_and_location_changes() {
         let command1 = RoswaalTestCommand::Step {
             name: "Johnny is signed in".to_string(),
-            requirement: "Ensure Johnny is signed into his account".to_string()
+            requirement: "Ensure Johnny is signed into his account,,,, and is (*$)(*)($# alive".to_string()
         };
         let command2 = RoswaalTestCommand::SetLocation {
             location_name: RoswaalLocationName::from_str("Oakland").unwrap()
@@ -273,7 +271,7 @@ export const beforeLaunch = async (): Promise<TestAppLaunchConfig> => {
   return {}
 }
 
-export const ensureJohnnyIsSignedIntoHisAccount = async () => {
+export const ensureJohnnyIsSignedIntoHisAccountAndIsAlive = async () => {
   // Johnny is signed in
   throw new Error(\"TODO\")
 }
@@ -289,7 +287,7 @@ export const setLocationToOakland = async () => {
     fn test_generate_test_case_command_typescript_only_steps() {
         let step1 = RoswaalTestCommand::Step {
             name: "Johnny is signed in".to_string(),
-            requirement: "Ensure Johnny is signed into his account".to_string()
+            requirement: "Ensure Johnny is signed into his account,,,, and is (*$)(*)($# alive".to_string()
         };
         let step2 = RoswaalTestCommand::Step {
             name: "Johnny is bored".to_string(),
@@ -307,7 +305,7 @@ import { roswaalClient } from \"../Client\"
 test(\"B\", async () => {
   const testCase = new RoswaalTestCase(\"B\", TestActions.beforeLaunch)
   // Johnny is signed in
-  testCase.appendAction(TestActions.ensureJohnnyIsSignedIntoHisAccount)
+  testCase.appendAction(TestActions.ensureJohnnyIsSignedIntoHisAccountAndIsAlive)
   // Johnny is bored
   testCase.appendAction(TestActions.ensureThatJohnnyIsNotBored)
   await roswaalClient.run(testCase)
