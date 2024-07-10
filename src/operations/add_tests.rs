@@ -1,13 +1,13 @@
-use std::iter::zip;
+use std::{iter::zip, process::Output};
 
 use anyhow::Result;
 use tokio::spawn;
 
-use crate::{generation::interface::RoswaalTypescriptGenerate, git::{branch_name::{self, RoswaalOwnedGitBranchName}, edit::EditGitRepositoryStatus, metadata::{self, RoswaalGitRepositoryMetadata}, pull_request::GithubPullRequestOpen, repo::{RoswaalGitRepository, RoswaalGitRepositoryClient}}, language::{ast::{extract_tests_syntax, RoswaalTestSyntax}, compiler::{RoswaalCompilationError, RoswaalCompile, RoswaalCompileContext}, test::RoswaalTest}, location::{name::RoswaalLocationName, storage::LoadLocationsFilter}, utils::sqlite::RoswaalSqlite, with_transaction};
+use crate::{generation::{interface::RoswaalTypescriptGenerate, test_case::TestCaseTypescript}, git::{branch_name::{self, RoswaalOwnedGitBranchName}, edit::EditGitRepositoryStatus, metadata::{self, RoswaalGitRepositoryMetadata}, pull_request::{GithubPullRequest, GithubPullRequestOpen}, repo::{RoswaalGitRepository, RoswaalGitRepositoryClient}}, language::{ast::{extract_tests_syntax, RoswaalTestSyntax}, compiler::{RoswaalCompilationError, RoswaalCompile, RoswaalCompileContext}, test::RoswaalTest}, location::{name::RoswaalLocationName, storage::LoadLocationsFilter}, utils::sqlite::RoswaalSqlite, with_transaction};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum AddTestsStatus {
-    Success { results: Vec<Result<RoswaalTest, Vec<RoswaalCompilationError>>>, did_delete_branch: bool },
+    Success { results: RoswaalTestCompilationResults, should_warn_undeleted_branch: bool },
     NoTestsFound,
     MergeConflict,
     FailedToOpenPullRequest
@@ -22,72 +22,38 @@ impl AddTestsStatus {
     ) -> Result<Self> {
         let tests_syntax = extract_tests_syntax(tests_str);
         if tests_syntax.is_empty() { return Ok(AddTestsStatus::NoTestsFound) }
+
         let mut transaction = sqlite.transaction().await?;
         let (location_names, git_transaction) = with_transaction!(transaction, async {
-            let location_names = transaction.locations_in_alphabetical_order(
+            let location_names = transaction.location_names_in_alphabetical_order(
                 LoadLocationsFilter::MergedOnly
-            )
-            .await?
-            .iter()
-            .map(|l| l.location().name().clone())
-            .collect::<Vec<RoswaalLocationName>>();
+            ).await?;
             Ok((location_names, git_repository.transaction().await))
         })?;
-        let branch_name = RoswaalOwnedGitBranchName::for_adding_tests();
+
         let metadata = git_transaction.metadata().clone();
-        let cloned_tests_syntax = tests_syntax.clone();
-        let results = cloned_tests_syntax
-            .iter()
-            .map(|syntax| {
-                let compile_context = RoswaalCompileContext::new(&location_names);
-                RoswaalTest::compile_syntax(syntax, compile_context)
-            })
-            .collect::<Vec<Result<RoswaalTest, Vec<RoswaalCompilationError>>>>();
-        if results.iter().filter(|r| r.is_ok()).count() == 0 {
-            return Ok(Self::Success { results, did_delete_branch: false })
+        let branch_name = RoswaalOwnedGitBranchName::for_adding_tests();
+        let results = RoswaalTestCompilationResults::compile(&tests_syntax, &location_names);
+        if !results.has_passing_tests() {
+            return Ok(Self::Success { results, should_warn_undeleted_branch: false })
         }
+
         let edit_status = EditGitRepositoryStatus::from_editing_new_branch(
             &branch_name,
             git_transaction,
             pr_open,
             async {
-                let futures = results.iter().filter_map(|r| {
-                    if let Ok(test) = r {
-                        let test = test.clone();
-                        let metadata = metadata.clone();
-                        Some(
-                            spawn(async move {
-                                test.typescript().save_in_dir(&metadata.test_dirpath(&test)).await
-                            })
-                        )
-                    } else {
-                        None
-                    }
-                });
-                for future in futures {
-                    future.await??;
-                }
-                let test_names_with_syntax = zip(results.iter(), tests_syntax.iter())
-                    .filter_map(|(r, syntax)| {
-                        if let Ok(test) = r {
-                            Some((test.name(), syntax))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<(&str, &RoswaalTestSyntax<'_>)>>();
-                Ok(metadata.add_tests_pull_request(&test_names_with_syntax, &branch_name))
+                Self::generate_typescript(&results, &metadata).await?;
+                Ok(results.pull_request(&tests_syntax, &branch_name, &metadata))
             }
         ).await?;
+
         match edit_status {
             EditGitRepositoryStatus::Success { did_delete_branch } => {
                 transaction = sqlite.transaction().await?;
                 with_transaction!(transaction, async {
-                    let tests = results.iter()
-                        .filter_map(|r| r.clone().ok())
-                        .collect::<Vec<RoswaalTest>>();
-                    transaction.save_tests(&tests, &branch_name).await?;
-                    Ok(Self::Success { results, did_delete_branch })
+                    transaction.save_tests(&results.tests(), &branch_name).await?;
+                    Ok(Self::Success { results, should_warn_undeleted_branch: !did_delete_branch })
                 })
             },
             EditGitRepositoryStatus::FailedToOpenPullRequest => {
@@ -97,6 +63,77 @@ impl AddTestsStatus {
                 Ok(Self::MergeConflict)
             }
         }
+    }
+
+    async fn generate_typescript(
+        results: &RoswaalTestCompilationResults,
+        metadata: &RoswaalGitRepositoryMetadata
+    ) -> Result<()> {
+        let tests = results.tests();
+        let futures = tests.iter()
+            .map(|test| {
+                let test = test.clone();
+                let dir_path = metadata.test_dirpath(&test);
+                spawn(async move { test.typescript().save_in_dir(&dir_path).await })
+            });
+        for future in futures {
+            future.await??
+        }
+        Ok(())
+    }
+}
+
+/// A data type constructed from compiling multiple test cases at a time.
+#[derive(Debug, PartialEq, Eq)]
+pub struct RoswaalTestCompilationResults {
+    results: Vec<Result<RoswaalTest, Vec<RoswaalCompilationError>>>
+}
+
+impl RoswaalTestCompilationResults {
+    fn compile(syntax: &Vec<RoswaalTestSyntax<'_>>, location_names: &Vec<RoswaalLocationName>) -> Self {
+        let results = syntax
+            .iter()
+            .map(|syntax| {
+                let compile_context = RoswaalCompileContext::new(&location_names);
+                RoswaalTest::compile_syntax(syntax, compile_context)
+            })
+            .collect::<Vec<Result<RoswaalTest, Vec<RoswaalCompilationError>>>>();
+        Self { results }
+    }
+}
+
+impl RoswaalTestCompilationResults {
+    /// Returns the raw results associated with the compilation results.
+    pub fn raw_results(&self) -> &[Result<RoswaalTest, Vec<RoswaalCompilationError>>] {
+        &self.results
+    }
+
+    fn tests(&self) -> Vec<RoswaalTest> {
+        self.results.iter()
+            .filter_map(|r| r.clone().ok())
+            .collect::<Vec<RoswaalTest>>()
+    }
+
+    fn has_passing_tests(&self) -> bool {
+        self.results.iter().filter(|r| r.is_ok()).count() > 0
+    }
+
+    fn pull_request(
+        &self,
+        syntax: &Vec<RoswaalTestSyntax<'_>>,
+        branch_name: &RoswaalOwnedGitBranchName,
+        metadata: &RoswaalGitRepositoryMetadata
+    ) -> GithubPullRequest {
+        let test_names_with_syntax = zip(self.results.iter(), syntax.iter())
+            .filter_map(|(r, syntax)| {
+                if let Ok(test) = r {
+                    Some((test.name(), syntax))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<(&str, &RoswaalTestSyntax<'_>)>>();
+        metadata.add_tests_pull_request(&test_names_with_syntax, &branch_name)
     }
 }
 
@@ -176,7 +213,13 @@ This is like an invalid test or something...
                     ]
                 )
             ];
-            assert_eq!(status, AddTestsStatus::Success { results: expected_results, did_delete_branch: true });
+            match status {
+                AddTestsStatus::Success { results, should_warn_undeleted_branch } => {
+                    assert_eq!(results.raw_results(), expected_results);
+                    assert!(!should_warn_undeleted_branch)
+                },
+                _ => panic!()
+            }
             Ok(())
         })
         .await.unwrap();
@@ -225,9 +268,9 @@ Set Location: Test
                 &RoswaalGitRepository::noop().await?
             ).await?;
             match status {
-                AddTestsStatus::Success { results, did_delete_branch: _ } => {
-                    assert!(results[0].is_ok());
-                    assert!(results[1].is_err());
+                AddTestsStatus::Success { results, should_warn_undeleted_branch: _ } => {
+                    assert!(results.raw_results()[0].is_ok());
+                    assert!(results.raw_results()[1].is_err());
                 },
                 _ => panic!()
             }
@@ -400,12 +443,18 @@ lkjdlkjlkjalkjslkdjdflkj
 ";
         let sqlite = RoswaalSqlite::in_memory().await.unwrap();
         let pr_open = TestGithubPullRequestOpen::new(true);
-        _ = AddTestsStatus::from_adding_tests(
+        let status = AddTestsStatus::from_adding_tests(
             tests_str,
             &sqlite,
             &pr_open,
             &RoswaalGitRepository::noop().await.unwrap()
         ).await.unwrap();
+        match status {
+            AddTestsStatus::Success { results: _, should_warn_undeleted_branch } => {
+                assert!(!should_warn_undeleted_branch)
+            },
+            _ => panic!()
+        }
         let pr = pr_open.most_recent_pr().await;
         assert_eq!(pr, None)
     }
