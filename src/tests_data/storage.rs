@@ -15,6 +15,12 @@ pub struct RoswaalStoredTest {
     unmerged_branch_name: Option<RoswaalOwnedGitBranchName>
 }
 
+impl RoswaalStoredTest {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct RoswaalStoredTestCommand {
     command: RoswaalTestCommand,
@@ -22,7 +28,7 @@ pub struct RoswaalStoredTestCommand {
 }
 
 impl <'a> RoswaalSqliteTransaction<'a> {
-    async fn merge_unmerged_tests(&mut self, branch_name: &RoswaalOwnedGitBranchName) -> Result<()> {
+    pub async fn merge_unmerged_tests(&mut self, branch_name: &RoswaalOwnedGitBranchName) -> Result<()> {
         let sqlite_location_names = query_as::<Sqlite, SqliteTestName>(
             "SELECT name FROM Tests WHERE unmerged_branch_name = ?;"
         )
@@ -42,7 +48,7 @@ impl <'a> RoswaalSqliteTransaction<'a> {
         Ok(())
     }
 
-    async fn save_tests(
+    pub async fn save_tests(
         &mut self,
         tests: &Vec<RoswaalTest>,
         branch_name: &RoswaalOwnedGitBranchName
@@ -81,7 +87,7 @@ impl <'a> RoswaalSqliteTransaction<'a> {
         Ok(())
     }
 
-    async fn tests_in_alphabetical_order(&mut self) -> Result<Vec<RoswaalStoredTest>> {
+    pub async fn tests_in_alphabetical_order(&mut self) -> Result<Vec<RoswaalStoredTest>> {
         let sqlite_tests = query_as::<Sqlite, SqliteStoredTestRow>(SELECT_TESTS_IN_ALPHABETICAL_ORDER)
             .fetch_all(self.connection())
             .await?;

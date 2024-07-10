@@ -81,7 +81,14 @@ impl AddTestsStatus {
         ).await?;
         match edit_status {
             EditGitRepositoryStatus::Success { did_delete_branch } => {
-                Ok(Self::Success { results, did_delete_branch })
+                transaction = sqlite.transaction().await?;
+                with_transaction!(transaction, async {
+                    let tests = results.iter()
+                        .filter_map(|r| r.clone().ok())
+                        .collect::<Vec<RoswaalTest>>();
+                    transaction.save_tests(&tests, &branch_name).await?;
+                    Ok(Self::Success { results, did_delete_branch })
+                })
             },
             EditGitRepositoryStatus::FailedToOpenPullRequest => {
                 Ok(Self::FailedToOpenPullRequest)
@@ -215,7 +222,7 @@ Set Location: Test
                 tests_str,
                 &sqlite,
                 &TestGithubPullRequestOpen::new(false),
-                 &RoswaalGitRepository::noop().await?
+                &RoswaalGitRepository::noop().await?
             ).await?;
             match status {
                 AddTestsStatus::Success { results, did_delete_branch: _ } => {
