@@ -4,13 +4,19 @@ use crate::location::name::{RoswaalLocationName, RoswaalLocationNameParsingError
 
 use super::{ast::{RoswaalTestSyntax, RoswaalTestSyntaxCommand, RoswaalTestSyntaxLineContent}, test::{RoswaalTest, RoswaalTestCommand}};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct RoswaalCompilationError {
     line_number: u32,
     code: RoswaalCompilationErrorCode
 }
 
-#[derive(Debug, PartialEq, Eq)]
+impl RoswaalCompilationError {
+    pub fn new(line_number: u32, code: RoswaalCompilationErrorCode) -> Self {
+        Self { line_number, code }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum RoswaalCompilationErrorCode {
     NoTestName,
     NoTestSteps,
@@ -27,15 +33,15 @@ pub enum RoswaalCompilationErrorCode {
     TestNameAlreadyDeclared
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum RoswaalCompilationDuplicateErrorCode {
     StepLabel,
     RequirementLabel
 }
 
 /// A struct that holds compilation information on a roswaal test script.
-pub struct RoswaalCompileContext {
-    location_names: Vec<RoswaalLocationName>,
+pub struct RoswaalCompileContext<'a> {
+    location_names: Option<&'a Vec<RoswaalLocationName>>,
     errors: Vec<RoswaalCompilationError>,
     test_name: Option<String>,
     test_description: Option<String>,
@@ -44,16 +50,24 @@ pub struct RoswaalCompileContext {
     commands: Vec<CompiledCommand>
 }
 
-impl RoswaalCompileContext {
+impl <'a> RoswaalCompileContext<'a> {
     /// Creates a new empty context with no location or test names.
     pub fn empty() -> Self {
-        Self::new(vec![])
+        Self {
+            location_names: None,
+            errors: vec![],
+            test_name: None,
+            test_description: None,
+            matchable_steps: HashMap::new(),
+            matchable_requirements: HashMap::new(),
+            commands: vec![]
+        }
     }
 
     /// Creates a new context with the specified location names.
-    pub fn new(location_names: Vec<RoswaalLocationName>) -> Self {
+    pub fn new(location_names: &'a Vec<RoswaalLocationName>) -> Self {
         Self {
-            location_names,
+            location_names: Some(location_names),
             errors: vec![],
             test_name: None,
             test_description: None,
@@ -67,7 +81,7 @@ impl RoswaalCompileContext {
 /// A trait for self-initializing by compiling roswaal test syntax.
 pub trait RoswaalCompile: Sized {
     fn compile_syntax(
-        syntax: RoswaalTestSyntax,
+        syntax: &RoswaalTestSyntax,
         ctx: RoswaalCompileContext
     ) -> Result<Self, Vec<RoswaalCompilationError>>;
 
@@ -75,13 +89,13 @@ pub trait RoswaalCompile: Sized {
         source_code: &str,
         ctx: RoswaalCompileContext
     ) -> Result<Self, Vec<RoswaalCompilationError>> {
-        Self::compile_syntax(RoswaalTestSyntax::from(source_code), ctx)
+        Self::compile_syntax(&RoswaalTestSyntax::from(source_code), ctx)
     }
 }
 
 impl RoswaalCompile for RoswaalTest {
     fn compile_syntax(
-        syntax: RoswaalTestSyntax,
+        syntax: &RoswaalTestSyntax,
         mut ctx: RoswaalCompileContext
     ) -> Result<Self, Vec<RoswaalCompilationError>> {
         for line in syntax.lines() {
@@ -164,13 +178,13 @@ impl RoswaalCompile for RoswaalTest {
     }
 }
 
-impl RoswaalCompileContext {
+impl <'a> RoswaalCompileContext<'a> {
     fn append_location(&mut self, line_number: u32, location_name: RoswaalLocationName) {
-        if !self.location_names.iter().any(|name| name.matches(&location_name)) {
-            self.append_error(
-                line_number,
-                RoswaalCompilationErrorCode::UnknownLocationName(location_name.raw_name().to_string())
-            )
+        let error_code = RoswaalCompilationErrorCode::UnknownLocationName(
+            location_name.raw_name().to_string()
+        );
+        if !self.location_names.unwrap_or(&vec![]).iter().any(|name| name.matches(&location_name)) {
+            self.append_error(line_number, error_code)
         } else {
             let command = CompiledCommand {
                 line_number,
@@ -255,7 +269,7 @@ impl RoswaalCompileContext {
         self.matchable_requirements.insert(label_key, info);
     }
 
-    fn finalize<'a>(mut self) -> Result<RoswaalTest, Vec<RoswaalCompilationError>> {
+    fn finalize(mut self) -> Result<RoswaalTest, Vec<RoswaalCompilationError>> {
         let test_name = match self.test_name {
             Some(name) => name,
             _ => return Err(self.errors)
@@ -487,7 +501,7 @@ Set Location: world
 ";
         let result = RoswaalTest::compile(
             test,
-            RoswaalCompileContext::new(location_names)
+            RoswaalCompileContext::new(&location_names)
         );
         let error = RoswaalCompilationError {
             line_number: 2,
@@ -507,7 +521,7 @@ Requirement 1: sure, do the thing
 ";
         let result = RoswaalTest::compile(
             test,
-            RoswaalCompileContext::new(location_names)
+            RoswaalCompileContext::new(&location_names)
         );
         let error = RoswaalCompilationError {
             line_number: 3,
@@ -746,7 +760,7 @@ Requirement 1: Have the guy dying on the floor ask why he didn't block that
 ";
         let result = RoswaalTest::compile(
             test,
-            RoswaalCompileContext::new(vec!["new york".parse().unwrap()])
+            RoswaalCompileContext::new(&vec!["new york".parse().unwrap()])
         ).unwrap();
         let expected_test = RoswaalTest::new(
             "I'm Insane, From New York".to_string(),

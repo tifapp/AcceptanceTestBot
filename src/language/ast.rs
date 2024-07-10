@@ -8,7 +8,7 @@ use crate::location::name::{RoswaalLocationName, RoswaalLocationParsingResult};
 /// A token of roswaal test syntax.
 ///
 /// Each token represents a line of source code. See `RoswaalTestSyntax`.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum RoswaalTestSyntaxCommand<'a> {
     /// A line denoting a "Step" command without its matching "Requirement"
     /// command.
@@ -88,6 +88,7 @@ impl <'a> RoswaalTestSyntaxCommand<'a> {
 /// Requirement 1: I am a requirement that matches step 1.
 /// Requirement 2: I am a requirement that is paired with step 2.
 /// ```
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct RoswaalTestSyntax<'a> {
     source_code: &'a str
 }
@@ -173,9 +174,82 @@ impl <'a> RoswaalTestSyntaxLineContent<'a> {
     }
 }
 
+static EXTRACT_REGEX: Lazy<Regex> = Lazy::new(|| {
+    let regex = r"(?s)```\n(?<test>.*?)\n```";
+    RegexBuilder::new(regex)
+        .build()
+        .expect("Failed to compile extract tests syntax regex.")
+});
+
+/// Extracts a vector of `RoswaalTestSyntax` from a block of multiline text.
+///
+/// Each test should be placed between 2 "```\n" sequences in the string.
+pub fn extract_tests_syntax<'a>(text: &'a str) -> Vec<RoswaalTestSyntax<'a>> {
+    EXTRACT_REGEX.captures_iter(text).filter_map(|captures| {
+        captures.name("test").map(|m| RoswaalTestSyntax::from(m.as_str()))
+    })
+    .collect()
+}
+
 #[cfg(test)]
-mod ast_tests {
+mod tests {
     use super::*;
+
+    #[cfg(test)]
+    mod extract_tests {
+        use crate::language::ast::{extract_tests_syntax, RoswaalTestSyntax};
+
+        #[test]
+        fn test_no_syntax_from_empty_str() {
+            assert_eq!(extract_tests_syntax(""), vec![])
+        }
+
+        #[test]
+        fn test_no_syntax_from_single_line_back_ticks() {
+            assert_eq!(extract_tests_syntax("```New test: Invalid```"), vec![])
+        }
+
+        #[test]
+        fn test_no_syntax_from_single_multiline_invalid_back_ticks() {
+            assert_eq!(extract_tests_syntax("Hello ```New test: Invalid\n```"), vec![])
+        }
+
+        #[test]
+        fn test_syntax_from_markdown_str() {
+            let markdown = "
+```
+New test: Test
+Step 1: Get parsed
+Requirement 1: Cool
+```
+
+Hello world, I am some random comment between tests, not an actual test...
+
+```
+New Test: test 2
+Step 1: Nice
+Requirement 1: Awesome
+```
+
+More BS **here** at the bottom.
+";
+            assert_eq!(
+                extract_tests_syntax(markdown),
+                vec![
+                    RoswaalTestSyntax::from("\
+New test: Test
+Step 1: Get parsed
+Requirement 1: Cool"
+                    ),
+                    RoswaalTestSyntax::from("\
+New Test: test 2
+Step 1: Nice
+Requirement 1: Awesome"
+                    )
+                ]
+            )
+        }
+    }
 
     #[cfg(test)]
     mod token_tests {

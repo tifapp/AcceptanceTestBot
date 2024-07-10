@@ -82,7 +82,7 @@ Since I am Roswaaaaaaal, I do not need to specify any tiiiiiiiickets!
 
     /// Creates a PR for test case creation on the frontend repo.
     pub fn for_test_cases_tif_react_frontend<'a, 'b>(
-        test_names_with_syntax: &Vec<(&'a str, RoswaalTestSyntax<'b>)>,
+        test_names_with_syntax: &Vec<(&'a str, &RoswaalTestSyntax<'b>)>,
         head_branch: &RoswaalOwnedGitBranchName
     ) -> Self {
         let joined_names = test_names_with_syntax.iter()
@@ -217,9 +217,11 @@ Requirement 3: Do more stuff";
         let test2 = "New Test: I am the next test
 Step 1: A
 Requirement 1: B";
+        let t1_syntax = RoswaalTestSyntax::from(test1);
+        let t2_syntax = RoswaalTestSyntax::from(test2);
         let tests_with_names = vec![
-            ("I am the test", RoswaalTestSyntax::from(test1)),
-            ("I am the next test", RoswaalTestSyntax::from(test2))
+            ("I am the test", &t1_syntax),
+            ("I am the next test", &t2_syntax)
         ];
         let pr = GithubPullRequest::for_test_cases_tif_react_frontend(
             &tests_with_names,

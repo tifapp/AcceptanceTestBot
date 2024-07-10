@@ -3,7 +3,7 @@ use sqlx::{query, query_as, FromRow, Sqlite};
 
 use crate::{git::branch_name::{self, RoswaalOwnedGitBranchName}, utils::sqlite::RoswaalSqliteTransaction};
 
-use super::location::RoswaalLocation;
+use super::{location::RoswaalLocation, name::RoswaalLocationName};
 
 #[derive(Debug, PartialEq)]
 pub struct RoswaalStoredLocation {
@@ -23,11 +23,20 @@ pub enum LoadLocationsFilter {
 }
 
 impl LoadLocationsFilter {
-    fn select_statement(&self) -> &'static str {
+    fn full_select_statement(&self) -> &'static str {
         match self {
             Self::All => "SELECT * FROM Locations ORDER BY name, latitude",
             Self::MergedOnly => {
                 "SELECT * FROM Locations WHERE unmerged_branch_name IS NULL ORDER BY name, latitude"
+            }
+        }
+    }
+
+    fn name_select_statement(&self) -> &'static str {
+        match self {
+            Self::All => "SELECT name FROM Locations ORDER BY name, latitude",
+            Self::MergedOnly => {
+                "SELECT name FROM Locations WHERE unmerged_branch_name IS NULL ORDER BY name, latitude"
             }
         }
     }
@@ -78,15 +87,28 @@ impl <'a> RoswaalSqliteTransaction <'a> {
         &mut self,
         filter: LoadLocationsFilter
     ) -> Result<Vec<RoswaalStoredLocation>> {
-        let locations = query_as::<Sqlite, SqliteLocation>(filter.select_statement())
-        .fetch_all(self.connection())
-        .await?
-        .iter()
-        .map(|l| RoswaalStoredLocation {
-            location: RoswaalLocation::new_without_validation(&l.name, l.latitude, l.longitude),
-            unmerged_branch_name: l.unmerged_branch_name.clone()
-        })
-        .collect();
+        let locations = query_as::<Sqlite, SqliteLocation>(filter.full_select_statement())
+            .fetch_all(self.connection())
+            .await?
+            .iter()
+            .map(|l| RoswaalStoredLocation {
+                location: RoswaalLocation::new_without_validation(&l.name, l.latitude, l.longitude),
+                unmerged_branch_name: l.unmerged_branch_name.clone()
+            })
+            .collect();
+            Ok(locations)
+    }
+
+    pub async fn location_names_in_alphabetical_order(
+        &mut self,
+        filter: LoadLocationsFilter
+    ) -> Result<Vec<RoswaalLocationName>> {
+        let locations = query_as::<Sqlite, SqliteLocationName>(filter.name_select_statement())
+            .fetch_all(self.connection())
+            .await?
+            .iter()
+            .map(|n| RoswaalLocationName { raw_value: n.name.clone() })
+            .collect();
         Ok(locations)
     }
 }
