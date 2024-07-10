@@ -109,6 +109,14 @@ impl RoswaalGitRepository<NoopGitRepositoryClient> {
     pub async fn noop() -> Result<Self> {
         Self::open(&RoswaalGitRepositoryMetadata::for_testing()).await
     }
+
+    pub async fn noop_ensuring_merge_conflicts() -> Result<Self> {
+        let repo = Self::open(&RoswaalGitRepositoryMetadata::for_testing()).await?;
+        let mut transaction = repo.transaction().await;
+        transaction.ensure_merge_conflict();
+        drop(transaction);
+        Ok(repo)
+    }
 }
 
 #[cfg(test)]

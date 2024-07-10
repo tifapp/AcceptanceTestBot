@@ -33,6 +33,15 @@ pub trait UppercaseFirstAsciiCharacter: ToString {
 impl UppercaseFirstAsciiCharacter for String {}
 impl UppercaseFirstAsciiCharacter for &str {}
 
+pub trait ToAsciiKebabCase: ToString {
+    fn to_ascii_kebab_case(&self) -> String {
+        self.to_string().trim().replace(" ", "-")
+    }
+}
+
+impl ToAsciiKebabCase for String {}
+impl ToAsciiKebabCase for &str {}
+
 #[cfg(test)]
 mod string_utils_tests {
     use super::*;
@@ -76,5 +85,23 @@ mod string_utils_tests {
     #[test]
     fn test_pascal_case_uppercases_first_letter_of_all_words_and_trims_white_space() {
         assert_eq!("santa cruz".to_ascii_pascal_case(), String::from("SantaCruz"))
+    }
+
+    #[test]
+    fn to_ascii_kebab_case() {
+        let strings = vec![
+            ("hello world", "hello-world"),
+            ("Hello world", "Hello-world"),
+            ("", ""),
+            ("test", "test"),
+            ("it's really cold outside", "it's-really-cold-outside"),
+            ("hello + world", "hello-+-world"),
+            ("hello@world", "hello@world"),
+            ("   hello world   ", "hello-world"),
+            ("hello    world", "hello----world")
+        ];
+        for (before, after) in strings {
+            assert_eq!(before.to_ascii_kebab_case(), after.to_string())
+        }
     }
 }

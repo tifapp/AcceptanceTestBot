@@ -4,7 +4,7 @@ use crate::location::name::{RoswaalLocationName, RoswaalLocationNameParsingError
 
 use super::{ast::{RoswaalTestSyntax, RoswaalTestSyntaxCommand, RoswaalTestSyntaxLineContent}, test::{RoswaalTest, RoswaalTestCommand}};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct RoswaalCompilationError {
     line_number: u32,
     code: RoswaalCompilationErrorCode
@@ -16,7 +16,7 @@ impl RoswaalCompilationError {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum RoswaalCompilationErrorCode {
     NoTestName,
     NoTestSteps,
@@ -33,7 +33,7 @@ pub enum RoswaalCompilationErrorCode {
     TestNameAlreadyDeclared
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum RoswaalCompilationDuplicateErrorCode {
     StepLabel,
     RequirementLabel

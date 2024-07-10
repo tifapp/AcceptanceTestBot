@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::location::name::RoswaalLocationName;
+use crate::{location::name::RoswaalLocationName, utils::string::ToAsciiKebabCase};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct RoswaalTest {
@@ -22,6 +22,10 @@ impl RoswaalTest {
 impl RoswaalTest {
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn dir_name(&self) -> String {
+        self.name().to_ascii_kebab_case().to_ascii_lowercase()
     }
 
     pub fn commands(&self) -> &Vec<RoswaalTestCommand> {

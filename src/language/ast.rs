@@ -8,7 +8,7 @@ use crate::location::name::{RoswaalLocationName, RoswaalLocationParsingResult};
 /// A token of roswaal test syntax.
 ///
 /// Each token represents a line of source code. See `RoswaalTestSyntax`.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum RoswaalTestSyntaxCommand<'a> {
     /// A line denoting a "Step" command without its matching "Requirement"
     /// command.
@@ -88,7 +88,7 @@ impl <'a> RoswaalTestSyntaxCommand<'a> {
 /// Requirement 1: I am a requirement that matches step 1.
 /// Requirement 2: I am a requirement that is paired with step 2.
 /// ```
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct RoswaalTestSyntax<'a> {
     source_code: &'a str
 }

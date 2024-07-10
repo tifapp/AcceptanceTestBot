@@ -1,6 +1,6 @@
-use std::env;
+use std::{env, fmt::format};
 
-use crate::{language::ast::RoswaalTestSyntax, location::location::RoswaalStringLocations};
+use crate::{language::{ast::RoswaalTestSyntax, test::RoswaalTest}, location::location::RoswaalStringLocations};
 use super::{branch_name::RoswaalOwnedGitBranchName, pull_request::GithubPullRequest};
 
 /// A struct containing neccessary metadata for operating in a roswaal compatible git repo.
@@ -11,7 +11,7 @@ pub struct RoswaalGitRepositoryMetadata {
     ssh_private_key_home_path: String,
     test_cases_root_dir_path: String,
     add_test_cases_pr: fn(
-        test_names_with_syntax: &Vec<(&str, RoswaalTestSyntax)>,
+        test_names_with_syntax: &Vec<(&str, &RoswaalTestSyntax)>,
         &RoswaalOwnedGitBranchName
     ) -> GithubPullRequest,
     locations_path: String,
@@ -91,5 +91,17 @@ impl RoswaalGitRepositoryMetadata {
         branch_name: &RoswaalOwnedGitBranchName
     ) -> GithubPullRequest {
         (self.add_locations_pr)(locations, branch_name)
+    }
+
+    pub fn add_tests_pull_request<'a>(
+        &self,
+        tests: &Vec<(&str, &RoswaalTestSyntax<'a>)>,
+        branch_name: &RoswaalOwnedGitBranchName
+    ) -> GithubPullRequest {
+        (self.add_test_cases_pr)(tests, branch_name)
+    }
+
+    pub fn test_dirpath(&self, test: &RoswaalTest) -> String {
+        format!("{}/{}", self.test_cases_root_dir_path, test.dir_name())
     }
 }

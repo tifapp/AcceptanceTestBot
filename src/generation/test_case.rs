@@ -1,3 +1,6 @@
+use tokio::{fs::{create_dir_all, File}, io::AsyncWriteExt};
+use anyhow::Result;
+
 use crate::{is_case, language::test::{RoswaalTest, RoswaalTestCommand}, utils::string::ToAsciiCamelCase};
 
 use super::{constants::GENERATED_HEADER, interface::RoswaalTypescriptGenerate};
@@ -6,6 +9,21 @@ use super::{constants::GENERATED_HEADER, interface::RoswaalTypescriptGenerate};
 pub struct TestCaseTypescript {
     test_case_code: String,
     test_action_code: String
+}
+
+impl TestCaseTypescript {
+    /// Saves this typescript code in files in the specified dirpath.
+    pub async fn save_in_dir(&self, dirpath: &str) -> Result<()> {
+        create_dir_all(dirpath).await?;
+        let mut file = File::create(format!("{}/TestCase.test.ts", dirpath)).await?;
+        file.write(self.test_case_code.as_bytes()).await?;
+        // file.flush().await?;
+
+        file = File::create(format!("{}/TestActions.ts", dirpath)).await?;
+        file.write(self.test_action_code.as_bytes()).await?;
+        // file.flush().await?;
+        Ok(())
+    }
 }
 
 impl RoswaalTypescriptGenerate<TestCaseTypescript> for RoswaalTestCommand {
