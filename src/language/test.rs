@@ -24,10 +24,6 @@ impl RoswaalTest {
         &self.name
     }
 
-    pub fn dir_name(&self) -> String {
-        self.name().to_ascii_kebab_case().to_ascii_lowercase()
-    }
-
     pub fn commands(&self) -> &Vec<RoswaalTestCommand> {
         &self.commands
     }

@@ -42,12 +42,12 @@ impl AddLocationsStatus {
                     &stored_locations,
                     metadata.locations_path()
                 ).await?;
-                Ok(metadata.add_locations_pull_request(&string_locations, &branch_name))
+                Ok((metadata.add_locations_pull_request(&string_locations, &branch_name), ()))
             }
         ).await?;
 
         match edit_status {
-            EditGitRepositoryStatus::Success { did_delete_branch } => {
+            EditGitRepositoryStatus::Success { did_delete_branch, value: _ } => {
                 transaction = sqlite.transaction().await?;
                 with_transaction!(transaction, async {
                     transaction.save_locations(&string_locations.locations(), &branch_name).await?;

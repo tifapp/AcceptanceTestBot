@@ -4,7 +4,7 @@ use anyhow::Result;
 use reqwest::{header::CONTENT_TYPE, Client};
 use serde::Serialize;
 
-use crate::{language::ast::RoswaalTestSyntax, location::location::{RoswaalLocationStringError, RoswaalStringLocations}};
+use crate::{language::ast::RoswaalTestSyntax, location::location::{RoswaalLocationStringError, RoswaalStringLocations}, tests_data::query::RoswaalTestNamesString};
 
 use super::branch_name::RoswaalOwnedGitBranchName;
 
@@ -97,6 +97,20 @@ Since I am Roswaaaaaaal, I do not need to specify any tiiiiiiiickets!
         let body = format!("Adds the following teeeeeests!\n\n{}", joined_test_cases);
         Self::for_tif_react_frontend(&title, &body, head_branch)
     }
+
+    /// Creates a PR for removing test cases on the frontend repo.
+    pub fn for_removing_test_cases_tif_react_frontend(
+        test_names: &RoswaalTestNamesString<'_>,
+        head_branch: &RoswaalOwnedGitBranchName
+    ) -> Self {
+        let title = format!("Remove Tests {}", test_names.iter().collect::<Vec<&str>>().join(", "));
+        let test_names_list = test_names.iter()
+            .map(|n| format!("- {}", n))
+            .collect::<Vec<String>>()
+            .join("\n");
+        let body = format!("Removes the following teeeeeeeests!\n{}", test_names_list);
+        Self::for_tif_react_frontend(&title, &body, &head_branch)
+    }
 }
 
 impl GithubPullRequest {
@@ -148,7 +162,7 @@ impl GithubPullRequestOpen for Client {
 
 #[cfg(test)]
 mod tests {
-    use crate::{git::branch_name::RoswaalOwnedGitBranchName, language::ast::RoswaalTestSyntax, location::location::RoswaalStringLocations};
+    use crate::{git::branch_name::{self, RoswaalOwnedGitBranchName}, language::ast::RoswaalTestSyntax, location::location::RoswaalStringLocations, tests_data::query::RoswaalTestNamesString};
 
     use super::GithubPullRequest;
 
@@ -245,6 +259,23 @@ New Test: I am the next test
 Step 1: A
 Requirement 1: B
 ```";
+        assert!(pr.body.contains(expected_body))
+    }
+
+    #[test]
+    fn remove_test_cases() {
+        let test_names = RoswaalTestNamesString("\
+Blob
+Blob Jr.
+");
+        let branch_name = RoswaalOwnedGitBranchName::new("test");
+        let pr = GithubPullRequest::for_removing_test_cases_tif_react_frontend(&test_names, &branch_name);
+        assert_eq!(pr.title(), "Roswaal: Remove Tests Blob, Blob Jr.");
+        let expected_body = "\
+Removes the following teeeeeeeests!
+- Blob
+- Blob Jr.
+";
         assert!(pr.body.contains(expected_body))
     }
 }

@@ -26,7 +26,7 @@ impl SearchTestsStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{git::{repo::RoswaalGitRepository, test_support::{with_clean_test_repo_access, TestGithubPullRequestOpen}}, operations::add_tests::AddTestsStatus, utils::sqlite::RoswaalSqlite};
+    use crate::{git::{repo::RoswaalGitRepository, test_support::{with_clean_test_repo_access, TestGithubPullRequestOpen}}, operations::{add_tests::AddTestsStatus, merge_branch::MergeBranchStatus, remove_tests::RemoveTestsStatus}, utils::sqlite::RoswaalSqlite};
 
     #[tokio::test]
     async fn reports_no_tests_when_no_tests_saved() {
@@ -100,6 +100,33 @@ Requirement 1: Do the thing
                 },
                 _ => panic!()
             }
+            Ok(())
+        })
+        .await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn does_not_report_added_and_merged_test_after_removal() {
+        with_clean_test_repo_access(async {
+            let sqlite = RoswaalSqlite::in_memory().await?;
+            let pr_open = TestGithubPullRequestOpen::new(false);
+            let repo = RoswaalGitRepository::noop().await?;
+            let tests_str = "\
+```
+New Test: Bob
+Step 1: Do the thing
+Requirement 1: Do the thing
+```
+";
+            _ = AddTestsStatus::from_adding_tests(tests_str, &sqlite, &pr_open, &repo).await?;
+            let mut branch_name = pr_open.most_recent_head_branch_name().await.unwrap();
+            _ = MergeBranchStatus::from_merging_branch_with_name(&branch_name, &sqlite).await?;
+            _ = RemoveTestsStatus::from_removing_tests("bob", &sqlite, &repo, &pr_open).await?;
+            branch_name = pr_open.most_recent_head_branch_name().await.unwrap();
+            _ = MergeBranchStatus::from_merging_branch_with_name(&branch_name, &sqlite).await?;
+            let query_str = "bob";
+            let status = SearchTestsStatus::from_searching_tests(query_str, &sqlite).await.unwrap();
+            assert_eq!(status, SearchTestsStatus::NoTests);
             Ok(())
         })
         .await.unwrap();

@@ -53,6 +53,11 @@ CREATE TABLE IF NOT EXISTS TestSteps (
     UNIQUE(test_id, content),
     CONSTRAINT fk_test FOREIGN KEY(test_id) REFERENCES Tests(id) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS StagedTestRemovals (
+    name TEXT NOT NULL,
+    unmerged_branch_name TEXT NOT NULL,
+    PRIMARY KEY(name, unmerged_branch_name)
+);
             "
         )
         .execute(pool)

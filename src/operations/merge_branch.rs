@@ -3,9 +3,7 @@ use anyhow::Result;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum MergeBranchStatus<'a> {
-    MergedNewLocations,
-    MergedTestRemovals,
-    MergedNewTests,
+    Merged(RoswaalOwnedBranchKind),
     UnknownBranchKind(&'a RoswaalOwnedGitBranchName)
 }
 
@@ -15,22 +13,24 @@ impl <'a> MergeBranchStatus<'a> {
         sqlite: &RoswaalSqlite
     ) -> Result<Self> {
         match branch_name.kind() {
-            Some(RoswaalOwnedBranchKind::AddLocations) => {
+            Some(kind) => {
                 let mut transaction = sqlite.transaction().await?;
                 with_transaction!(transaction, async {
-                    transaction.merge_unmerged_locations(&branch_name).await?;
-                    Ok(Self::MergedNewLocations)
+                    match kind {
+                        RoswaalOwnedBranchKind::AddTests => {
+                            transaction.merge_unmerged_tests(&branch_name).await?;
+                        },
+                        RoswaalOwnedBranchKind::AddLocations => {
+                            transaction.merge_unmerged_locations(&branch_name).await?;
+                        }
+                        RoswaalOwnedBranchKind::RemoveTests => {
+                            transaction.merge_test_removals(&branch_name).await?;
+                        }
+                    }
+                    Ok(Self::Merged(kind))
                 })
             },
-            Some(RoswaalOwnedBranchKind::AddTests) => {
-                Ok(Self::MergedNewTests)
-            },
-            Some(RoswaalOwnedBranchKind::RemoveTests) => {
-                Ok(Self::MergedTestRemovals)
-            },
-            None => {
-                Ok(Self::UnknownBranchKind(branch_name))
-            }
+            None => Ok(Self::UnknownBranchKind(branch_name))
         }
     }
 }
