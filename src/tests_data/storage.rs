@@ -51,11 +51,13 @@ impl <'a> RoswaalSqliteTransaction<'a> {
         .bind(branch_name)
         .fetch_all(self.connection())
         .await?;
-        let delete_query_str = statements::delete_tests(test_names.iter().count());
-        let mut delete_query = query::<Sqlite>(&delete_query_str);
+        let delete_tests_statement = statements::delete_tests(test_names.iter().count());
+        let mut delete_query = query::<Sqlite>(&delete_tests_statement);
         for sqlite_name in test_names.iter() {
             delete_query = delete_query.bind(&sqlite_name.name);
         }
+        delete_query.execute(self.connection()).await?;
+        delete_query = query::<Sqlite>(statements::DELETE_STAGED_TEST_REMOVALS_WITH_BRANCH);
         delete_query.execute(self.connection()).await?;
         Ok(())
     }
@@ -204,6 +206,9 @@ INSERT OR REPLACE INTO Tests (
     ?,
     ?
 ) RETURNING id;";
+
+    pub const DELETE_STAGED_TEST_REMOVALS_WITH_BRANCH: &str =
+        "DELETE FROM StagedTestRemovals WHERE unmerged_branch_name = ?";
 
     pub fn select_tests_in_alphabetical_order(count: usize) -> String {
         format!("
