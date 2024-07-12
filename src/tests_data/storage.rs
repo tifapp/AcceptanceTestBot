@@ -1,6 +1,6 @@
 use std::{fmt::format, iter::zip};
 
-use crate::{git::branch_name::{self, RoswaalOwnedGitBranchName}, language::test::{RoswaalTest, RoswaalTestCommand}, utils::sqlite::RoswaalSqliteTransaction};
+use crate::{git::branch_name::{self, RoswaalOwnedGitBranchName}, language::test::{RoswaalTest, RoswaalTestCommand}, utils::sqlite::{sqlite_repeat, SqliteRepeat, RoswaalSqliteTransaction}};
 use anyhow::Result;
 use sqlx::{query, query_as, FromRow, Sqlite};
 
@@ -34,15 +34,10 @@ impl <'a> RoswaalSqliteTransaction<'a> {
         branch_name: &RoswaalOwnedGitBranchName
     ) -> Result<()> {
         if test_names.is_empty() { return Ok(()) }
-        let statements = test_names.iter()
-            .map(|_| statements::INSERT_STAGED_TEST_REMOVAL)
-            .collect::<Vec<&str>>()
-            .join("\n");
-        let mut insert_query = query::<Sqlite>(&statements);
-        for name in test_names.iter() {
-            insert_query = insert_query.bind(name).bind(branch_name)
-        }
-        insert_query.execute(self.connection()).await?;
+        sqlite_repeat(statements::INSERT_STAGED_TEST_REMOVAL, &test_names.iter().collect())
+            .bind_to_query(|q, name| Ok(q.bind(name).bind(branch_name)))?
+            .execute(self.connection())
+            .await?;
         Ok(())
     }
 
@@ -72,17 +67,15 @@ impl <'a> RoswaalSqliteTransaction<'a> {
         .bind(branch_name)
         .fetch_all(self.connection())
         .await?;
-        let update_statements = sqlite_location_names.iter()
-            .map(|_| statements::MERGE_UNMERGED_TESTS)
-            .collect::<Vec<&str>>()
-            .join("\n");
-        let mut update_query = query::<Sqlite>(&update_statements);
-        for sqlite_name in sqlite_location_names.iter() {
-            update_query = update_query.bind(sqlite_name.name.clone())
-                .bind(branch_name)
-                .bind(sqlite_name.name.clone());
-        }
-        update_query.execute(self.connection()).await?;
+        sqlite_repeat(statements::MERGE_UNMERGED_TESTS, &sqlite_location_names)
+            .bind_to_query(|q, sqlite_name| {
+                Ok(
+                    q.bind(sqlite_name.name.clone())
+                        .bind(branch_name)
+                        .bind(sqlite_name.name.clone())
+                )
+            })?
+            .execute(self.connection()).await?;
         Ok(())
     }
 
@@ -94,31 +87,22 @@ impl <'a> RoswaalSqliteTransaction<'a> {
         let mut tests = tests.clone();
         tests.reverse(); // NB: Ensure the last occurrence of each test is kept when dedupping.
         tests.dedup_by(|a, b| a.name() == b.name());
-        let statements = tests.iter()
-            .map(|_| statements::INSERT_TEST_RETURNING_ID)
-            .collect::<Vec<&str>>()
-            .join("\n");
-        let mut tests_insert_query = query_as::<Sqlite, SqliteTestID>(&statements);
-        for test in tests.iter() {
-            tests_insert_query = tests_insert_query.bind(test.name())
-                .bind(test.description())
-                .bind(branch_name);
-        }
-        let id_rows = tests_insert_query.fetch_all(self.connection()).await?;
-        let command_insert_statements = tests.iter()
-            .flat_map(|t| t.commands())
-            .map(|_| statements::INSERT_TEST_STEP)
-            .collect::<Vec<&str>>()
-            .join("\n");
-        let mut commands_insert_query = query::<Sqlite>(&command_insert_statements);
-        for (test, id_row) in zip(tests.iter(), id_rows.iter()) {
+        let id_rows = sqlite_repeat(statements::INSERT_TEST_RETURNING_ID, &tests)
+            .bind_to_query_as::<SqliteTestID>(|q, test| {
+                Ok(q.bind(test.name()).bind(test.description()).bind(branch_name))
+            })?
+            .fetch_all(self.connection()).await?;
+        sqlite_repeat(
+            statements::INSERT_TEST_STEP,
+            &(0..tests.iter().flat_map(|t| t.commands()).count()).collect()
+        )
+        .bind_custom_values_to_query(zip(tests.iter(), id_rows.iter()), |mut q, (test, id_row)| {
             for (ordinal, command) in test.commands().iter().enumerate() {
-                commands_insert_query = commands_insert_query.bind(id_row.id)
-                    .bind(serde_json::to_string(&command)?)
-                    .bind(ordinal as i32);
+                q = q.bind(id_row.id).bind(serde_json::to_string(&command)?).bind(ordinal as i32)
             }
-        }
-        commands_insert_query.execute(self.connection()).await?;
+            Ok(q)
+        })?
+        .execute(self.connection()).await?;
         Ok(())
     }
 
@@ -249,7 +233,7 @@ struct SqliteTestName {
     name: String
 }
 
-#[derive(Debug, FromRow)]
+#[derive(Debug, FromRow, Clone)]
 struct SqliteTestID {
     id: i32
 }
