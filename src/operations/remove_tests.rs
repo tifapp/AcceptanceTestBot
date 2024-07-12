@@ -3,7 +3,7 @@ use std::{error::Error, fmt::Display, future};
 use anyhow::Result;
 use tokio::{fs::remove_dir_all, spawn};
 
-use crate::{git::{branch_name::{self, RoswaalOwnedBranchKind, RoswaalOwnedGitBranchName}, edit::EditGitRepositoryStatus, metadata::{self, RoswaalGitRepositoryMetadata}, pull_request::{GithubPullRequest, GithubPullRequestOpen}, repo::{RoswaalGitRepository, RoswaalGitRepositoryClient}}, tests_data::query::RoswaalTestNamesString, utils::sqlite::RoswaalSqlite, with_transaction};
+use crate::{git::{branch_name::{self, RoswaalOwnedBranchKind, RoswaalOwnedGitBranchName}, edit::EditGitRepositoryStatus, metadata::{self, RoswaalGitRepositoryMetadata}, pull_request::{GithubPullRequest, GithubPullRequestOpen}, repo::{RoswaalGitRepository, RoswaalGitRepositoryClient}}, tests_data::query::RoswaalTestNamesString, utils::{dedup::DedupIterator, sqlite::RoswaalSqlite}, with_transaction};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum RemoveTestsStatus {
@@ -62,7 +62,7 @@ impl RemoveTestsStatus {
         test_names: &RoswaalTestNamesString<'_>,
         metadata: &RoswaalGitRepositoryMetadata
     ) -> Result<Vec<String>> {
-        let futures = test_names.iter().map(|n| {
+        let futures = test_names.iter().dedup().map(|n| {
             let name = n.to_string();
             let dir_path = metadata.test_dirpath(n);
             spawn(async {
@@ -210,6 +210,42 @@ Zanza The Divine
         .await.unwrap()
     }
 
+    #[tokio::test]
+    async fn does_not_include_duplicate_removed_test_names() {
+        with_clean_test_repo_access(async {
+            let sqlite = RoswaalSqlite::in_memory().await?;
+            let pr_open = TestGithubPullRequestOpen::new(false);
+            let repo = RoswaalGitRepository::noop().await?;
+            let tests_str = "\
+```
+New Test: Blob
+Step 1: Do the thing
+Requirement 1: Do the thing
+```
+```
+New Test: Blob 2
+Step 1: Step A
+Requirement 1: Requirement A
+```
+";
+            add_and_merge(tests_str, &sqlite, &repo, &pr_open).await?;
+            let status = RemoveTestsStatus::from_removing_tests(
+                "Blob\nBlob",
+                &sqlite,
+                &repo,
+                &pr_open
+            ).await?;
+            match status {
+                RemoveTestsStatus::Success { removed_test_names, should_warn_undeleted_branch: _ } => {
+                    assert_eq!(removed_test_names, vec!["Blob"])
+                },
+                _ => panic!()
+            }
+            Ok(())
+        })
+        .await.unwrap()
+    }
+
     async fn add_and_merge_blob(
         sqlite: &RoswaalSqlite,
         repo: &RoswaalGitRepository<NoopGitRepositoryClient>,
@@ -222,13 +258,22 @@ Step 1: Do the thing
 Requirement 1: Do the thing
 ```
 ";
-        _ = AddTestsStatus::from_adding_tests(
+        add_and_merge(tests_str, sqlite, repo, pr_open).await
+    }
+
+    async fn add_and_merge(
+        tests_str: &str,
+        sqlite: &RoswaalSqlite,
+        repo: &RoswaalGitRepository<NoopGitRepositoryClient>,
+        pr_open: &TestGithubPullRequestOpen
+    ) -> Result<()> {
+        AddTestsStatus::from_adding_tests(
             tests_str,
             sqlite,
             pr_open,
             repo
         ).await?;
-        _ = MergeBranchStatus::from_merging_branch_with_name(
+        MergeBranchStatus::from_merging_branch_with_name(
             &pr_open.most_recent_head_branch_name().await.unwrap(),
             &sqlite
         ).await?;

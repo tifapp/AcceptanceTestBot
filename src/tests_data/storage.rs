@@ -34,11 +34,9 @@ impl <'a> RoswaalSqliteTransaction<'a> {
         branch_name: &RoswaalOwnedGitBranchName
     ) -> Result<()> {
         if test_names.is_empty() { return Ok(()) }
-        let statements = test_names.iter().map(|_| {
-            "INSERT INTO StagedTestRemovals (name, unmerged_branch_name) VALUES (?, ?);"
-        })
-        .collect::<Vec<&str>>()
-        .join("\n");
+        let statements = test_names.iter().map(|_| INSERT_STAGED_TEST_REMOVAL)
+            .collect::<Vec<&str>>()
+            .join("\n");
         let mut insert_query = query::<Sqlite>(&statements);
         for name in test_names.iter() {
             insert_query = insert_query.bind(name).bind(branch_name)
@@ -59,7 +57,7 @@ impl <'a> RoswaalSqliteTransaction<'a> {
         let delete_query_str = delete_tests_query_string(test_names.iter().count());
         let mut delete_query = query::<Sqlite>(&delete_query_str);
         for sqlite_name in test_names.iter() {
-            delete_query = delete_query.bind(sqlite_name.name.to_lowercase())
+            delete_query = delete_query.bind(&sqlite_name.name);
         }
         delete_query.execute(self.connection()).await?;
         Ok(())
@@ -168,6 +166,16 @@ impl <'a> RoswaalSqliteTransaction<'a> {
         Ok(tests)
     }
 }
+
+const INSERT_STAGED_TEST_REMOVAL: &str = "
+INSERT INTO StagedTestRemovals (
+    name,
+    unmerged_branch_name
+) VALUES (
+    LOWER(?),
+    ?
+) ON CONFLICT (name, unmerged_branch_name) DO NOTHING;
+";
 
 const SELECT_ALL_STAGED_TEST_REMOVALS_BY_BRANCH: &str = "
 SELECT name FROM StagedTestRemovals WHERE unmerged_branch_name = ?
