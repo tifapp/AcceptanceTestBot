@@ -1,6 +1,6 @@
 use std::{env, fmt::format};
 
-use crate::{language::{ast::RoswaalTestSyntax, test::RoswaalTest}, location::location::RoswaalStringLocations};
+use crate::{language::{ast::RoswaalTestSyntax, test::RoswaalTest}, location::location::RoswaalStringLocations, utils::string::ToAsciiKebabCase};
 use super::{branch_name::RoswaalOwnedGitBranchName, pull_request::GithubPullRequest};
 
 /// A struct containing neccessary metadata for operating in a roswaal compatible git repo.
@@ -101,7 +101,8 @@ impl RoswaalGitRepositoryMetadata {
         (self.add_test_cases_pr)(tests, branch_name)
     }
 
-    pub fn test_dirpath(&self, test: &RoswaalTest) -> String {
-        format!("{}/{}", self.test_cases_root_dir_path, test.dir_name())
+    pub fn test_dirpath(&self, test_name: &str) -> String {
+        let name = test_name.to_ascii_kebab_case().to_ascii_lowercase();
+        format!("{}/{}", self.test_cases_root_dir_path, name)
     }
 }

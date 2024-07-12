@@ -44,12 +44,12 @@ impl AddTestsStatus {
             pr_open,
             async {
                 Self::generate_typescript(&results, &metadata).await?;
-                Ok(results.pull_request(&tests_syntax, &branch_name, &metadata))
+                Ok((results.pull_request(&tests_syntax, &branch_name, &metadata), ()))
             }
         ).await?;
 
         match edit_status {
-            EditGitRepositoryStatus::Success { did_delete_branch } => {
+            EditGitRepositoryStatus::Success { did_delete_branch, value: _ } => {
                 transaction = sqlite.transaction().await?;
                 with_transaction!(transaction, async {
                     transaction.save_tests(&results.tests(), &branch_name).await?;
@@ -73,7 +73,7 @@ impl AddTestsStatus {
         let futures = tests.iter()
             .map(|test| {
                 let test = test.clone();
-                let dir_path = metadata.test_dirpath(&test);
+                let dir_path = metadata.test_dirpath(&test.name());
                 spawn(async move { test.typescript().save_in_dir(&dir_path).await })
             });
         for future in futures {

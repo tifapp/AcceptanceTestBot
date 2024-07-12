@@ -7,24 +7,24 @@ use super::{branch_name::RoswaalOwnedGitBranchName, pull_request::{GithubPullReq
 /// A status type for creating a new branch, pushing changes, opening a pull request, and
 /// deleting the newly created branch.
 #[derive(Debug, PartialEq, Eq)]
-pub enum EditGitRepositoryStatus {
-    Success { did_delete_branch: bool },
+pub enum EditGitRepositoryStatus<T> {
+    Success { did_delete_branch: bool, value: T },
     FailedToOpenPullRequest,
     MergeConflict
 }
 
-impl EditGitRepositoryStatus {
+impl <T> EditGitRepositoryStatus<T> {
     /// Performs the edit future within a git repository transaction, and opens a PR detailing
     /// those changes.
     ///
     /// Any uncomitted changes are reset and cleaned up, and the latest changes from the base
     /// branch are pulled before the edit future is ran. The new branch is deleted on the local
     /// repository after the edit is completed.
-    pub async fn from_editing_new_branch<'a>(
+    pub async fn from_editing_new_branch(
         new_branch_name: &RoswaalOwnedGitBranchName,
-        transaction: RoswaalGitRepositoryTransaction<'a, impl RoswaalGitRepositoryClient>,
+        transaction: RoswaalGitRepositoryTransaction<'_, impl RoswaalGitRepositoryClient>,
         pr_open: &impl GithubPullRequestOpen,
-        edit: impl Future<Output = Result<GithubPullRequest>>
+        edit: impl Future<Output = Result<(GithubPullRequest, T)>>
     ) -> Result<Self> {
         let base_branch_name = transaction.metadata().base_branch_name();
         transaction.hard_reset_to_head().await?;
@@ -35,7 +35,7 @@ impl EditGitRepositoryStatus {
             return Ok(Self::MergeConflict)
         }
         transaction.checkout_new_branch(new_branch_name).await?;
-        let pull_request = edit.await?;
+        let (pull_request, value) = edit.await?;
         transaction.commit_all(pull_request.title()).await?;
         transaction.push_changes(new_branch_name).await?;
         transaction.switch_branch(base_branch_name).await?;
@@ -45,7 +45,7 @@ impl EditGitRepositoryStatus {
         if !did_open {
             Ok(Self::FailedToOpenPullRequest)
         } else {
-            Ok(Self::Success { did_delete_branch })
+            Ok(Self::Success { did_delete_branch, value })
         }
     }
 }
@@ -74,7 +74,7 @@ mod tests {
                 &pr_open,
                 async {
                     File::create(&file_path).await?;
-                    Ok(ret_pr)
+                    Ok((ret_pr, ()))
                 }
             ).await?;
             assert_successful_single_file_created_edit(
@@ -96,9 +96,7 @@ mod tests {
             &new_branch_name,
             RoswaalGitRepository::noop().await.unwrap().transaction().await,
             &TestGithubPullRequestOpen::new(true),
-            async {
-                Ok(GithubPullRequest::test(&new_branch_name))
-            }
+            async { Ok((GithubPullRequest::test(&new_branch_name), ())) }
         ).await.unwrap();
         assert_eq!(status, EditGitRepositoryStatus::FailedToOpenPullRequest);
     }
@@ -110,13 +108,13 @@ mod tests {
             let pr_open = TestGithubPullRequestOpen::new(false);
             let mut branch_name = RoswaalOwnedGitBranchName::new("test-edit-recovery-failure");
             let failure_file_path = metadata.relative_path("test-failure.txt");
-            let mut edit_result = EditGitRepositoryStatus::from_editing_new_branch(
+            let edit_result = EditGitRepositoryStatus::from_editing_new_branch(
                 &branch_name,
                 repo.transaction().await,
                 &pr_open,
                 async {
                     File::create(&failure_file_path).await?;
-                    Err(anyhow::Error::new(TestError))
+                    Err::<(GithubPullRequest, ()), anyhow::Error>(anyhow::Error::new(TestError))
                 }
             ).await;
             assert!(edit_result.is_err());
@@ -126,18 +124,18 @@ mod tests {
             let expected_pr = GithubPullRequest::for_tif_react_frontend("Test", "Test", &branch_name);
             let edit_pr = expected_pr.clone();
             let success_file_path = metadata.relative_path("test-success.txt");
-            edit_result = EditGitRepositoryStatus::from_editing_new_branch(
+            let status = EditGitRepositoryStatus::from_editing_new_branch(
                 &branch_name,
                 repo.transaction().await,
                 &pr_open,
                 async {
                     File::create(&success_file_path).await?;
-                    Ok(edit_pr)
+                    Ok((edit_pr, ()))
                 }
-            ).await;
+            ).await?;
             assert!(!try_exists(metadata.relative_path("test-failure.txt")).await?);
             assert_successful_single_file_created_edit(
-                &edit_result.unwrap(),
+                &status,
                 &branch_name,
                 &expected_pr,
                 &success_file_path,
@@ -180,7 +178,7 @@ mod tests {
                 async {
                     assert!(try_exists(&file_path_1).await?);
                     assert!(!try_exists(&file_path_2).await?);
-                    Ok(GithubPullRequest::test(&branch_name_2))
+                    Ok((GithubPullRequest::test(&branch_name_2), ()))
                 }
             ).await?;
             Ok(())
@@ -219,7 +217,7 @@ mod tests {
                 &new_branch_name,
                 transaction,
                 &pr_open,
-                async { Ok(GithubPullRequest::test(&new_branch_name)) }
+                async { Ok((GithubPullRequest::test(&new_branch_name), ())) }
             ).await?;
             assert_eq!(status, EditGitRepositoryStatus::MergeConflict);
             Ok(())
@@ -228,14 +226,14 @@ mod tests {
     }
 
     async fn assert_successful_single_file_created_edit(
-        status: &EditGitRepositoryStatus,
+        status: &EditGitRepositoryStatus<()>,
         branch_name: &RoswaalOwnedGitBranchName,
         expected_pr: &GithubPullRequest,
         file_path: &str,
         repo: &RoswaalGitRepository<LibGit2RepositoryClient>,
         pr_open: &TestGithubPullRequestOpen
     ) -> Result<()> {
-        assert_eq!(status, &EditGitRepositoryStatus::Success { did_delete_branch: true });
+        assert_eq!(status, &EditGitRepositoryStatus::Success { did_delete_branch: true, value: () });
         assert_eq!(pr_open.most_recent_pr().await, Some(expected_pr.clone()));
 
         let transaction = repo.transaction().await;
