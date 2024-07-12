@@ -20,7 +20,7 @@ impl <'a> RoswaalSearchTestsQuery<'a> {
 
 /// A list of stringified test names.
 #[derive(Debug, PartialEq, Eq)]
-pub struct RoswaalTestNamesString<'a>(pub(super) &'a str);
+pub struct RoswaalTestNamesString<'a>(pub &'a str);
 
 impl <'a> RoswaalTestNamesString<'a> {
     /// Returns an iterator to the test names specified by this string.
