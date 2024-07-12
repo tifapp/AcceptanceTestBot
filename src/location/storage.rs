@@ -25,19 +25,15 @@ pub enum LoadLocationsFilter {
 impl LoadLocationsFilter {
     fn full_select_statement(&self) -> &'static str {
         match self {
-            Self::All => "SELECT * FROM Locations ORDER BY name, latitude",
-            Self::MergedOnly => {
-                "SELECT * FROM Locations WHERE unmerged_branch_name IS NULL ORDER BY name, latitude"
-            }
+            Self::All => statements::SELECT_ALL_LOCATIONS,
+            Self::MergedOnly => statements::SELECT_ALL_MERGED_LOCATIONS
         }
     }
 
     fn name_select_statement(&self) -> &'static str {
         match self {
-            Self::All => "SELECT name FROM Locations ORDER BY name, latitude",
-            Self::MergedOnly => {
-                "SELECT name FROM Locations WHERE unmerged_branch_name IS NULL ORDER BY name, latitude"
-            }
+            Self::All => statements::SELECT_ALL_LOCATION_NAMES,
+            Self::MergedOnly => statements::SELECT_ALL_MERGED_LOCATION_NAMES
         }
     }
 }
@@ -45,12 +41,13 @@ impl LoadLocationsFilter {
 impl <'a> RoswaalSqliteTransaction <'a> {
     pub async fn merge_unmerged_locations(&mut self, branch_name: &RoswaalOwnedGitBranchName) -> Result<()> {
         let sqlite_location_names = query_as::<Sqlite, SqliteLocationName>(
-            "SELECT name FROM Locations WHERE unmerged_branch_name = ?;"
+            statements::SELECT_UNMERGED_LOCATION_NAMES_WITH_BRANCH
         )
         .bind(branch_name)
         .fetch_all(self.connection())
         .await?;
-        let update_statements = sqlite_location_names.iter().map(|_| UPDATE_MERGE_UNMERGED_STATEMENT)
+        let update_statements = sqlite_location_names.iter()
+            .map(|_| statements::MERGE_UNMERGED_LOCATION)
             .collect::<Vec<&str>>()
             .join("\n");
         let mut update_query = query::<Sqlite>(&update_statements);
@@ -69,7 +66,7 @@ impl <'a> RoswaalSqliteTransaction <'a> {
         branch_name: &RoswaalOwnedGitBranchName
     ) -> Result<()> {
         let statements = locations.iter()
-            .map(|_| SAVE_STATEMENT)
+            .map(|_| statements::INSERT_OR_REPLACE_LOCATION)
             .collect::<Vec<&str>>()
             .join("\n");
         let mut bulk_insert_query = query::<Sqlite>(&statements);
@@ -113,7 +110,8 @@ impl <'a> RoswaalSqliteTransaction <'a> {
     }
 }
 
-const SAVE_STATEMENT: &str = "
+mod statements {
+    pub const INSERT_OR_REPLACE_LOCATION: &str = "
 INSERT OR REPLACE INTO Locations (
     latitude,
     longitude,
@@ -126,10 +124,26 @@ INSERT OR REPLACE INTO Locations (
     ?
 );";
 
-const UPDATE_MERGE_UNMERGED_STATEMENT: &str = "
+    pub const MERGE_UNMERGED_LOCATION: &str = "
 DELETE FROM Locations WHERE name = ? AND unmerged_branch_name IS NULL;
 UPDATE Locations SET unmerged_branch_name = NULL WHERE unmerged_branch_name = ? AND name = ?;
 ";
+
+    pub const SELECT_UNMERGED_LOCATION_NAMES_WITH_BRANCH: &str =
+        "SELECT name FROM Locations WHERE unmerged_branch_name = ?;";
+
+    pub const SELECT_ALL_LOCATION_NAMES: &str =
+        "SELECT name FROM Locations ORDER BY name, latitude";
+
+    pub const SELECT_ALL_MERGED_LOCATION_NAMES: &str =
+        "SELECT name FROM Locations WHERE unmerged_branch_name IS NULL ORDER BY name, latitude;";
+
+    pub const SELECT_ALL_LOCATIONS: &str =
+        "SELECT * FROM Locations ORDER BY name, latitude";
+
+    pub const SELECT_ALL_MERGED_LOCATIONS: &str =
+        "SELECT * FROM Locations WHERE unmerged_branch_name IS NULL ORDER BY name, latitude;";
+}
 
 #[derive(FromRow, Debug)]
 struct SqliteLocationName {

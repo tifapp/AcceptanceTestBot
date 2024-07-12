@@ -129,6 +129,24 @@ macro_rules! with_transaction {
     }
 }
 
+/// Returns a list of substitutable array parameters for use in sqlite queries that check if a
+/// value is contained within a list of values.
+///
+/// ```rs
+/// impl RoswaalSqliteTransaction {
+///     pub async fn items(&mut self, item_names: &Vec<&str>) -> Result<Vec<Item>> {
+///         let select_query_statement = format!(
+///             "SELECT * FROM Items WHERE name in {};",
+///             sqlite_array_fields(item_names.len())
+///         );
+///         // Execute query...
+///     }
+/// }
+/// ```
+pub fn sqlite_array_fields(count: usize) -> String {
+    format!("({})", (0..count).map(|_| "?").collect::<Vec<&str>>().join(", "))
+}
+
 #[cfg(test)]
 mod tests {
     use sqlx::{prelude::FromRow, query_as};

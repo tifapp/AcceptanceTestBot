@@ -34,7 +34,8 @@ impl <'a> RoswaalSqliteTransaction<'a> {
         branch_name: &RoswaalOwnedGitBranchName
     ) -> Result<()> {
         if test_names.is_empty() { return Ok(()) }
-        let statements = test_names.iter().map(|_| INSERT_STAGED_TEST_REMOVAL)
+        let statements = test_names.iter()
+            .map(|_| statements::INSERT_STAGED_TEST_REMOVAL)
             .collect::<Vec<&str>>()
             .join("\n");
         let mut insert_query = query::<Sqlite>(&statements);
@@ -49,12 +50,13 @@ impl <'a> RoswaalSqliteTransaction<'a> {
         &mut self,
         branch_name: &RoswaalOwnedGitBranchName
     ) -> Result<()> {
-        let statement = "SELECT name FROM StagedTestRemovals WHERE unmerged_branch_name = ?";
-        let test_names = query_as::<Sqlite, SqliteTestName>(statement)
-            .bind(branch_name)
-            .fetch_all(self.connection())
-            .await?;
-        let delete_query_str = delete_tests_query_string(test_names.iter().count());
+        let test_names = query_as::<Sqlite, SqliteTestName>(
+            statements::SELECT_STAGED_TEST_REMOVAL_NAMES
+        )
+        .bind(branch_name)
+        .fetch_all(self.connection())
+        .await?;
+        let delete_query_str = statements::delete_tests(test_names.iter().count());
         let mut delete_query = query::<Sqlite>(&delete_query_str);
         for sqlite_name in test_names.iter() {
             delete_query = delete_query.bind(&sqlite_name.name);
@@ -65,12 +67,13 @@ impl <'a> RoswaalSqliteTransaction<'a> {
 
     pub async fn merge_unmerged_tests(&mut self, branch_name: &RoswaalOwnedGitBranchName) -> Result<()> {
         let sqlite_location_names = query_as::<Sqlite, SqliteTestName>(
-            "SELECT name FROM Tests WHERE unmerged_branch_name = ?;"
+            statements::SELECT_UNMERGED_TEST_NAMES
         )
         .bind(branch_name)
         .fetch_all(self.connection())
         .await?;
-        let update_statements = sqlite_location_names.iter().map(|_| UPDATE_MERGE_UNMERGED_STATEMENT)
+        let update_statements = sqlite_location_names.iter()
+            .map(|_| statements::MERGE_UNMERGED_TESTS)
             .collect::<Vec<&str>>()
             .join("\n");
         let mut update_query = query::<Sqlite>(&update_statements);
@@ -91,11 +94,10 @@ impl <'a> RoswaalSqliteTransaction<'a> {
         let mut tests = tests.clone();
         tests.reverse(); // NB: Ensure the last occurrence of each test is kept when dedupping.
         tests.dedup_by(|a, b| a.name() == b.name());
-        let statements = tests.iter().map(|_| {
-            "INSERT OR REPLACE INTO Tests (name, description, unmerged_branch_name) VALUES (?, ?, ?) RETURNING id;"
-        })
-        .collect::<Vec<&str>>()
-        .join("\n");
+        let statements = tests.iter()
+            .map(|_| statements::INSERT_TEST_RETURNING_ID)
+            .collect::<Vec<&str>>()
+            .join("\n");
         let mut tests_insert_query = query_as::<Sqlite, SqliteTestID>(&statements);
         for test in tests.iter() {
             tests_insert_query = tests_insert_query.bind(test.name())
@@ -105,9 +107,7 @@ impl <'a> RoswaalSqliteTransaction<'a> {
         let id_rows = tests_insert_query.fetch_all(self.connection()).await?;
         let command_insert_statements = tests.iter()
             .flat_map(|t| t.commands())
-            .map(|_| {
-                "INSERT INTO TestSteps (test_id, content, ordinal) VALUES (?, ?, ?);"
-            })
+            .map(|_| statements::INSERT_TEST_STEP)
             .collect::<Vec<&str>>()
             .join("\n");
         let mut commands_insert_query = query::<Sqlite>(&command_insert_statements);
@@ -125,7 +125,9 @@ impl <'a> RoswaalSqliteTransaction<'a> {
     pub async fn tests_in_alphabetical_order(&mut self, query: &RoswaalSearchTestsQuery<'_>) -> Result<Vec<RoswaalStoredTest>> {
         let sqlite_tests = match query {
             RoswaalSearchTestsQuery::TestNames(test_names) => {
-                let query_str = select_tests_in_alphabetical_order_query_string(test_names.iter().count());
+                let query_str = statements::select_tests_in_alphabetical_order(
+                    test_names.iter().count()
+                );
                 let mut select_query = query_as::<Sqlite, SqliteStoredTestRow>(&query_str);
                 for name in test_names.iter() {
                     select_query = select_query.bind(name.to_lowercase());
@@ -133,9 +135,11 @@ impl <'a> RoswaalSqliteTransaction<'a> {
                 select_query.fetch_all(self.connection()).await?
             },
             RoswaalSearchTestsQuery::AllTests => {
-                query_as::<Sqlite, SqliteStoredTestRow>(SELECT_ALL_TESTS_IN_ALPHABETICAL_ORDER)
-                    .fetch_all(self.connection())
-                    .await?
+                query_as::<Sqlite, SqliteStoredTestRow>(
+                    statements::SELECT_ALL_TESTS_IN_ALPHABETICAL_ORDER
+                )
+                .fetch_all(self.connection())
+                .await?
             }
         };
         if sqlite_tests.is_empty() { return Ok(vec![]) }
@@ -167,7 +171,10 @@ impl <'a> RoswaalSqliteTransaction<'a> {
     }
 }
 
-const INSERT_STAGED_TEST_REMOVAL: &str = "
+mod statements {
+    use crate::utils::sqlite::sqlite_array_fields;
+
+    pub const INSERT_STAGED_TEST_REMOVAL: &str = "
 INSERT INTO StagedTestRemovals (
     name,
     unmerged_branch_name
@@ -177,11 +184,7 @@ INSERT INTO StagedTestRemovals (
 ) ON CONFLICT (name, unmerged_branch_name) DO NOTHING;
 ";
 
-const SELECT_ALL_STAGED_TEST_REMOVALS_BY_BRANCH: &str = "
-SELECT name FROM StagedTestRemovals WHERE unmerged_branch_name = ?
-";
-
-const SELECT_ALL_TESTS_IN_ALPHABETICAL_ORDER: &str = "
+    pub const SELECT_ALL_TESTS_IN_ALPHABETICAL_ORDER: &str = "
 SELECT
     t.name AS test_name,
     t.description,
@@ -193,36 +196,53 @@ INNER JOIN TestSteps c ON t.id = c.test_id
 ORDER BY test_name, c.ordinal;
 ";
 
-fn select_tests_in_alphabetical_order_query_string(count: usize) -> String {
-    format!("
-SELECT
-    t.name AS test_name,
-    t.description,
-    t.unmerged_branch_name,
-    c.content AS command_content,
-    c.did_pass
-FROM Tests t
-INNER JOIN TestSteps c ON t.id = c.test_id
-WHERE LOWER(test_name) IN ({})
-ORDER BY test_name, c.ordinal;
-", array_fields(count))
-}
-
-fn delete_tests_query_string(count: usize) -> String {
-    format!("\
-DELETE FROM Tests
-WHERE LOWER(name) IN ({}) AND unmerged_branch_name IS NULL
-", array_fields(count))
-}
-
-fn array_fields(count: usize) -> String {
-    (0..count).map(|_| "?").collect::<Vec<&str>>().join(", ")
-}
-
-const UPDATE_MERGE_UNMERGED_STATEMENT: &str = "
+    pub const MERGE_UNMERGED_TESTS: &str = "
 DELETE FROM Tests WHERE name = ? AND unmerged_branch_name IS NULL;
 UPDATE Tests SET unmerged_branch_name = NULL WHERE unmerged_branch_name = ? AND name = ?;
 ";
+
+    pub const SELECT_UNMERGED_TEST_NAMES: &str =
+        "SELECT name FROM Tests WHERE unmerged_branch_name = ?;";
+
+    pub const SELECT_STAGED_TEST_REMOVAL_NAMES: &str =
+        "SELECT name FROM StagedTestRemovals WHERE unmerged_branch_name = ?";
+
+    pub const INSERT_TEST_STEP: &str =
+        "INSERT INTO TestSteps (test_id, content, ordinal) VALUES (?, ?, ?);";
+
+    pub const INSERT_TEST_RETURNING_ID: &str = "\
+INSERT OR REPLACE INTO Tests (
+    name,
+    description,
+    unmerged_branch_name
+) VALUES (
+    ?,
+    ?,
+    ?
+) RETURNING id;";
+
+    pub fn select_tests_in_alphabetical_order(count: usize) -> String {
+        format!("
+    SELECT
+        t.name AS test_name,
+        t.description,
+        t.unmerged_branch_name,
+        c.content AS command_content,
+        c.did_pass
+    FROM Tests t
+    INNER JOIN TestSteps c ON t.id = c.test_id
+    WHERE LOWER(test_name) IN {}
+    ORDER BY test_name, c.ordinal;
+    ", sqlite_array_fields(count))
+    }
+
+    pub fn delete_tests(count: usize) -> String {
+        format!("\
+DELETE FROM Tests
+WHERE LOWER(name) IN {} AND unmerged_branch_name IS NULL
+", sqlite_array_fields(count))
+    }
+}
 
 #[derive(Debug, FromRow)]
 struct SqliteTestName {
