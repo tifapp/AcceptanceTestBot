@@ -13,21 +13,19 @@ impl <'a> RoswaalSearchTestsQuery<'a> {
         if string.is_empty() {
             Self::AllTests
         } else {
-            Self::TestNames(RoswaalTestNamesString { string })
+            Self::TestNames(RoswaalTestNamesString(string))
         }
     }
 }
 
 /// A list of stringified test names.
 #[derive(Debug, PartialEq, Eq)]
-pub struct RoswaalTestNamesString<'a> {
-    string: &'a str
-}
+pub struct RoswaalTestNamesString<'a>(pub(super) &'a str);
 
 impl <'a> RoswaalTestNamesString<'a> {
     /// Returns an iterator to the test names specified by this string.
     pub fn iter(&self) -> impl Iterator<Item = &'a str> {
-        self.string.lines().filter_map(|line| {
+        self.0.lines().filter_map(|line| {
             let string = line.trim();
             if string.is_empty() {
                 None
@@ -35,6 +33,10 @@ impl <'a> RoswaalTestNamesString<'a> {
                 Some(string)
             }
         })
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.iter().count() == 0
     }
 }
 
@@ -70,5 +72,13 @@ The 5 Hounds are too OP Plz Nerf
             "The 5 Hounds are too OP Plz Nerf"
         ];
         assert_eq!(test_names, expected_names)
+    }
+
+    #[test]
+    fn is_empty() {
+        let strings = vec![("", true), ("    ", true), ("\n\n  \n", true), ("h", false)];
+        for (string, is_empty) in strings {
+            assert_eq!(RoswaalTestNamesString(string).is_empty(), is_empty)
+        }
     }
 }
