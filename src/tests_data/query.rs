@@ -2,24 +2,31 @@
 ///
 /// Users will enter test names with each test name being on a separate line. An empty string
 /// indicates that *all* tests should be covered by this query.
-pub struct RoswaalTestsQuery<'a> {
+#[derive(Debug, PartialEq, Eq)]
+pub enum RoswaalSearchTestsQuery<'a> {
+    TestNames(RoswaalTestNamesString<'a>),
+    AllTests
+}
+
+impl <'a> RoswaalSearchTestsQuery<'a> {
+    pub fn new(string: &'a str) -> Self {
+        if string.is_empty() {
+            Self::AllTests
+        } else {
+            Self::TestNames(RoswaalTestNamesString { string })
+        }
+    }
+}
+
+/// A list of stringified test names.
+#[derive(Debug, PartialEq, Eq)]
+pub struct RoswaalTestNamesString<'a> {
     string: &'a str
 }
 
-impl <'a> RoswaalTestsQuery<'a> {
-    pub fn new(string: &'a str) -> Self {
-        Self { string }
-    }
-}
-
-impl <'a> RoswaalTestsQuery<'a> {
-    /// Returns true if this query is for querying all tests.
-    pub fn is_for_all_tests(&self) -> bool {
-        self.string.is_empty()
-    }
-
-    /// Returns an iterator to the test names of this query.
-    pub fn names(&self) -> impl Iterator<Item = &'a str> {
+impl <'a> RoswaalTestNamesString<'a> {
+    /// Returns an iterator to the test names specified by this string.
+    pub fn iter(&self) -> impl Iterator<Item = &'a str> {
         self.string.lines().filter_map(|line| {
             let string = line.trim();
             if string.is_empty() {
@@ -37,21 +44,8 @@ mod tests {
 
     #[test]
     fn empty_string_denotes_all_tests() {
-        let query = RoswaalTestsQuery::new("");
-        assert!(query.is_for_all_tests())
-    }
-
-    #[test]
-    fn string_with_names_denotes_specific_tests() {
-        let string = "\
-Test 1
-   Johnny in Mexico
-Basic Sail Across the Atlantic with the Titanic
-
-The 5 Hounds are too OP Plz Nerf
-            ";
-        let query = RoswaalTestsQuery::new(string);
-        assert!(!query.is_for_all_tests())
+        let query = RoswaalSearchTestsQuery::new("");
+        assert_eq!(query, RoswaalSearchTestsQuery::AllTests)
     }
 
     #[test]
@@ -63,8 +57,12 @@ Basic Sail Across the Atlantic with the Titanic
 
 The 5 Hounds are too OP Plz Nerf
             ";
-        let query = RoswaalTestsQuery::new(string);
-        let test_names = query.names().collect::<Vec<&str>>();
+        let query = RoswaalSearchTestsQuery::new(string);
+        let test_names = match query {
+            RoswaalSearchTestsQuery::TestNames(test_names) => test_names,
+            _ => panic!()
+        };
+        let test_names = test_names.iter().collect::<Vec<&str>>();
         let expected_names = vec![
             "Test 1",
             "Johnny in Mexico",
