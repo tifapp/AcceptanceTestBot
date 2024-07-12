@@ -3,7 +3,7 @@ use std::{error::Error, fmt::Display, future};
 use anyhow::Result;
 use tokio::{fs::remove_dir_all, spawn};
 
-use crate::{git::{branch_name::{self, RoswaalOwnedBranchKind, RoswaalOwnedGitBranchName}, edit::EditGitRepositoryStatus, metadata::{self, RoswaalGitRepositoryMetadata}, pull_request::{GithubPullRequest, GithubPullRequestOpen}, repo::{RoswaalGitRepository, RoswaalGitRepositoryClient}}, tests_data::query::RoswaalTestNamesString, utils::sqlite::RoswaalSqlite};
+use crate::{git::{branch_name::{self, RoswaalOwnedBranchKind, RoswaalOwnedGitBranchName}, edit::EditGitRepositoryStatus, metadata::{self, RoswaalGitRepositoryMetadata}, pull_request::{GithubPullRequest, GithubPullRequestOpen}, repo::{RoswaalGitRepository, RoswaalGitRepositoryClient}}, tests_data::query::RoswaalTestNamesString, utils::sqlite::RoswaalSqlite, with_transaction};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum RemoveTestsStatus {
@@ -42,7 +42,11 @@ impl RemoveTestsStatus {
 
         match edit_result {
             Ok(EditGitRepositoryStatus::Success { did_delete_branch, value: removed_test_names }) => {
-                Ok(Self::Success { removed_test_names, should_warn_undeleted_branch: !did_delete_branch })
+                let mut transaction = sqlite.transaction().await?;
+                with_transaction!(transaction, async {
+                    transaction.stage_test_removals(&test_names, &branch_name).await?;
+                    Ok(Self::Success { removed_test_names, should_warn_undeleted_branch: !did_delete_branch })
+                })
             },
             Ok(EditGitRepositoryStatus::MergeConflict) => {
                 Ok(Self::MergeConflict)

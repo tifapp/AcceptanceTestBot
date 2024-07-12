@@ -28,12 +28,38 @@ pub struct RoswaalStoredTestCommand {
 }
 
 impl <'a> RoswaalSqliteTransaction<'a> {
-    pub async fn remove_merged_tests(&mut self, test_names: &RoswaalTestNamesString<'_>) -> Result<()> {
+    pub async fn stage_test_removals(
+        &mut self,
+        test_names: &RoswaalTestNamesString<'_>,
+        branch_name: &RoswaalOwnedGitBranchName
+    ) -> Result<()> {
         if test_names.is_empty() { return Ok(()) }
-        let  delete_query_str = delete_tests_query_string(test_names.iter().count());
-        let mut delete_query = query::<Sqlite>(&delete_query_str);
+        let statements = test_names.iter().map(|_| {
+            "INSERT INTO StagedTestRemovals (name, unmerged_branch_name) VALUES (?, ?);"
+        })
+        .collect::<Vec<&str>>()
+        .join("\n");
+        let mut insert_query = query::<Sqlite>(&statements);
         for name in test_names.iter() {
-            delete_query = delete_query.bind(name.to_lowercase())
+            insert_query = insert_query.bind(name).bind(branch_name)
+        }
+        insert_query.execute(self.connection()).await?;
+        Ok(())
+    }
+
+    pub async fn merge_test_removals(
+        &mut self,
+        branch_name: &RoswaalOwnedGitBranchName
+    ) -> Result<()> {
+        let statement = "SELECT name FROM StagedTestRemovals WHERE unmerged_branch_name = ?";
+        let test_names = query_as::<Sqlite, SqliteTestName>(statement)
+            .bind(branch_name)
+            .fetch_all(self.connection())
+            .await?;
+        let delete_query_str = delete_tests_query_string(test_names.iter().count());
+        let mut delete_query = query::<Sqlite>(&delete_query_str);
+        for sqlite_name in test_names.iter() {
+            delete_query = delete_query.bind(sqlite_name.name.to_lowercase())
         }
         delete_query.execute(self.connection()).await?;
         Ok(())
@@ -142,6 +168,10 @@ impl <'a> RoswaalSqliteTransaction<'a> {
         Ok(tests)
     }
 }
+
+const SELECT_ALL_STAGED_TEST_REMOVALS_BY_BRANCH: &str = "
+SELECT name FROM StagedTestRemovals WHERE unmerged_branch_name = ?
+";
 
 const SELECT_ALL_TESTS_IN_ALPHABETICAL_ORDER: &str = "
 SELECT
@@ -586,6 +616,38 @@ l
     }
 
     #[tokio::test]
+    async fn stage_test_removals_does_not_remove_tests() {
+        let mut branch_name = RoswaalOwnedGitBranchName::new("test");
+        let sqlite = RoswaalSqlite::in_memory().await.unwrap();
+        let mut transaction = sqlite.transaction().await.unwrap();
+        let tests = vec![
+            RoswaalTest::new(
+                "Zanza The Divine".to_string(),
+                None,
+                vec![
+                    RoswaalTestCommand::Step {
+                        name: "Step A".to_string(),
+                        requirement: "Requirement A".to_string()
+                    }
+                ]
+            )
+        ];
+        transaction.save_tests(&tests, &branch_name).await.unwrap();
+        transaction.merge_unmerged_tests(&branch_name).await.unwrap();
+        let names_str = "Zanza The Divine";
+        branch_name = RoswaalOwnedGitBranchName::new("stage");
+        transaction.stage_test_removals(
+            &RoswaalTestNamesString(names_str),
+            &branch_name
+        ).await.unwrap();
+        let stored_tests = transaction.tests_in_alphabetical_order(
+            &RoswaalSearchTestsQuery::new(names_str)
+        ).await.unwrap();
+        let expected_test_names = vec!["Zanza The Divine"];
+        assert_eq!(stored_tests.iter().map(|t| t.name()).collect::<Vec<&str>>(), expected_test_names)
+    }
+
+    #[tokio::test]
     async fn remove_merged_tests_only_removes_merged_tests() {
         let branch_name = RoswaalOwnedGitBranchName::new("test");
         let sqlite = RoswaalSqlite::in_memory().await.unwrap();
@@ -635,19 +697,16 @@ l
 Zanza The Divine
 L
 ";
-        transaction.remove_merged_tests(&RoswaalTestNamesString(names_str)).await.unwrap();
+        let stage_branch = RoswaalOwnedGitBranchName::new("stage");
+        transaction.stage_test_removals(
+            &RoswaalTestNamesString(names_str),
+            &stage_branch
+        ).await.unwrap();
+        transaction.merge_test_removals(&stage_branch).await.unwrap();
         let stored_tests = transaction.tests_in_alphabetical_order(
             &RoswaalSearchTestsQuery::new(names_str)
         ).await.unwrap();
         let expected_test_names = vec!["L"];
         assert_eq!(stored_tests.iter().map(|t| t.name()).collect::<Vec<&str>>(), expected_test_names)
-    }
-
-    #[tokio::test]
-    async fn remove_merged_tests_does_nothing_when_no_test_names() {
-        let sqlite = RoswaalSqlite::in_memory().await.unwrap();
-        let mut transaction = sqlite.transaction().await.unwrap();
-        let result = transaction.remove_merged_tests(&RoswaalTestNamesString("")).await;
-        assert!(result.is_ok())
     }
 }
