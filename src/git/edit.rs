@@ -35,17 +35,27 @@ impl <T> EditGitRepositoryStatus<T> {
             return Ok(Self::MergeConflict)
         }
         transaction.checkout_new_branch(new_branch_name).await?;
-        let (pull_request, value) = edit.await?;
-        transaction.commit_all(pull_request.title()).await?;
-        transaction.push_changes(new_branch_name).await?;
-        transaction.switch_branch(base_branch_name).await?;
-        let did_delete_branch = transaction.delete_local_branch(new_branch_name).await?;
-        drop(transaction);
-        let did_open = pr_open.open(&pull_request).await?;
-        if !did_open {
-            Ok(Self::FailedToOpenPullRequest)
-        } else {
-            Ok(Self::Success { did_delete_branch, value })
+        match edit.await {
+            Ok((pull_request, value)) => {
+                transaction.commit_all(pull_request.title()).await?;
+                transaction.push_changes(new_branch_name).await?;
+                transaction.switch_branch(base_branch_name).await?;
+                let did_delete_branch = transaction.delete_local_branch(new_branch_name).await?;
+                drop(transaction);
+                let did_open = pr_open.open(&pull_request).await?;
+                if !did_open {
+                    Ok(Self::FailedToOpenPullRequest)
+                } else {
+                    Ok(Self::Success { did_delete_branch, value })
+                }
+            },
+            Err(err) => {
+                transaction.hard_reset_to_head().await?;
+                transaction.clean_all_untracked().await?;
+                transaction.switch_branch(base_branch_name).await?;
+                transaction.delete_local_branch(new_branch_name).await?;
+                Err(err)
+            }
         }
     }
 }
@@ -118,7 +128,7 @@ mod tests {
                 }
             ).await;
             assert!(edit_result.is_err());
-            assert!(try_exists(failure_file_path).await?);
+            assert!(!try_exists(failure_file_path).await?);
 
             branch_name = RoswaalOwnedGitBranchName::new("test-edit-recovery-success");
             let expected_pr = GithubPullRequest::for_tif_react_frontend("Test", "Test", &branch_name);
@@ -133,7 +143,6 @@ mod tests {
                     Ok((edit_pr, ()))
                 }
             ).await?;
-            assert!(!try_exists(metadata.relative_path("test-failure.txt")).await?);
             assert_successful_single_file_created_edit(
                 &status,
                 &branch_name,
@@ -142,6 +151,27 @@ mod tests {
                 &repo,
                 &pr_open
             ).await
+        })
+        .await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn deletes_branch_of_failed_edit() {
+        with_clean_test_repo_access(async {
+            let (repo, _) = repo_with_test_metadata().await?;
+            let pr_open = TestGithubPullRequestOpen::new(false);
+            let branch_name = RoswaalOwnedGitBranchName::new("test-edit-delete-branch-on-failure");
+            _ = EditGitRepositoryStatus::from_editing_new_branch(
+                &branch_name,
+                repo.transaction().await,
+                &pr_open,
+                async { Err::<(GithubPullRequest, ()), anyhow::Error>(anyhow::Error::new(TestError)) }
+            ).await;
+
+            let transaction = repo.transaction().await;
+            let result = transaction.switch_branch(&branch_name.to_string()).await;
+            assert!(result.is_err());
+            Ok(())
         })
         .await.unwrap()
     }
