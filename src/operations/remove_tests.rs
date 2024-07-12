@@ -32,10 +32,7 @@ impl RemoveTestsStatus {
             pr_open,
             async {
                 let removed_test_names = Self::remove_test_names(&test_names, &metadata).await?;
-                let pr = GithubPullRequest::for_removing_test_cases_tif_react_frontend(
-                    &test_names,
-                    &branch_name
-                );
+                let pr = metadata.remove_tests_pull_request(&test_names, &branch_name);
                 Ok((pr, removed_test_names))
             }
         ).await;

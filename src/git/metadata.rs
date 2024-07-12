@@ -1,6 +1,6 @@
 use std::{env, fmt::format};
 
-use crate::{language::{ast::RoswaalTestSyntax, test::RoswaalTest}, location::location::RoswaalStringLocations, utils::string::ToAsciiKebabCase};
+use crate::{language::{ast::RoswaalTestSyntax, test::RoswaalTest}, location::location::RoswaalStringLocations, tests_data::query::RoswaalTestNamesString, utils::string::ToAsciiKebabCase};
 use super::{branch_name::RoswaalOwnedGitBranchName, pull_request::GithubPullRequest};
 
 /// A struct containing neccessary metadata for operating in a roswaal compatible git repo.
@@ -18,6 +18,10 @@ pub struct RoswaalGitRepositoryMetadata {
     add_locations_pr: fn(
         &RoswaalStringLocations,
         &RoswaalOwnedGitBranchName
+    ) -> GithubPullRequest,
+    remove_tests_pr: fn(
+        &RoswaalTestNamesString,
+        &RoswaalOwnedGitBranchName
     ) -> GithubPullRequest
 }
 
@@ -31,7 +35,8 @@ impl RoswaalGitRepositoryMetadata {
             test_cases_root_dir_path: "./FitnessProject/roswaal".to_string(),
             add_test_cases_pr: GithubPullRequest::for_test_cases_tif_react_frontend,
             locations_path: "./FitnessProject/roswaal/Locations.ts".to_string(),
-            add_locations_pr: GithubPullRequest::for_locations_tif_react_frontend
+            add_locations_pr: GithubPullRequest::for_locations_tif_react_frontend,
+            remove_tests_pr: GithubPullRequest::for_removing_test_cases_tif_react_frontend
         }
     }
 
@@ -55,6 +60,13 @@ impl RoswaalGitRepositoryMetadata {
             add_locations_pr: |locations, head_branch| {
                 GithubPullRequest::for_locations_tif_react_frontend(locations, head_branch)
                     .for_testing_do_not_merge()
+            },
+            remove_tests_pr: |test_names, head_branch| {
+                GithubPullRequest::for_removing_test_cases_tif_react_frontend(
+                    test_names,
+                    head_branch
+                )
+                .for_testing_do_not_merge()
             }
         }
     }
@@ -99,6 +111,14 @@ impl RoswaalGitRepositoryMetadata {
         branch_name: &RoswaalOwnedGitBranchName
     ) -> GithubPullRequest {
         (self.add_test_cases_pr)(tests, branch_name)
+    }
+
+    pub fn remove_tests_pull_request<'a>(
+        &self,
+        test_names: &RoswaalTestNamesString,
+        branch_name: &RoswaalOwnedGitBranchName
+    ) -> GithubPullRequest {
+        (self.remove_tests_pr)(test_names, branch_name)
     }
 
     pub fn test_dirpath(&self, test_name: &str) -> String {
