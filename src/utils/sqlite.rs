@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
-use sqlx::{query, Executor, Pool, Transaction};
-use sqlx::sqlite::Sqlite;
+use sqlx::database::HasArguments;
+use sqlx::query::{Query, QueryAs};
+use sqlx::{query, query_as, Executor, FromRow, Pool, Transaction};
+use sqlx::sqlite::{Sqlite, SqliteArguments, SqliteQueryResult, SqliteRow};
 use anyhow::Result;
 use tokio::sync::{Mutex, MutexGuard};
 
@@ -126,6 +128,81 @@ macro_rules! with_transaction {
                 }
             }
         }
+    }
+}
+
+/// Returns a list of substitutable array parameters for use in sqlite queries that check if a
+/// value is contained within a list of values.
+///
+/// ```rs
+/// impl RoswaalSqliteTransaction {
+///     pub async fn items(&mut self, item_names: &Vec<&str>) -> Result<Vec<Item>> {
+///         let select_query_statement = format!(
+///             "SELECT * FROM Items WHERE name in {};",
+///             sqlite_array_fields(item_names.len())
+///         );
+///         // Execute query...
+///     }
+/// }
+/// ```
+pub fn sqlite_array_fields(count: usize) -> String {
+    format!("({})", (0..count).map(|_| "?").collect::<Vec<&str>>().join(", "))
+}
+
+pub type SqliteQuery<'q> = Query<'q, Sqlite, SqliteArguments<'q>>;
+pub type SqliteQueryAs<'q, Output> = QueryAs<'q, Sqlite, Output, SqliteArguments<'q>>;
+
+/// A repeated Sqlite Query.
+pub struct SqliteRepeat<'q, Value> {
+    statements: String,
+    values: &'q Vec<Value>
+}
+
+/// Repeats the SQL statement for each value in `values`.
+pub fn sqlite_repeat<'q, Value>(
+    statement: &'q str,
+    values: &'q Vec<Value>
+) -> SqliteRepeat<'q, Value> {
+    let statements = values.iter().map(|_| statement).collect::<Vec<&str>>().join("\n");
+    SqliteRepeat { statements, values }
+}
+
+impl <'q, Value> SqliteRepeat<'q, Value> {
+    /// Given a function with a query and each value, binds the value to the query.
+    pub fn bind_to_query(
+        &'q self,
+        bind: impl Fn(SqliteQuery<'q>, &'q Value) -> Result<SqliteQuery<'q>>
+    ) -> Result<SqliteQuery<'q>> {
+        let mut query = query::<Sqlite>(&self.statements);
+        for value in self.values.iter() {
+            query = bind(query, &value)?;
+        }
+        Ok(query)
+    }
+
+    /// Given a function with a query and each value from `values`, binds the value to the query.
+    pub fn bind_custom_values_to_query<V>(
+        &'q self,
+        values: impl Iterator<Item = V>,
+        bind: impl Fn(SqliteQuery<'q>, &V) -> Result<SqliteQuery<'q>>
+    ) -> Result<SqliteQuery<'q>> {
+        let mut query = query::<Sqlite>(&self.statements);
+        for value in values {
+            query = bind(query, &value)?;
+        }
+        Ok(query)
+    }
+
+    /// Given a function with q query and each value, binds the value to the query.
+    pub fn bind_to_query_as<Output: for<'r> FromRow<'r, SqliteRow>>(
+        &'q self,
+        bind: impl Fn(SqliteQueryAs<'q, Output>, &'q Value) -> Result<SqliteQueryAs<'q, Output>>
+    ) -> Result<SqliteQueryAs<'q, Output>> {
+        let mut query = query_as::<Sqlite, Output>(&self.statements);
+        for value in self.values.iter() {
+            query = bind(query, &value)?;
+        }
+        Ok(query)
     }
 }
 

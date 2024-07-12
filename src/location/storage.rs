@@ -1,7 +1,7 @@
 use anyhow::Result;
 use sqlx::{query, query_as, FromRow, Sqlite};
 
-use crate::{git::branch_name::{self, RoswaalOwnedGitBranchName}, utils::sqlite::RoswaalSqliteTransaction};
+use crate::{git::branch_name::{self, RoswaalOwnedGitBranchName}, utils::sqlite::{sqlite_repeat, RoswaalSqliteTransaction}};
 
 use super::{location::RoswaalLocation, name::RoswaalLocationName};
 
@@ -25,41 +25,35 @@ pub enum LoadLocationsFilter {
 impl LoadLocationsFilter {
     fn full_select_statement(&self) -> &'static str {
         match self {
-            Self::All => "SELECT * FROM Locations ORDER BY name, latitude",
-            Self::MergedOnly => {
-                "SELECT * FROM Locations WHERE unmerged_branch_name IS NULL ORDER BY name, latitude"
-            }
+            Self::All => statements::SELECT_ALL_LOCATIONS,
+            Self::MergedOnly => statements::SELECT_ALL_MERGED_LOCATIONS
         }
     }
 
     fn name_select_statement(&self) -> &'static str {
         match self {
-            Self::All => "SELECT name FROM Locations ORDER BY name, latitude",
-            Self::MergedOnly => {
-                "SELECT name FROM Locations WHERE unmerged_branch_name IS NULL ORDER BY name, latitude"
-            }
+            Self::All => statements::SELECT_ALL_LOCATION_NAMES,
+            Self::MergedOnly => statements::SELECT_ALL_MERGED_LOCATION_NAMES
         }
     }
 }
 
 impl <'a> RoswaalSqliteTransaction <'a> {
-    pub async fn merge_unmerged_locations(&mut self, branch_name: &RoswaalOwnedGitBranchName) -> Result<()> {
+    pub async fn merge_unmerged_locations(
+        &mut self,
+        branch_name: &RoswaalOwnedGitBranchName
+    ) -> Result<()> {
         let sqlite_location_names = query_as::<Sqlite, SqliteLocationName>(
-            "SELECT name FROM Locations WHERE unmerged_branch_name = ?;"
+            statements::SELECT_UNMERGED_LOCATION_NAMES_WITH_BRANCH
         )
         .bind(branch_name)
         .fetch_all(self.connection())
         .await?;
-        let update_statements = sqlite_location_names.iter().map(|_| UPDATE_MERGE_UNMERGED_STATEMENT)
-            .collect::<Vec<&str>>()
-            .join("\n");
-        let mut update_query = query::<Sqlite>(&update_statements);
-        for sqlite_name in sqlite_location_names.iter() {
-            update_query = update_query.bind(sqlite_name.name.clone())
-                .bind(branch_name)
-                .bind(sqlite_name.name.clone());
-        }
-        update_query.execute(self.connection()).await?;
+        sqlite_repeat(statements::MERGE_UNMERGED_LOCATION, &sqlite_location_names)
+            .bind_to_query(|q, sqlite_name| {
+                Ok(q.bind(sqlite_name.name.clone()).bind(branch_name).bind(sqlite_name.name.clone()))
+            })?
+            .execute(self.connection()).await?;
         Ok(())
     }
 
@@ -68,18 +62,16 @@ impl <'a> RoswaalSqliteTransaction <'a> {
         locations: &Vec<RoswaalLocation>,
         branch_name: &RoswaalOwnedGitBranchName
     ) -> Result<()> {
-        let statements = locations.iter()
-            .map(|_| SAVE_STATEMENT)
-            .collect::<Vec<&str>>()
-            .join("\n");
-        let mut bulk_insert_query = query::<Sqlite>(&statements);
-        for location in locations.iter() {
-            bulk_insert_query = bulk_insert_query.bind(location.coordinate().latitude())
-                .bind(location.coordinate().longitude())
-                .bind(&location.name().raw_value)
-                .bind(branch_name)
-        }
-        bulk_insert_query.execute(self.connection()).await?;
+        sqlite_repeat::<RoswaalLocation>(statements::INSERT_OR_REPLACE_LOCATION, locations)
+            .bind_to_query(|q, location| {
+                Ok(
+                    q.bind(location.coordinate().latitude())
+                        .bind(location.coordinate().longitude())
+                        .bind(&location.name().raw_value)
+                        .bind(branch_name)
+                )
+            })?
+            .execute(self.connection()).await?;
         Ok(())
     }
 
@@ -113,7 +105,8 @@ impl <'a> RoswaalSqliteTransaction <'a> {
     }
 }
 
-const SAVE_STATEMENT: &str = "
+mod statements {
+    pub const INSERT_OR_REPLACE_LOCATION: &str = "
 INSERT OR REPLACE INTO Locations (
     latitude,
     longitude,
@@ -126,10 +119,26 @@ INSERT OR REPLACE INTO Locations (
     ?
 );";
 
-const UPDATE_MERGE_UNMERGED_STATEMENT: &str = "
+    pub const MERGE_UNMERGED_LOCATION: &str = "
 DELETE FROM Locations WHERE name = ? AND unmerged_branch_name IS NULL;
 UPDATE Locations SET unmerged_branch_name = NULL WHERE unmerged_branch_name = ? AND name = ?;
 ";
+
+    pub const SELECT_UNMERGED_LOCATION_NAMES_WITH_BRANCH: &str =
+        "SELECT name FROM Locations WHERE unmerged_branch_name = ?;";
+
+    pub const SELECT_ALL_LOCATION_NAMES: &str =
+        "SELECT name FROM Locations ORDER BY name, latitude";
+
+    pub const SELECT_ALL_MERGED_LOCATION_NAMES: &str =
+        "SELECT name FROM Locations WHERE unmerged_branch_name IS NULL ORDER BY name, latitude;";
+
+    pub const SELECT_ALL_LOCATIONS: &str =
+        "SELECT * FROM Locations ORDER BY name, latitude";
+
+    pub const SELECT_ALL_MERGED_LOCATIONS: &str =
+        "SELECT * FROM Locations WHERE unmerged_branch_name IS NULL ORDER BY name, latitude;";
+}
 
 #[derive(FromRow, Debug)]
 struct SqliteLocationName {
