@@ -26,7 +26,7 @@ impl LoadAllLocationsStatus {
 
 #[cfg(test)]
 mod tests {
-    use crate::{git::{repo::RoswaalGitRepository, test_support::{with_clean_test_repo_access, TestGithubPullRequestOpen}}, is_case, location::location::RoswaalLocation, operations::{add_locations::AddLocationsStatus, load_all_locations::LoadAllLocationsStatus}, utils::sqlite::RoswaalSqlite};
+    use crate::{git::{branch_name, repo::RoswaalGitRepository, test_support::{with_clean_test_repo_access, TestGithubPullRequestOpen}}, is_case, location::location::RoswaalLocation, operations::{add_locations::AddLocationsStatus, close_branch::CloseBranchStatus, load_all_locations::LoadAllLocationsStatus}, utils::sqlite::RoswaalSqlite};
 
     #[tokio::test]
     async fn test_returns_no_locations_when_no_saved_locations() {
@@ -104,6 +104,26 @@ Test 2, -5.0, 5.0
                 &sqlite,
                 &pr_open
             ).await?;
+            let status = LoadAllLocationsStatus::from_stored_locations(&sqlite).await.unwrap();
+            assert_eq!(status, LoadAllLocationsStatus::NoLocations);
+            Ok(())
+        })
+        .await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn reports_no_loactions_when_no_merged_locations_and_all_unmerged_locations_are_closed() {
+        with_clean_test_repo_access(async {
+            let sqlite = RoswaalSqlite::in_memory().await.unwrap();
+            let locations_str = "
+Test 1, 50.0, 50.0
+Test 2, -5.0, 5.0
+                ";
+            let repo = RoswaalGitRepository::noop().await?;
+            let pr_open = TestGithubPullRequestOpen::new(false);
+            AddLocationsStatus::from_adding_locations(&locations_str, &repo, &sqlite, &pr_open).await?;
+            let branch_name = pr_open.most_recent_head_branch_name().await.unwrap();
+            CloseBranchStatus::from_closing_branch(&branch_name, &sqlite).await?;
             let status = LoadAllLocationsStatus::from_stored_locations(&sqlite).await.unwrap();
             assert_eq!(status, LoadAllLocationsStatus::NoLocations);
             Ok(())
