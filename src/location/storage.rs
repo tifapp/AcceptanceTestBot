@@ -39,6 +39,17 @@ impl LoadLocationsFilter {
 }
 
 impl <'a> RoswaalSqliteTransaction <'a> {
+    pub async fn close_add_locations_branch(
+        &mut self,
+        branch_name: &RoswaalOwnedGitBranchName
+    ) -> Result<()> {
+        query::<Sqlite>(statements::DELETE_LOCATIONS_WITH_BRANCH)
+            .bind(branch_name)
+            .execute(self.connection())
+            .await?;
+        Ok(())
+    }
+
     pub async fn merge_unmerged_locations(
         &mut self,
         branch_name: &RoswaalOwnedGitBranchName
@@ -138,6 +149,9 @@ UPDATE Locations SET unmerged_branch_name = NULL WHERE unmerged_branch_name = ? 
 
     pub const SELECT_ALL_MERGED_LOCATIONS: &str =
         "SELECT * FROM Locations WHERE unmerged_branch_name IS NULL ORDER BY name, latitude;";
+
+    pub const DELETE_LOCATIONS_WITH_BRANCH: &str =
+        "DELETE FROM Locations WHERE unmerged_branch_name = ?;";
 }
 
 #[derive(FromRow, Debug)]
@@ -300,6 +314,22 @@ mod tests {
         let expected_locations = vec![
             RoswaalStoredLocation { location: new_york, unmerged_branch_name: None }
         ];
+        assert_eq!(saved_locations, expected_locations)
+    }
+
+    #[tokio::test]
+    async fn save_and_close_location_branch_removes_location() {
+        let sqlite = RoswaalSqlite::in_memory().await.unwrap();
+        let mut transaction = sqlite.transaction().await.unwrap();
+
+        let branch_name = RoswaalOwnedGitBranchName::new("test");
+        let locations = vec![RoswaalLocation::new_without_validation("New York", 45.0, 45.0)];
+        transaction.save_locations(&locations, &branch_name).await.unwrap();
+        transaction.close_add_locations_branch(&branch_name).await.unwrap();
+
+        let saved_locations = transaction.locations_in_alphabetical_order(LoadLocationsFilter::All)
+            .await.unwrap();
+        let expected_locations = vec![];
         assert_eq!(saved_locations, expected_locations)
     }
 }
