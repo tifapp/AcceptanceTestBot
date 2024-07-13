@@ -50,7 +50,8 @@ impl RoswaalGitRepositoryMetadata {
         Self {
             base_branch_name: base_branch_name.to_string(),
             repo_root_dir_path: "./FitnessProjectTest".to_string(),
-            ssh_private_key_home_path: "./.ssh/id_mhayes".to_string(),
+            ssh_private_key_home_path: env::var("TEST_SSH_PRIVATE_KEY_HOME_PATH")
+                .expect("Ensure to the set the TEST_SSH_PRIVATE_KEY_HOME_PATH variable in your .env file to the home path of your private ssh-key (Ex. ./.ssh/id_rsa)"),
             test_cases_root_dir_path: "./FitnessProjectTest/roswaal".to_string(),
             add_test_cases_pr: |cases, head_branch| {
                 GithubPullRequest::for_test_cases_tif_react_frontend(cases, head_branch)
@@ -84,6 +85,7 @@ impl RoswaalGitRepositoryMetadata {
     /// the remote repository.
     pub fn ssh_private_key_path(&self) -> String {
         let home = env::var("HOME").unwrap();
+        println!("{} {}", home, self.ssh_private_key_home_path);
         format!("{}/{}", home, self.ssh_private_key_home_path)
     }
 
