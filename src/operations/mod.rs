@@ -5,3 +5,4 @@ pub mod add_tests;
 pub mod search_tests;
 pub mod remove_tests;
 pub mod close_branch;
+pub mod save_progress;

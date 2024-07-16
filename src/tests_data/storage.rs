@@ -20,6 +20,10 @@ impl RoswaalStoredTest {
     pub fn name(&self) -> &str {
         &self.name
     }
+
+    pub fn command_failure_ordinal(&self) -> Option<RoswaalTestCommandOrdinal> {
+        self.command_failure_ordinal
+    }
 }
 
 impl <'a> RoswaalSqliteTransaction<'a> {
