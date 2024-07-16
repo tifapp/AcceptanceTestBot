@@ -42,7 +42,11 @@ CREATE TABLE IF NOT EXISTS Tests (
     name TEXT NOT NULL,
     description TEXT,
     unmerged_branch_name TEXT,
+    error_message TEXT,
+    error_stack_trace TEXT,
+    command_failure_ordinal INTEGER,
     creation_date DATETIME NOT NULL DEFAULT (unixepoch()),
+    last_run_date DATETIME,
     UNIQUE(name, unmerged_branch_name)
 );
 CREATE TABLE IF NOT EXISTS TestSteps (
@@ -50,7 +54,6 @@ CREATE TABLE IF NOT EXISTS TestSteps (
     test_id INTEGER NOT NULL,
     content TEXT NOT_NULL,
     ordinal INTEGER NOT NULL,
-    did_pass INT2 NOT NULL DEFAULT FALSE,
     creation_date DATETIME NOT NULL DEFAULT (unixepoch()),
     UNIQUE(test_id, content),
     CONSTRAINT fk_test FOREIGN KEY(test_id) REFERENCES Tests(id) ON DELETE CASCADE
@@ -58,6 +61,7 @@ CREATE TABLE IF NOT EXISTS TestSteps (
 CREATE TABLE IF NOT EXISTS StagedTestRemovals (
     name TEXT NOT NULL,
     unmerged_branch_name TEXT NOT NULL,
+    creation_date DATETIME NOT NULL DEFAULT (unixepoch()),
     PRIMARY KEY(name, unmerged_branch_name)
 );
             "

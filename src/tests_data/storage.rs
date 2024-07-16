@@ -2,32 +2,69 @@ use std::{fmt::format, iter::zip};
 
 use crate::{git::branch_name::{self, RoswaalOwnedGitBranchName}, language::test::{RoswaalTest, RoswaalTestCommand}, utils::sqlite::{sqlite_repeat, SqliteRepeat, RoswaalSqliteTransaction}};
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use sqlx::{query, query_as, FromRow, Sqlite};
 
-use super::{progress::RoswaalTestProgressErrorDescription, query::{RoswaalSearchTestsQuery, RoswaalTestNamesString}};
+use super::{ordinal::RoswaalTestCommandOrdinal, progress::{RoswaalTestProgress, RoswaalTestProgressErrorDescription}, query::{RoswaalSearchTestsQuery, RoswaalTestNamesString}};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct RoswaalStoredTest {
     name: String,
     description: Option<String>,
-    steps: Vec<RoswaalStoredTestCommand>,
+    steps: Vec<RoswaalTestCommand>,
+    command_failure_ordinal: Option<RoswaalTestCommandOrdinal>,
     error: Option<RoswaalTestProgressErrorDescription>,
-    unmerged_branch_name: Option<RoswaalOwnedGitBranchName>
+    unmerged_branch_name: Option<RoswaalOwnedGitBranchName>,
+    last_run_date: Option<DateTime<Utc>>
+}
+
+impl RoswaalStoredTest {
+    fn from_sqlite_row(sqlite_test: &SqliteStoredTestRow, steps: Vec<RoswaalTestCommand>) -> Self {
+        let error = (sqlite_test.error_message.clone(), sqlite_test.error_stack_trace.clone());
+        Self {
+            name: sqlite_test.test_name.clone(),
+            description: sqlite_test.description.clone(),
+            steps,
+            unmerged_branch_name: sqlite_test.unmerged_branch_name.clone(),
+            command_failure_ordinal: sqlite_test.command_failure_ordinal,
+            error: if let (Some(message), Some(stack_trace)) = error {
+                Some(RoswaalTestProgressErrorDescription::new(message, stack_trace))
+            } else {
+                None
+            },
+            last_run_date: sqlite_test.last_run_date
+        }
+    }
 }
 
 impl RoswaalStoredTest {
     pub fn name(&self) -> &str {
         &self.name
     }
-}
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct RoswaalStoredTestCommand {
-    command: RoswaalTestCommand,
-    did_pass: bool
+    pub fn command_failure_ordinal(&self) -> Option<RoswaalTestCommandOrdinal> {
+        self.command_failure_ordinal
+    }
 }
 
 impl <'a> RoswaalSqliteTransaction<'a> {
+    pub async fn save_test_progess(
+        &mut self,
+        progress: &Vec<RoswaalTestProgress>
+    ) -> Result<()> {
+        sqlite_repeat(statements::UPDATE_TEST_PROGRESS, progress)
+            .bind_to_query(|q, progress| {
+                Ok(
+                    q.bind(progress.command_failure_ordinal())
+                        .bind(progress.error_message())
+                        .bind(progress.error_stack_trace())
+                        .bind(progress.test_name()))
+            })?
+            .execute(self.connection())
+            .await?;
+        Ok(())
+    }
+
     pub async fn close_remove_tests_branch(
         &mut self,
         branch_name: &RoswaalOwnedGitBranchName
@@ -122,8 +159,9 @@ impl <'a> RoswaalSqliteTransaction<'a> {
             &(0..tests.iter().flat_map(|t| t.commands()).count()).collect()
         )
         .bind_custom_values_to_query(zip(tests.iter(), id_rows.iter()), |mut q, (test, id_row)| {
-            for (ordinal, command) in test.commands().iter().enumerate() {
-                q = q.bind(id_row.id).bind(serde_json::to_string(&command)?).bind(ordinal as i32)
+            for (raw_ordinal, command) in test.commands().iter().enumerate() {
+                let ordinal = RoswaalTestCommandOrdinal::new(raw_ordinal as i32);
+                q = q.bind(id_row.id).bind(serde_json::to_string(&command)?).bind(ordinal)
             }
             Ok(q)
         })?
@@ -153,27 +191,15 @@ impl <'a> RoswaalSqliteTransaction<'a> {
             }
         };
         if sqlite_tests.is_empty() { return Ok(vec![]) }
-        let mut test = RoswaalStoredTest {
-            name: sqlite_tests[0].test_name.clone(),
-            description: sqlite_tests[0].description.clone(),
-            steps: vec![],
-            unmerged_branch_name: sqlite_tests[0].unmerged_branch_name.clone(),
-            error: None
-        };
+        let mut test = RoswaalStoredTest::from_sqlite_row(&sqlite_tests[0], vec![]);
         let mut tests = Vec::<RoswaalStoredTest>::new();
         for sqlite_test in sqlite_tests {
             let command = serde_json::from_str::<RoswaalTestCommand>(&sqlite_test.command_content)?;
             if sqlite_test.is_separate_from(&test) {
                 tests.push(test);
-                test = RoswaalStoredTest {
-                    name: sqlite_test.test_name.clone(),
-                    description: sqlite_test.description.clone(),
-                    steps: vec![RoswaalStoredTestCommand { command, did_pass: sqlite_test.did_pass }],
-                    unmerged_branch_name: sqlite_test.unmerged_branch_name.clone(),
-                    error: None
-                };
+                test = RoswaalStoredTest::from_sqlite_row(&sqlite_test, vec![command]);
             } else {
-                test.steps.push(RoswaalStoredTestCommand { command, did_pass: sqlite_test.did_pass })
+                test.steps.push(command)
             };
         }
         tests.push(test);
@@ -199,8 +225,11 @@ SELECT
     t.name AS test_name,
     t.description,
     t.unmerged_branch_name,
-    c.content AS command_content,
-    c.did_pass
+    t.command_failure_ordinal,
+    t.error_message,
+    t.error_stack_trace,
+    t.last_run_date,
+    c.content AS command_content
 FROM Tests t
 INNER JOIN TestSteps c ON t.id = c.test_id
 ORDER BY test_name, c.ordinal;
@@ -232,24 +261,38 @@ INSERT OR REPLACE INTO Tests (
 ) RETURNING id;";
 
     pub const DELETE_STAGED_TEST_REMOVALS_WITH_BRANCH: &str =
-        "DELETE FROM StagedTestRemovals WHERE unmerged_branch_name = ?";
+        "DELETE FROM StagedTestRemovals WHERE unmerged_branch_name = ?;";
 
     pub const DELETE_UNMERGED_TESTS_WITH_BRANCH: &str =
-        "DELETE FROM Tests WHERE unmerged_branch_name = ?";
+        "DELETE FROM Tests WHERE unmerged_branch_name = ?;";
+
+    pub const UPDATE_TEST_PROGRESS: &str = "\
+UPDATE Tests
+SET
+    command_failure_ordinal = ?,
+    error_message = ?,
+    error_stack_trace = ?,
+    last_run_date = unixepoch()
+WHERE
+    name = ? AND unmerged_branch_name IS NULL;
+";
 
     pub fn select_tests_in_alphabetical_order(count: usize) -> String {
         format!("
-    SELECT
-        t.name AS test_name,
-        t.description,
-        t.unmerged_branch_name,
-        c.content AS command_content,
-        c.did_pass
-    FROM Tests t
-    INNER JOIN TestSteps c ON t.id = c.test_id
-    WHERE LOWER(test_name) IN {}
-    ORDER BY test_name, c.ordinal;
-    ", sqlite_array_fields(count))
+SELECT
+    t.name AS test_name,
+    t.description,
+    t.unmerged_branch_name,
+    t.command_failure_ordinal,
+    t.error_message,
+    t.error_stack_trace,
+    t.last_run_date,
+    c.content AS command_content
+FROM Tests t
+INNER JOIN TestSteps c ON t.id = c.test_id
+WHERE LOWER(test_name) IN {}
+ORDER BY test_name, c.ordinal;
+", sqlite_array_fields(count))
     }
 
     pub fn delete_tests(count: usize) -> String {
@@ -276,7 +319,10 @@ struct SqliteStoredTestRow {
     description: Option<String>,
     unmerged_branch_name: Option<RoswaalOwnedGitBranchName>,
     command_content: String,
-    did_pass: bool
+    command_failure_ordinal: Option<RoswaalTestCommandOrdinal>,
+    error_message: Option<String>,
+    error_stack_trace: Option<String>,
+    last_run_date: Option<DateTime<Utc>>
 }
 
 impl SqliteStoredTestRow {
@@ -290,7 +336,7 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-    use crate::{git::branch_name::{self, RoswaalOwnedGitBranchName}, language::test::{RoswaalTest, RoswaalTestCommand}, location::name::RoswaalLocationName, utils::sqlite::RoswaalSqlite};
+    use crate::{git::branch_name::{self, RoswaalOwnedGitBranchName}, language::test::{RoswaalTest, RoswaalTestCommand}, location::name::RoswaalLocationName, tests_data::{ordinal::RoswaalTestCommandOrdinal}, utils::sqlite::RoswaalSqlite};
 
     #[tokio::test]
     async fn test_store_and_retrieve_unmerged_tests() {
@@ -331,37 +377,32 @@ mod tests {
                 name: "Test 1".to_string(),
                 description: None,
                 steps: vec![
-                    RoswaalStoredTestCommand {
-                        command: RoswaalTestCommand::Step {
-                            name: "Step 1".to_string(),
-                            requirement: "Requirement 1".to_string()
-                        },
-                        did_pass: false
+                    RoswaalTestCommand::Step {
+                        name: "Step 1".to_string(),
+                        requirement: "Requirement 1".to_string()
                     },
-                    RoswaalStoredTestCommand {
-                        command: RoswaalTestCommand::SetLocation {
-                            location_name: RoswaalLocationName::from_str("test").unwrap()
-                        },
-                        did_pass: false
+                    RoswaalTestCommand::SetLocation {
+                        location_name: RoswaalLocationName::from_str("test").unwrap()
                     }
                 ],
                 error: None,
-                unmerged_branch_name: Some(branch_name.clone())
+                command_failure_ordinal: None,
+                unmerged_branch_name: Some(branch_name.clone()),
+                last_run_date: None
             },
             RoswaalStoredTest {
                 name: "Test 2".to_string(),
                 description: None,
                 steps: vec![
-                    RoswaalStoredTestCommand {
-                        command: RoswaalTestCommand::Step {
-                            name: "Step A".to_string(),
-                            requirement: "Requirement A".to_string()
-                        },
-                        did_pass: false
+                    RoswaalTestCommand::Step {
+                        name: "Step A".to_string(),
+                        requirement: "Requirement A".to_string()
                     }
                 ],
                 error: None,
-                unmerged_branch_name: Some(branch_name.clone())
+                command_failure_ordinal: None,
+                unmerged_branch_name: Some(branch_name.clone()),
+                last_run_date: None
             }
         ];
         assert_eq!(stored_tests, expected_tests)
@@ -406,16 +447,15 @@ mod tests {
                 name: "Test".to_string(),
                 description: None,
                 steps: vec![
-                    RoswaalStoredTestCommand {
-                        command: RoswaalTestCommand::Step {
-                            name: "Step A".to_string(),
-                            requirement: "Requirement A".to_string()
-                        },
-                        did_pass: false
+                    RoswaalTestCommand::Step {
+                        name: "Step A".to_string(),
+                        requirement: "Requirement A".to_string()
                     }
                 ],
                 error: None,
-                unmerged_branch_name: Some(branch_name.clone())
+                command_failure_ordinal: None,
+                unmerged_branch_name: Some(branch_name.clone()),
+                last_run_date: None
             }
         ];
         assert_eq!(stored_tests, expected_tests)
@@ -461,31 +501,29 @@ mod tests {
                 name: "Test".to_string(),
                 description: None,
                 steps: vec![
-                    RoswaalStoredTestCommand {
-                        command: RoswaalTestCommand::Step {
-                            name: "Step 1".to_string(),
-                            requirement: "Requirement 1".to_string()
-                        },
-                        did_pass: false
+                    RoswaalTestCommand::Step {
+                        name: "Step 1".to_string(),
+                        requirement: "Requirement 1".to_string()
                     }
                 ],
                 error: None,
-                unmerged_branch_name: Some(branch_name1.clone())
+                command_failure_ordinal: None,
+                unmerged_branch_name: Some(branch_name1.clone()),
+                last_run_date: None
             },
             RoswaalStoredTest {
                 name: "Test".to_string(),
                 description: None,
                 steps: vec![
-                    RoswaalStoredTestCommand {
-                        command: RoswaalTestCommand::Step {
-                            name: "Step A".to_string(),
-                            requirement: "Requirement A".to_string()
-                        },
-                        did_pass: false
+                    RoswaalTestCommand::Step {
+                        name: "Step A".to_string(),
+                        requirement: "Requirement A".to_string()
                     }
                 ],
                 error: None,
-                unmerged_branch_name: Some(branch_name2.clone())
+                command_failure_ordinal: None,
+                unmerged_branch_name: Some(branch_name2.clone()),
+                last_run_date: None
             }
         ];
         assert_eq!(stored_tests, expected_tests)
@@ -591,16 +629,15 @@ mod tests {
                 name: "Test".to_string(),
                 description: None,
                 steps: vec![
-                    RoswaalStoredTestCommand {
-                        command: RoswaalTestCommand::Step {
-                            name: "Step A".to_string(),
-                            requirement: "Requirement A".to_string()
-                        },
-                        did_pass: false
+                    RoswaalTestCommand::Step {
+                        name: "Step A".to_string(),
+                        requirement: "Requirement A".to_string()
                     }
                 ],
                 error: None,
-                unmerged_branch_name: None
+                unmerged_branch_name: None,
+                command_failure_ordinal: None,
+                last_run_date: None
             }
         ];
         assert_eq!(stored_tests, expected_tests)
@@ -839,5 +876,86 @@ L
         ).await.unwrap();
         let expected_test_names = vec!["Zanza The Divine"];
         assert_eq!(stored_tests.iter().map(|t| t.name()).collect::<Vec<&str>>(), expected_test_names)
+    }
+
+    #[tokio::test]
+    async fn saves_test_progress_for_merged_tests() {
+        let branch_name = RoswaalOwnedGitBranchName::new("test");
+        let sqlite = RoswaalSqlite::in_memory().await.unwrap();
+        let mut transaction = sqlite.transaction().await.unwrap();
+        let mut tests = vec![
+            RoswaalTest::new(
+                "Dazai Is Insane".to_string(),
+                None,
+                vec![
+                    RoswaalTestCommand::Step {
+                        name: "Step 1".to_string(),
+                        requirement: "Requirement 1".to_string()
+                    },
+                    RoswaalTestCommand::SetLocation {
+                        location_name: RoswaalLocationName::from_str("test").unwrap()
+                    }
+                ]
+            ),
+            RoswaalTest::new(
+                "Zanza The Divine".to_string(),
+                None,
+                vec![
+                    RoswaalTestCommand::Step {
+                        name: "Step A".to_string(),
+                        requirement: "Requirement A".to_string()
+                    }
+                ]
+            )
+        ];
+        transaction.save_tests(&tests, &branch_name).await.unwrap();
+        transaction.merge_unmerged_tests(&branch_name).await.unwrap();
+        let branch_name2 = RoswaalOwnedGitBranchName::new("test-2");
+        tests = vec![
+            RoswaalTest::new(
+                "Zanza The Divine".to_string(),
+                None,
+                vec![
+                    RoswaalTestCommand::Step {
+                        name: "Step B".to_string(),
+                        requirement: "Requirement C".to_string()
+                    }
+                ]
+            )
+        ];
+        transaction.save_tests(&tests, &branch_name2).await.unwrap();
+
+        let progress = vec![
+            RoswaalTestProgress::new(
+                "Zanza The Divine".to_string(),
+                Some(RoswaalTestCommandOrdinal::new(0)),
+                Some(
+                    RoswaalTestProgressErrorDescription::new(
+                        "Device died".to_string(),
+                        "Some stack trace...".to_string()
+                    )
+                )
+            ),
+            RoswaalTestProgress::new(
+                "Dazai Is Insane".to_string(),
+                None,
+                None
+            )
+        ];
+        transaction.save_test_progess(&progress).await.unwrap();
+        let stored_tests = transaction.tests_in_alphabetical_order(
+            &RoswaalSearchTestsQuery::AllTests
+        )
+        .await
+        .unwrap();
+        assert_eq!(stored_tests[0].command_failure_ordinal, None);
+        assert_eq!(stored_tests[1].command_failure_ordinal, Some(RoswaalTestCommandOrdinal::new(0)));
+        assert_eq!(stored_tests[2].command_failure_ordinal, None);
+        assert!(stored_tests[0].error.is_none());
+        assert!(stored_tests[1].error.is_some());
+        assert!(stored_tests[2].error.is_none());
+        assert!(stored_tests[0].last_run_date.is_some());
+        assert!(stored_tests[1].last_run_date.is_some());
+        assert!(stored_tests[2].last_run_date.is_none());
     }
 }
