@@ -2,6 +2,7 @@ use std::{fmt::format, iter::zip};
 
 use crate::{git::branch_name::{self, RoswaalOwnedGitBranchName}, language::test::{RoswaalTest, RoswaalTestCommand}, utils::sqlite::{sqlite_repeat, SqliteRepeat, RoswaalSqliteTransaction}};
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use sqlx::{query, query_as, FromRow, Sqlite};
 
 use super::{ordinal::RoswaalTestCommandOrdinal, progress::{RoswaalTestProgress, RoswaalTestProgressErrorDescription}, query::{RoswaalSearchTestsQuery, RoswaalTestNamesString}};
@@ -13,7 +14,27 @@ pub struct RoswaalStoredTest {
     steps: Vec<RoswaalTestCommand>,
     command_failure_ordinal: Option<RoswaalTestCommandOrdinal>,
     error: Option<RoswaalTestProgressErrorDescription>,
-    unmerged_branch_name: Option<RoswaalOwnedGitBranchName>
+    unmerged_branch_name: Option<RoswaalOwnedGitBranchName>,
+    last_run_date: Option<DateTime<Utc>>
+}
+
+impl RoswaalStoredTest {
+    fn from_sqlite_row(sqlite_test: &SqliteStoredTestRow, steps: Vec<RoswaalTestCommand>) -> Self {
+        let error = (sqlite_test.error_message.clone(), sqlite_test.error_stack_trace.clone());
+        Self {
+            name: sqlite_test.test_name.clone(),
+            description: sqlite_test.description.clone(),
+            steps,
+            unmerged_branch_name: sqlite_test.unmerged_branch_name.clone(),
+            command_failure_ordinal: sqlite_test.command_failure_ordinal,
+            error: if let (Some(message), Some(stack_trace)) = error {
+                Some(RoswaalTestProgressErrorDescription::new(message, stack_trace))
+            } else {
+                None
+            },
+            last_run_date: sqlite_test.last_run_date
+        }
+    }
 }
 
 impl RoswaalStoredTest {
@@ -186,24 +207,6 @@ impl <'a> RoswaalSqliteTransaction<'a> {
     }
 }
 
-impl RoswaalStoredTest {
-    fn from_sqlite_row(sqlite_test: &SqliteStoredTestRow, steps: Vec<RoswaalTestCommand>) -> Self {
-        let error = (sqlite_test.error_message.clone(), sqlite_test.error_stack_trace.clone());
-        Self {
-            name: sqlite_test.test_name.clone(),
-            description: sqlite_test.description.clone(),
-            steps,
-            unmerged_branch_name: sqlite_test.unmerged_branch_name.clone(),
-            command_failure_ordinal: sqlite_test.command_failure_ordinal,
-            error: if let (Some(m), Some(s)) = error {
-                Some(RoswaalTestProgressErrorDescription::new(m, s))
-            } else {
-                None
-            }
-        }
-    }
-}
-
 mod statements {
     use crate::utils::sqlite::sqlite_array_fields;
 
@@ -225,6 +228,7 @@ SELECT
     t.command_failure_ordinal,
     t.error_message,
     t.error_stack_trace,
+    t.last_run_date,
     c.content AS command_content
 FROM Tests t
 INNER JOIN TestSteps c ON t.id = c.test_id
@@ -267,7 +271,8 @@ UPDATE Tests
 SET
     command_failure_ordinal = ?,
     error_message = ?,
-    error_stack_trace = ?
+    error_stack_trace = ?,
+    last_run_date = unixepoch()
 WHERE
     name = ? AND unmerged_branch_name IS NULL;
 ";
@@ -281,6 +286,7 @@ SELECT
     t.command_failure_ordinal,
     t.error_message,
     t.error_stack_trace,
+    t.last_run_date,
     c.content AS command_content
 FROM Tests t
 INNER JOIN TestSteps c ON t.id = c.test_id
@@ -315,7 +321,8 @@ struct SqliteStoredTestRow {
     command_content: String,
     command_failure_ordinal: Option<RoswaalTestCommandOrdinal>,
     error_message: Option<String>,
-    error_stack_trace: Option<String>
+    error_stack_trace: Option<String>,
+    last_run_date: Option<DateTime<Utc>>
 }
 
 impl SqliteStoredTestRow {
@@ -380,7 +387,8 @@ mod tests {
                 ],
                 error: None,
                 command_failure_ordinal: None,
-                unmerged_branch_name: Some(branch_name.clone())
+                unmerged_branch_name: Some(branch_name.clone()),
+                last_run_date: None
             },
             RoswaalStoredTest {
                 name: "Test 2".to_string(),
@@ -393,7 +401,8 @@ mod tests {
                 ],
                 error: None,
                 command_failure_ordinal: None,
-                unmerged_branch_name: Some(branch_name.clone())
+                unmerged_branch_name: Some(branch_name.clone()),
+                last_run_date: None
             }
         ];
         assert_eq!(stored_tests, expected_tests)
@@ -445,7 +454,8 @@ mod tests {
                 ],
                 error: None,
                 command_failure_ordinal: None,
-                unmerged_branch_name: Some(branch_name.clone())
+                unmerged_branch_name: Some(branch_name.clone()),
+                last_run_date: None
             }
         ];
         assert_eq!(stored_tests, expected_tests)
@@ -498,7 +508,8 @@ mod tests {
                 ],
                 error: None,
                 command_failure_ordinal: None,
-                unmerged_branch_name: Some(branch_name1.clone())
+                unmerged_branch_name: Some(branch_name1.clone()),
+                last_run_date: None
             },
             RoswaalStoredTest {
                 name: "Test".to_string(),
@@ -511,7 +522,8 @@ mod tests {
                 ],
                 error: None,
                 command_failure_ordinal: None,
-                unmerged_branch_name: Some(branch_name2.clone())
+                unmerged_branch_name: Some(branch_name2.clone()),
+                last_run_date: None
             }
         ];
         assert_eq!(stored_tests, expected_tests)
@@ -624,7 +636,8 @@ mod tests {
                 ],
                 error: None,
                 unmerged_branch_name: None,
-                command_failure_ordinal: None
+                command_failure_ordinal: None,
+                last_run_date: None
             }
         ];
         assert_eq!(stored_tests, expected_tests)
@@ -941,5 +954,8 @@ L
         assert!(stored_tests[0].error.is_none());
         assert!(stored_tests[1].error.is_some());
         assert!(stored_tests[2].error.is_none());
+        assert!(stored_tests[0].last_run_date.is_some());
+        assert!(stored_tests[1].last_run_date.is_some());
+        assert!(stored_tests[2].last_run_date.is_none());
     }
 }

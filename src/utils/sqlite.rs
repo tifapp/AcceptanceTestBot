@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS Tests (
     error_stack_trace TEXT,
     command_failure_ordinal INTEGER,
     creation_date DATETIME NOT NULL DEFAULT (unixepoch()),
+    last_run_date DATETIME,
     UNIQUE(name, unmerged_branch_name)
 );
 CREATE TABLE IF NOT EXISTS TestSteps (
