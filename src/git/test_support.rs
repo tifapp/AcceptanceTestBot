@@ -5,6 +5,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use once_cell::sync::Lazy;
 use std::future::Future;
 use tokio::process::Command;
+use dotenv::dotenv;
 
 #[cfg(test)]
 use tokio::sync::Mutex;
@@ -152,6 +153,7 @@ static TEST_REPO_LOCK: Lazy<Arc<Mutex<()>>> = Lazy::new(|| Arc::new(Mutex::new((
 #[cfg(test)]
 pub async fn with_clean_test_repo_access(work: impl Future<Output = Result<()>>) -> Result<()> {
     let guard = TEST_REPO_LOCK.lock().await;
+    dotenv()?;
     Command::new("./reset_test_repo.sh").spawn()?.wait().await?;
     let result = work.await;
     drop(guard);
