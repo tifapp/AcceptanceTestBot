@@ -1,4 +1,4 @@
-use super::{blocks::_SlackBlocks, primitive_view::PrimitiveView, slack_view::SlackView};
+use super::{blocks::_SlackBlocks, empty_view::EmptyView, primitive_view::PrimitiveView, slack_view::SlackView};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct _FlatChainSlackView<Base: SlackView, Other: SlackView> {
@@ -15,7 +15,9 @@ impl <Base: SlackView + 'static, Other: SlackView + 'static>
 
 impl <Base: SlackView + 'static, Other: SlackView + 'static> SlackView
     for _FlatChainSlackView<Base, Other> {
-    fn slack_body(&self) -> impl SlackView { PrimitiveView::empty() }
+    fn slack_body(&self) -> impl SlackView {
+        EmptyView
+    }
 
     fn _push_blocks_into(&self, slack_blocks: &mut _SlackBlocks) {
         self.base._push_blocks_into(slack_blocks);

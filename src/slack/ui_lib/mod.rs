@@ -5,3 +5,4 @@ pub mod slack_view;
 pub mod test_support;
 pub mod primitive_view;
 pub mod flat_chain_view;
+pub mod empty_view;
