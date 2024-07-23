@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use serde::Serialize;
 
-use super::{primitive_view::PrimitiveView, slack_view::SlackView};
+use super::{primitive_view::_PrimitiveView, slack_view::SlackView};
 
 /// A section component.
 #[derive(Debug, PartialEq, Eq, Serialize)]
@@ -24,7 +24,7 @@ impl SlackSection {
 
 impl SlackView for SlackSection {
     fn slack_body(&self) -> impl SlackView {
-        PrimitiveView::new(self)
+        _PrimitiveView::new(self)
     }
 }
 
@@ -54,7 +54,7 @@ pub const SlackDivider: _SlackDivider = _SlackDivider { _type: "divider" };
 
 impl SlackView for _SlackDivider {
     fn slack_body(&self) -> impl SlackView {
-        PrimitiveView::new(self)
+        _PrimitiveView::new(self)
     }
 }
 

@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use super::{blocks::_SlackBlocks, slack_view::SlackView};
+use super::{blocks::{SlackBlocks, _SlackBlocks}, slack_view::SlackView};
 
 /// A slack message.
 ///
@@ -9,7 +9,7 @@ use super::{blocks::_SlackBlocks, slack_view::SlackView};
 pub struct SlackMessage {
     #[serde(rename = "channel")]
     channel_id: String,
-    blocks: _SlackBlocks
+    blocks: SlackBlocks
 }
 
 impl SlackMessage {
@@ -25,8 +25,6 @@ impl SlackMessage {
 
     /// Constructs a slack message from a channel id and `SlackView`.
     pub fn new(channel_id: &str, view: &impl SlackView) -> Self {
-        let mut blocks = _SlackBlocks::new();
-        view._push_blocks_into(&mut blocks);
-        Self { channel_id: channel_id.to_string(), blocks }
+        Self { channel_id: channel_id.to_string(), blocks: SlackBlocks::render(view) }
     }
 }
