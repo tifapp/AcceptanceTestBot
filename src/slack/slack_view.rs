@@ -1,12 +1,10 @@
-use serde::Serialize;
-
-use super::primitive_views::{AnySlackView, _FlatChainSlackView};
+use super::{blocks::_SlackBlocks, primitive_views::_FlatChainSlackView};
 
 /// A trait for implementing a slack view.
 ///
 /// Slack views are composed of blocks that are serialized to JSON. Views are implemented using
 /// the `slack_body` method, where they must return another `SlackView`.
-pub trait SlackView: Serialize + Sized {
+pub trait SlackView: Sized {
     /// Returns another `SlackView` based on the content of this view.
     fn slack_body(&self) -> impl SlackView;
 
@@ -21,12 +19,7 @@ pub trait SlackView: Serialize + Sized {
         _FlatChainSlackView::new(self, other)
     }
 
-    /// Type erases this view.
-    fn erase_to_any_view(&self) -> AnySlackView {
-        AnySlackView::from(self)
-    }
-
-    fn _flat_deep_subviews(&self) -> Vec<AnySlackView> {
-        vec![self.erase_to_any_view()]
+    fn _push_blocks_into(&self, slack_blocks: &mut _SlackBlocks) {
+        slack_blocks.push_view(self)
     }
 }

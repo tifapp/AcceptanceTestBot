@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use serde::{ser::SerializeSeq, Serialize, Serializer};
 use serde_json::json;
 
-use super::slack_view::SlackView;
+use super::{blocks::_SlackBlocks, slack_view::SlackView};
 
 /// A section component.
 #[derive(Debug, PartialEq, Eq, Serialize)]
@@ -24,7 +24,7 @@ impl SlackSection {
 }
 
 impl SlackView for SlackSection {
-    fn slack_body(&self) -> impl SlackView { _PrimitiveView }
+    fn slack_body(&self) -> impl SlackView { PrimitiveView::new(self) }
 }
 
 /// Slack Markdown Text for use in a Section.
@@ -42,7 +42,7 @@ impl SlackMarkdownText {
 }
 
 impl SlackView for SlackMarkdownText {
-    fn slack_body(&self) -> impl SlackView { _PrimitiveView }
+    fn slack_body(&self) -> impl SlackView { PrimitiveView::new(self) }
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize)]
@@ -56,7 +56,7 @@ pub struct _SlackDivider {
 pub const SlackDivider: _SlackDivider = _SlackDivider { _type: "divider" };
 
 impl SlackView for _SlackDivider {
-    fn slack_body(&self) -> impl SlackView { _PrimitiveView }
+    fn slack_body(&self) -> impl SlackView { PrimitiveView::new(self) }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -72,72 +72,51 @@ impl <Base: SlackView + 'static, Other: SlackView + 'static>
     }
 }
 
-impl <Base: SlackView + 'static, Other: SlackView + 'static> Serialize
-    for _FlatChainSlackView<Base, Other> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-        let mut views = self.base._flat_deep_subviews();
-        views.append(&mut self.other._flat_deep_subviews());
-        let mut seq = serializer.serialize_seq(Some(views.len()))?;
-        for view in views {
-            seq.serialize_element(&view)?;
-        }
-        seq.end()
-    }
-}
-
 impl <Base: SlackView + 'static, Other: SlackView + 'static> SlackView
     for _FlatChainSlackView<Base, Other> {
-    fn slack_body(&self) -> impl SlackView { _PrimitiveView }
+    fn slack_body(&self) -> impl SlackView { PrimitiveView::empty() }
 
-    fn _flat_deep_subviews(&self) -> Vec<AnySlackView> {
-        let mut children = Vec::<AnySlackView>::new();
-        children.append(&mut self.base._flat_deep_subviews());
-        children.append(&mut self.other._flat_deep_subviews());
-        children
+    fn _push_blocks_into(&self, slack_blocks: &mut _SlackBlocks) {
+        self.base._push_blocks_into(slack_blocks);
+        self.other._push_blocks_into(slack_blocks)
     }
-}
-
-/// A type-erased Slack View.
-#[derive(Debug)]
-pub struct AnySlackView {
-    json: serde_json::Value
-}
-
-impl AnySlackView {
-    pub fn from(view: &impl SlackView) -> Self {
-        Self { json: json!(view) }
-    }
-}
-
-impl Serialize for AnySlackView {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-        self.json.serialize(serializer)
-    }
-}
-
-impl SlackView for AnySlackView {
-    fn slack_body(&self) -> impl SlackView { _PrimitiveView }
 }
 
 #[derive(Debug)]
-struct _PrimitiveView;
+pub(super) struct PrimitiveView {
+    json: Option<serde_json::Value>
+}
 
-impl Serialize for _PrimitiveView {
-    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
-        panic!("A primitive view cannot be serialized. Avoid directly calling the slack_body method on views, as it may return a primitive view.")
+impl PrimitiveView {
+    fn new(view: &(impl SlackView + Serialize)) -> Self {
+        Self { json: Some(json!(view)) }
+    }
+
+    fn empty() -> Self {
+        Self { json: None }
     }
 }
 
-impl SlackView for _PrimitiveView {
+impl PrimitiveView {
+    pub(super) fn value(&self) -> Option<&serde_json::Value> {
+        self.json.as_ref()
+    }
+}
+
+impl SlackView for PrimitiveView {
+    fn _push_blocks_into(&self, slack_blocks: &mut _SlackBlocks) {
+        slack_blocks.push_primitive_view(self)
+    }
+
     #[allow(refining_impl_trait)]
-    fn slack_body(&self) -> _PrimitiveView {
+    fn slack_body(&self) -> PrimitiveView {
         panic!("Do not directly call slack_body on views, as a view may not have a body due to it being a primitive view.")
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::slack::message::SlackMessage;
+    use crate::slack::test_support::assert_blocks_json;
 
     use super::*;
 
@@ -147,33 +126,46 @@ mod tests {
     impl SlackView for DividersView {
         fn slack_body(&self) -> impl SlackView {
             SlackDivider.flat_chain_block(SlackDivider)
-                .flat_chain_block(SlackDivider.flat_chain_block(SlackDivider.flat_chain_block(SlackDivider)))
+                .flat_chain_block(
+                    SlackDivider.flat_chain_block(
+                        SlackDivider.flat_chain_block(SlackDivider)
+                    )
+                )
                 .flat_chain_block(SlackDivider)
         }
     }
 
     #[test]
     fn flat_chain_flattens_nested_dividers() {
-        let message = SlackMessage::for_testing(&DividersView);
-        let json = serde_json::to_string(&message).unwrap();
-        let expected_json = r#"{"channel":"__TEST__","blocks":[{"type":"divider"},{"type":"divider"},{"type":"divider"},{"type":"divider"},{"type":"divider"},{"type":"divider"}]}"#;
-        assert_eq!(json, expected_json)
+        assert_blocks_json(
+            &DividersView,
+            r#"[{"type":"divider"},{"type":"divider"},{"type":"divider"},{"type":"divider"},{"type":"divider"},{"type":"divider"}]"#
+        );
     }
 
     #[derive(Debug, Serialize)]
-    struct AnyDividerView;
+    struct TextView;
 
-    impl SlackView for AnyDividerView {
+    impl SlackView for TextView {
         fn slack_body(&self) -> impl SlackView {
-            SlackDivider.erase_to_any_view().erase_to_any_view()
+            SlackSection::from_markdown("Hello World!")
+        }
+    }
+
+    #[derive(Debug, Serialize)]
+    struct NestedView;
+
+    impl SlackView for NestedView {
+        fn slack_body(&self) -> impl SlackView {
+            TextView.flat_chain_block(TextView)
         }
     }
 
     #[test]
-    fn serializing_any_view_does_not_nest() {
-        let message = SlackMessage::for_testing(&AnyDividerView);
-        let json = serde_json::to_string(&message).unwrap();
-        let expected_json = r#"{"channel":"__TEST__","blocks":[{"type":"divider"}]}"#;
-        assert_eq!(json, expected_json)
+    fn nested_view_flattens_to_proper_json() {
+        assert_blocks_json(
+            &NestedView,
+            r#"[{"text":{"text":"Hello World!","type":"mrkdwn"},"type":"section"},{"text":{"text":"Hello World!","type":"mrkdwn"},"type":"section"}]"#
+        );
     }
 }
