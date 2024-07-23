@@ -12,8 +12,21 @@ pub struct RoswaalStoredLocation {
 }
 
 impl RoswaalStoredLocation {
+    pub fn new(
+        location: RoswaalLocation,
+        unmerged_branch_name: Option<RoswaalOwnedGitBranchName>
+    ) -> Self {
+        Self { location, unmerged_branch_name }
+    }
+}
+
+impl RoswaalStoredLocation {
     pub fn location(&self) -> &RoswaalLocation {
         &self.location
+    }
+
+    pub fn unmerged_branch_name(&self) -> Option<&RoswaalOwnedGitBranchName> {
+        self.unmerged_branch_name.as_ref()
     }
 }
 

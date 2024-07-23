@@ -35,6 +35,17 @@ pub trait SlackView {
         }
     }
 
+    /// Chains multiple slack view components as a list of separate blocks.
+    ///
+    /// `other` will be flattened when serialized into a slack message, so it is safe to call
+    /// `flat_chain_block` inside the `slack_body` of `other` without incurring uneccessary nesting.
+    fn flat_chain_blocks<Other: SlackView>(
+        self,
+        others: Vec<Other>
+    ) -> _FlatChainSlackView<Self, Other> where Self: Sized {
+        _FlatChainSlackView::new_with_others(self, others)
+    }
+
     /// Type erases this view to an `AnySlackView`.
     fn erase_to_any_view(self) -> AnySlackView where Self: Sized {
         AnySlackView::erasing(self)
