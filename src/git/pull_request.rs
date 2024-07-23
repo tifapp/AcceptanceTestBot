@@ -34,7 +34,7 @@ impl GithubPullRequest {
 
 ## Tickets
 
-Since I am Roswaaaaaaal, I do not need to specify any tiiiiiiiickets!
+TASK_UNTRACKED
 ", body
             ),
             title: format!("Roswaal: {}", title),
