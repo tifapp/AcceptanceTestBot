@@ -2,8 +2,9 @@ use std::borrow::Borrow;
 
 use crate::{location::location::{RoswaalLocationStringError, RoswaalStringLocations}, operations::add_locations::AddLocationsStatus};
 
-use super::{merge_conflict_view::MergeConflictView, pr_open_fail_view::FailedToOpenPullRequestView, ui_lib::{block_kit_views::{SlackHeader, SlackSection}, slack_view::SlackView}, users::MATTHEW_SLACK_USER_ID};
+use super::{merge_conflict_view::MergeConflictView, pr_open_fail_view::FailedToOpenPullRequestView, ui_lib::{block_kit_views::{SlackDivider, SlackHeader, SlackSection}, empty_view::EmptySlackView, slack_view::SlackView}, users::MATTHEW_SLACK_USER_ID, warn_undeleted_branch_view::WarnUndeletedBranchView};
 
+/// A view for adding locations.
 pub struct AddLocationsView {
     status: AddLocationsStatus
 }
@@ -24,10 +25,17 @@ impl SlackView for AddLocationsView {
 impl AddLocationsView {
     fn status_view(&self) -> impl SlackView {
         match self.status.borrow() {
-            AddLocationsStatus::Success { locations, did_delete_branch: _ } => {
-                self.success_locations_view(locations)
-                    .flat_chain_block(self.failure_locations_view(locations))
-                    .erase_to_any_view()
+            AddLocationsStatus::Success { locations, did_delete_branch } => {
+                EmptySlackView.flat_chain_block_if(
+                    locations.has_valid_locations(),
+                    || self.success_locations_view(locations)
+                )
+                .flat_chain_block_if(locations.has_errors(),|| self.failure_locations_view(locations))
+                .flat_chain_block_if(
+                    !did_delete_branch,
+                    || SlackDivider.flat_chain_block(WarnUndeletedBranchView)
+                )
+                .erase_to_any_view()
             },
             AddLocationsStatus::NoLocationsAdded => {
                 SlackSection::from_markdown("No Locations were aaaaaaaaaaadded.")
@@ -90,6 +98,47 @@ New York
         let locations = RoswaalStringLocations::from_roswaal_locations_str(string);
         assert_slack_view_snapshot(
             "add-locations-success",
+            &AddLocationsView::new(AddLocationsStatus::Success { locations, did_delete_branch: true }),
+            false
+        )
+    }
+
+    #[test]
+    fn success_warn_undeleted_branch_snapshot() {
+        let string = "\
+Antarctica, 50.20982098092, 50.09830883
+New York
+12.298739, 122.2989379
+";
+        let locations = RoswaalStringLocations::from_roswaal_locations_str(string);
+        assert_slack_view_snapshot(
+            "add-locations-warn-undeleted-branch",
+            &AddLocationsView::new(AddLocationsStatus::Success { locations, did_delete_branch: false }),
+            false
+        )
+    }
+
+    #[test]
+    fn success_with_no_failures_snapshot() {
+        let string = "\
+Antarctica, 50.20982098092, 50.09830883
+";
+        let locations = RoswaalStringLocations::from_roswaal_locations_str(string);
+        assert_slack_view_snapshot(
+            "add-locations-no-failures",
+            &AddLocationsView::new(AddLocationsStatus::Success { locations, did_delete_branch: true }),
+            false
+        )
+    }
+
+    #[test]
+    fn success_with_no_successes_snapshot() {
+        let string = "\
+50.20982098092, 50.09830883
+";
+        let locations = RoswaalStringLocations::from_roswaal_locations_str(string);
+        assert_slack_view_snapshot(
+            "add-locations-no-successes",
             &AddLocationsView::new(AddLocationsStatus::Success { locations, did_delete_branch: true }),
             false
         )

@@ -46,7 +46,7 @@ impl SlackText {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Clone)]
 pub struct _SlackDivider {
     #[serde(rename = "type")]
     _type: &'static str
