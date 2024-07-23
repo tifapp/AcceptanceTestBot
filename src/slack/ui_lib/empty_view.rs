@@ -1,12 +1,16 @@
-use super::{primitive_view::PrimitiveView, slack_view::SlackView};
+use super::{primitive_view::_PrimitiveView, slack_view::SlackView};
 
 /// A view to use as a placeholder when no other view can be returned from the `slack_body` method
 /// of another view.
-pub struct EmptyView;
+pub struct EmptySlackView;
 
-impl SlackView for EmptyView {
+impl SlackView for EmptySlackView {
+    fn _as_primitive_view(&self) -> Option<_PrimitiveView> {
+        Some(_PrimitiveView::empty())
+    }
+
     fn slack_body(&self) -> impl SlackView {
-        PrimitiveView::empty()
+        _PrimitiveView::empty()
     }
 }
 
@@ -14,7 +18,7 @@ impl SlackView for EmptyView {
 mod tests {
     use crate::slack::ui_lib::{block_kit_views::SlackSection, slack_view::SlackView, test_support::assert_blocks_json};
 
-    use super::EmptyView;
+    use super::EmptySlackView;
 
     struct View;
 
@@ -28,7 +32,7 @@ mod tests {
 
     impl SlackView for ChainWithEmptyView {
         fn slack_body(&self) -> impl SlackView {
-            View.flat_chain_block(EmptyView)
+            View.flat_chain_block(EmptySlackView)
         }
     }
 
