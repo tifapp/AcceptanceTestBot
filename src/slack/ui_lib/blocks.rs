@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use super::{primitive_view::_PrimitiveView, slack_view::SlackView};
+use super::{primitive_view::PrimitiveView, slack_view::SlackView};
 
 /// A struct to render a `SlackView` into a flat array of serialized slack blocks.
 #[derive(Debug, PartialEq, Eq, Serialize)]
@@ -29,9 +29,13 @@ impl _SlackBlocks {
         view.slack_body()._push_blocks_into(self)
     }
 
-    pub(super) fn push_primitive_view(&mut self, view: &_PrimitiveView) {
+    pub(super) fn push_primitive_view(&mut self, view: &PrimitiveView) {
         if let Some(value) = view.json_value() {
             self.0.push(value.clone())
         }
+    }
+
+    pub(super) fn extend(&mut self, other: &SlackBlocks) {
+        self.0.extend(other.0.iter().map(|v| v.to_owned()))
     }
 }

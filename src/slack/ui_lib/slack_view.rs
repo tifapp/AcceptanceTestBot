@@ -1,4 +1,4 @@
-use super::{blocks::_SlackBlocks, flat_chain_view::_FlatChainSlackView, primitive_view::_PrimitiveView};
+use super::{any_view::AnySlackView, blocks::_SlackBlocks, flat_chain_view::_FlatChainSlackView, primitive_view::PrimitiveView};
 
 /// A trait for implementing a slack view.
 ///
@@ -19,18 +19,12 @@ pub trait SlackView {
         _FlatChainSlackView::new(self, other)
     }
 
+    /// Type erases this view to an `AnySlackView`.
+    fn erase_to_any_view(self) -> AnySlackView where Self: Sized {
+        AnySlackView::erasing(self)
+    }
+
     fn _push_blocks_into(&self, slack_blocks: &mut _SlackBlocks) where Self: Sized {
         slack_blocks.push_view(self)
     }
-
-    fn _as_primitive_view(&self) -> Option<_PrimitiveView> {
-        None
-    }
-}
-
-pub(super) fn find_primitive_view(view: &impl SlackView) -> _PrimitiveView {
-    if let Some(view) = view._as_primitive_view() {
-        return view
-    }
-    find_primitive_view(&view.slack_body())
 }
