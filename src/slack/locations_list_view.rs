@@ -77,7 +77,7 @@ mod tests {
             ),
             RoswaalStoredLocation::new(
                 RoswaalLocation::new_without_validation("McDonalds", 45.0, -50.0),
-                Some(branches.addLocations)
+                Some(branches.add_locations().clone())
             )
         ];
         assert_slack_view_snapshot(
