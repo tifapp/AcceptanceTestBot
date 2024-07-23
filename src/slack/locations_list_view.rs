@@ -2,7 +2,7 @@ use std::borrow::Borrow;
 
 use crate::{git::branch_name, location::storage::RoswaalStoredLocation, operations::load_all_locations::LoadAllLocationsStatus};
 
-use super::ui_lib::{block_kit_views::{SlackHeader, SlackSection}, empty_view::EmptySlackView, slack_view::SlackView};
+use super::ui_lib::{block_kit_views::{SlackHeader, SlackSection}, empty_view::EmptySlackView, for_each_view::ForEachView, slack_view::SlackView};
 
 pub struct LocationsListView {
     status: LoadAllLocationsStatus
@@ -25,12 +25,8 @@ impl LocationsListView {
     fn status_view(&self) -> impl SlackView {
         match self.status.borrow() {
             LoadAllLocationsStatus::Success(locations) => {
-                EmptySlackView.flat_chain_blocks(
-                    locations.iter()
-                        .map(|location| LocationView { location })
-                        .collect()
-                )
-                .erase_to_any_view()
+                ForEachView::new(locations.iter(), |location| LocationView { location })
+                    .erase_to_any_view()
             },
             LoadAllLocationsStatus::NoLocations => {
                 SlackSection::from_markdown("No locations were fooooound!")
