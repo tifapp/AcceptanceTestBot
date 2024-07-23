@@ -1,5 +1,3 @@
-pub mod slack_view;
-pub mod primitive_views;
-pub mod message;
-pub mod blocks;
-pub mod test_support;
+use ui_lib::slack_view::SlackView;
+
+pub mod ui_lib;

@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use super::{primitive_views::PrimitiveView, slack_view::SlackView};
+use super::{primitive_view::PrimitiveView, slack_view::SlackView};
 
 #[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct _SlackBlocks(Vec<serde_json::Value>);
@@ -17,7 +17,7 @@ impl _SlackBlocks {
     }
 
     pub(super) fn push_primitive_view(&mut self, view: &PrimitiveView) {
-        if let Some(value) = view.value() {
+        if let Some(value) = view.json_value() {
             self.0.push(value.clone())
         }
     }

@@ -1,11 +1,11 @@
-use super::{blocks::_SlackBlocks, primitive_views::_FlatChainSlackView};
+use super::{blocks::_SlackBlocks, flat_chain_view::_FlatChainSlackView};
 
 /// A trait for implementing a slack view.
 ///
 /// Slack views are composed of blocks that are serialized to JSON. Views are implemented using
 /// the `slack_body` method, where they must return another `SlackView`.
 pub trait SlackView: Sized {
-    /// Returns another `SlackView` based on the content of this view.
+    /// The content of this view.
     fn slack_body(&self) -> impl SlackView;
 
     /// Chains 2 slack view components as 2 separate blocks.
