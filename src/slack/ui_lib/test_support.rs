@@ -26,7 +26,7 @@ struct BlockKitBuilderCompatibleBlocks {
 /// This function is useful for testing and iterating on the UI of complex `SlackView`s. This
 /// assertion writes the output of the view to the `slack-snapshots` directory, and each snapshot
 /// can be copied and pasted directly into the
-/// [Block Kit Builder UI](https://app.slack.com/block-kit-builder/T01BFE465AN#%7B%22blocks%22:%5B%7B%22text%22:%7B%22text%22:%22I%20am%20a%20test%20view!%22,%22type%22:%22mrkdwn%22%7D,%22type%22:%22section%22%7D%5D%7D]).
+/// [Block Kit Builder UI](https://app.slack.com/block-kit-builder).
 ///
 /// `is_recording` is a parameter to update a snapshot when it has changed. When the value is true,
 /// the current snapshot will be overidden by the new snapshot, and the test will pass. When the
