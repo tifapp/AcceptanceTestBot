@@ -1,4 +1,4 @@
-use super::{blocks::_SlackBlocks, empty_view::EmptySlackView, slack_view::SlackView};
+use super::{blocks::_SlackBlocksCollection, empty_view::EmptySlackView, slack_view::SlackView};
 
 /// A view for displaying a list of items.
 pub struct ForEachView<
@@ -26,13 +26,28 @@ impl <
     View: SlackView,
     MakeView: Fn(&Item) -> View
 > SlackView for ForEachView<Item, View, MakeView> {
-    fn _push_blocks_into(&self, slack_blocks: &mut _SlackBlocks) where Self: Sized {
+    fn __push_blocks_into(&self, slack_blocks: &mut _SlackBlocksCollection) where Self: Sized {
         for item in self.items.iter() {
-            slack_blocks.push_view(&(self.make_view)(item))
+            (self.make_view)(item).__push_blocks_into(slack_blocks);
         }
     }
 
     fn slack_body(&self) -> impl SlackView {
         EmptySlackView
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::slack::ui_lib::{block_kit_views::SlackDivider, slack_view::SlackView, test_support::assert_blocks_json};
+
+    use super::ForEachView;
+
+    #[test]
+    fn for_each_with_chain() {
+        let view = ForEachView::new((0..2).into_iter(), |_| {
+            SlackDivider.flat_chain_block(SlackDivider)
+        });
+        assert_blocks_json(&view, r#"[{"type":"divider"},{"type":"divider"},{"type":"divider"},{"type":"divider"}]"#)
     }
 }

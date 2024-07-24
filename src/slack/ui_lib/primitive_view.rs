@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::json;
 
-use super::{blocks::_SlackBlocks, slack_view::SlackView};
+use super::{blocks::_SlackBlocksCollection, slack_view::SlackView};
 
 #[derive(Debug, Clone)]
 pub(super) struct PrimitiveView {
@@ -25,7 +25,7 @@ impl PrimitiveView {
 }
 
 impl SlackView for PrimitiveView {
-    fn _push_blocks_into(&self, slack_blocks: &mut _SlackBlocks) {
+    fn __push_blocks_into(&self, slack_blocks: &mut _SlackBlocksCollection) {
         slack_blocks.push_primitive_view(self)
     }
 

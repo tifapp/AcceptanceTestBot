@@ -59,7 +59,7 @@ impl <'l> SlackView for LocationView<'l> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{git::branch_name::RoswaalOwnedGitBranchName, location::{location::RoswaalLocation, storage::RoswaalStoredLocation}, operations::load_all_locations::LoadAllLocationsStatus, slack::{test_support::SlackTestConstantBranches, ui_lib::test_support::assert_slack_view_snapshot}};
+    use crate::{git::branch_name::RoswaalOwnedGitBranchName, location::{location::RoswaalLocation, storage::RoswaalStoredLocation}, operations::load_all_locations::LoadAllLocationsStatus, slack::{test_support::SlackTestConstantBranches, ui_lib::test_support::{assert_slack_view_snapshot, SnapshotMode}}};
 
     use super::LocationsListView;
 
@@ -79,7 +79,7 @@ mod tests {
         assert_slack_view_snapshot(
             "locations-list-success",
             &LocationsListView::new(LoadAllLocationsStatus::Success(locations)),
-            false
+            SnapshotMode::Comparing
         )
     }
 
@@ -88,7 +88,7 @@ mod tests {
         assert_slack_view_snapshot(
             "locations-list-no-locations",
             &LocationsListView::new(LoadAllLocationsStatus::NoLocations),
-            false
+            SnapshotMode::Comparing
         )
     }
 }

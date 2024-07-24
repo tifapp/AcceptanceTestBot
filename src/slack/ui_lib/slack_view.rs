@@ -1,10 +1,10 @@
-use super::{any_view::AnySlackView, blocks::_SlackBlocks, flat_chain_view::_FlatChainSlackView};
+use super::{any_view::AnySlackView, blocks::{SlackBlocks, _SlackBlocksCollection}, flat_chain_view::_FlatChainSlackView};
 
 /// A trait for implementing a slack view.
 ///
 /// Slack views are composed of blocks that are serialized to JSON. Views are implemented using
 /// the `slack_body` method, where they must return another `SlackView`.
-pub trait SlackView {
+pub trait SlackView: Sized {
     /// The content of this view.
     fn slack_body(&self) -> impl SlackView;
 
@@ -15,16 +15,24 @@ pub trait SlackView {
     fn flat_chain_block<Other: SlackView>(
         self,
         other: Other
-    ) -> _FlatChainSlackView<Self, Other> where Self: Sized {
+    ) -> _FlatChainSlackView<Self, Other> {
         _FlatChainSlackView::new(self, other)
     }
 
     /// Type erases this view to an `AnySlackView`.
-    fn erase_to_any_view(self) -> AnySlackView where Self: Sized {
+    fn erase_to_any_view(self) -> AnySlackView {
         AnySlackView::erasing(self)
     }
 
-    fn _push_blocks_into(&self, slack_blocks: &mut _SlackBlocks) where Self: Sized {
+    // Do not override this method. It is an implementation detail of the library.
+    fn __push_blocks_into(&self, slack_blocks: &mut _SlackBlocksCollection) {
         slack_blocks.push_view(self)
     }
+}
+
+/// Renders the specified `SlackView` into a `SlackBlocks` instance.
+pub fn render_slack_view(view: &impl SlackView) -> SlackBlocks {
+    let mut blocks = _SlackBlocksCollection::new();
+    view.__push_blocks_into(&mut blocks);
+    SlackBlocks::from(blocks)
 }

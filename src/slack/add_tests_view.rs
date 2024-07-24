@@ -198,7 +198,7 @@ impl <'v> SlackView for CompilationErrorView<'v> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{language::ast::RoswaalTestSyntax, operations::add_tests::{AddTestsStatus, RoswaalTestCompilationResults}, slack::ui_lib::test_support::assert_slack_view_snapshot};
+    use crate::{language::ast::RoswaalTestSyntax, operations::add_tests::{AddTestsStatus, RoswaalTestCompilationResults}, slack::ui_lib::test_support::{assert_slack_view_snapshot, SnapshotMode}};
 
     use super::AddTestsView;
 
@@ -225,7 +225,7 @@ Requirement 1: Chungus
         assert_slack_view_snapshot(
             "add-tests-success-no-compilation-errors",
             &AddTestsView::new(AddTestsStatus::Success { results, should_warn_undeleted_branch: false }),
-            false
+            SnapshotMode::Comparing
         )
     }
 
@@ -282,7 +282,7 @@ Fake Command: This is a fake command!
         assert_slack_view_snapshot(
             "add-tests-success-all-compilation-errors",
             &AddTestsView::new(AddTestsStatus::Success { results, should_warn_undeleted_branch: false }),
-            false
+            SnapshotMode::Comparing
         )
     }
 
@@ -299,7 +299,7 @@ Requirement 1: Chungus
         assert_slack_view_snapshot(
             "add-tests-success-warn-undeleted-branch-errors",
             &AddTestsView::new(AddTestsStatus::Success { results, should_warn_undeleted_branch: true }),
-            false
+            SnapshotMode::Comparing
         )
     }
 
@@ -308,7 +308,7 @@ Requirement 1: Chungus
         assert_slack_view_snapshot(
             "add-tests-no-tests-found",
             &AddTestsView::new(AddTestsStatus::NoTestsFound),
-            false
+            SnapshotMode::Comparing
         )
     }
 
@@ -317,7 +317,7 @@ Requirement 1: Chungus
         assert_slack_view_snapshot(
             "add-tests-pr-fail",
             &AddTestsView::new(AddTestsStatus::FailedToOpenPullRequest),
-            false
+            SnapshotMode::Comparing
         )
     }
 
@@ -326,7 +326,7 @@ Requirement 1: Chungus
         assert_slack_view_snapshot(
             "add-tests-merge-conflict",
             &AddTestsView::new(AddTestsStatus::MergeConflict),
-            false
+            SnapshotMode::Comparing
         )
     }
 }

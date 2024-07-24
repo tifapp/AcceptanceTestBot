@@ -1,14 +1,24 @@
-use super::{blocks::_SlackBlocks, empty_view::EmptySlackView, slack_view::SlackView};
+use std::marker::PhantomData;
+
+use super::{any_view::AnySlackView, blocks::_SlackBlocksCollection, empty_view::EmptySlackView, slack_view::SlackView};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct _FlatChainSlackView<Base: SlackView, Other: SlackView> {
-    base: Base,
-    other: Other
+    blocks: _SlackBlocksCollection,
+    p1: PhantomData<Base>,
+    p2: PhantomData<Other>
 }
 
 impl <Base: SlackView, Other: SlackView> _FlatChainSlackView<Base, Other> {
     pub(super) fn new(base: Base, other: Other) -> Self {
-        Self { base, other }
+        let mut blocks = _SlackBlocksCollection::new();
+        base.__push_blocks_into(&mut blocks);
+        other.__push_blocks_into(&mut blocks);
+        Self::from(blocks)
+    }
+
+    fn from(blocks: _SlackBlocksCollection) -> Self {
+        Self { blocks, p1: PhantomData, p2: PhantomData }
     }
 }
 
@@ -17,9 +27,20 @@ impl <Base: SlackView, Other: SlackView> SlackView for _FlatChainSlackView<Base,
         EmptySlackView
     }
 
-    fn _push_blocks_into(&self, slack_blocks: &mut _SlackBlocks) {
-        self.base._push_blocks_into(slack_blocks);
-        self.other._push_blocks_into(slack_blocks)
+    fn __push_blocks_into(&self, slack_blocks: &mut _SlackBlocksCollection) {
+        slack_blocks.extend(&self.blocks)
+    }
+
+    fn flat_chain_block<View: SlackView>(
+        mut self,
+        other: View
+    ) -> _FlatChainSlackView<Self, View> {
+        other.__push_blocks_into(&mut self.blocks);
+        _FlatChainSlackView::from(self.blocks)
+    }
+
+    fn erase_to_any_view(self) -> AnySlackView {
+        AnySlackView::from(self.blocks)
     }
 }
 

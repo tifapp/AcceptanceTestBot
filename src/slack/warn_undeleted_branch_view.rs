@@ -11,7 +11,7 @@ impl SlackView for WarnUndeletedBranchView {
 
 #[cfg(test)]
 mod tests {
-    use crate::slack::ui_lib::test_support::assert_slack_view_snapshot;
+    use crate::slack::ui_lib::test_support::{assert_slack_view_snapshot, SnapshotMode};
 
     use super::WarnUndeletedBranchView;
 
@@ -20,7 +20,7 @@ mod tests {
         assert_slack_view_snapshot(
             "warn-undeleted-branch",
             &WarnUndeletedBranchView,
-            false
+            SnapshotMode::Comparing
         )
     }
 }

@@ -21,8 +21,9 @@ impl SlackSection {
         }
     }
 
+    /// Constructs an empty section.
     pub fn empty() -> Self {
-        Self::from_markdown("")
+        Self::from_markdown(" ")
     }
 }
 
@@ -51,21 +52,22 @@ impl SlackText {
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Clone)]
-pub struct _SlackDivider {
+pub struct SlackDivider {
     #[serde(rename = "type")]
     _type: &'static str
 }
 
 /// A slack divider component.
 #[allow(nonstandard_style)]
-pub const SlackDivider: _SlackDivider = _SlackDivider { _type: "divider" };
+pub const SlackDivider: SlackDivider = SlackDivider { _type: "divider" };
 
-impl SlackView for _SlackDivider {
+impl SlackView for SlackDivider {
     fn slack_body(&self) -> impl SlackView {
         PrimitiveView::new(self)
     }
 }
 
+/// A Slack Header view.
 #[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct SlackHeader {
     #[serde(rename = "type")]

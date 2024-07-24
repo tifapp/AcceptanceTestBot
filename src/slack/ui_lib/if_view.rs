@@ -1,4 +1,4 @@
-use super::slack_view::SlackView;
+use super::{blocks::_SlackBlocksCollection, empty_view::EmptySlackView, slack_view::SlackView};
 
 /// A view that conditionally renders `View`.
 pub struct If<View: SlackView, MakeView: Fn() -> View> {
@@ -13,13 +13,14 @@ impl <View: SlackView, MakeView: Fn() -> View> If<View, MakeView> {
 }
 
 impl <View: SlackView, MakeView: Fn() -> View> SlackView for If<View, MakeView> {
-    // TODO: - Why doesn't using _push_slack_blocks_into work here?
-    fn slack_body(&self) -> impl SlackView {
+    fn __push_blocks_into(&self, slack_blocks: &mut _SlackBlocksCollection) where Self: Sized {
         if self.condition {
-            Some((self.make_view)())
-        } else {
-            None
+            (self.make_view)().__push_blocks_into(slack_blocks)
         }
+    }
+
+    fn slack_body(&self) -> impl SlackView {
+        EmptySlackView
     }
 }
 
@@ -45,5 +46,21 @@ mod tests {
     #[test]
     fn flat_chain_if_renders_nothing_when_false() {
         assert_blocks_json(&If::is_true(false, || DividersView), r#"[]"#);
+    }
+
+    #[test]
+    fn flat_chain_if_renders_when_true_with_nested_view() {
+        assert_blocks_json(
+            &If::is_true(true, || SlackDivider.flat_chain_block(SlackDivider)),
+            r#"[{"type":"divider"},{"type":"divider"}]"#
+        );
+    }
+
+    #[test]
+    fn flat_chain_if_renders_nothing_when_false_with_nested_view() {
+        assert_blocks_json(
+            &If::is_true(false, || SlackDivider.flat_chain_block(SlackDivider)),
+            r#"[]"#
+        );
     }
 }

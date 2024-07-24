@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::slack_view::SlackView;
 use super::message::SlackMessage;
@@ -6,6 +6,7 @@ use std::path::Path;
 use std::{fs::File, io::Write};
 use std::io::Read;
 use super::blocks::SlackBlocks;
+use super::slack_view::render_slack_view;
 
 /// Asserts the json rendered by a slack view.
 #[cfg(test)]
@@ -16,9 +17,15 @@ pub fn assert_blocks_json(view: &impl SlackView, json: &str) {
     assert_eq!(json, expected_json)
 }
 
-#[derive(Debug, Serialize)]
-struct BlockKitBuilderCompatibleBlocks {
-    blocks: SlackBlocks
+/// An enum to determine the behavior of `assert_slack_view_snapshot`.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
+pub enum SnapshotMode {
+    /// Specifies that a new snapshot should overwrite the existing one without comparing against it.
+    Recording,
+    /// Specified that a new snapshot should be compared with the existing one.
+    ///
+    /// If no snapshot exists, then this option is treated the same as `Recording`.
+    Comparing
 }
 
 /// Asserts a snapshot of a `SlackView`.
@@ -38,12 +45,12 @@ struct BlockKitBuilderCompatibleBlocks {
 pub fn assert_slack_view_snapshot(
     name: &str,
     view: &impl SlackView,
-    is_recording: bool
+    mode: SnapshotMode
 ) {
     let raw_path = format!("./slack-snapshots/{}.json", name);
     let path = Path::new(&raw_path);
-    let is_recording = is_recording || !path.exists();
-    let blocks = BlockKitBuilderCompatibleBlocks { blocks: SlackBlocks::render(view) };
+    let is_recording = mode == SnapshotMode::Recording || !path.exists();
+    let blocks = BlockKitBuilderCompatibleBlocks { blocks: render_slack_view(view) };
     let blocks_json = serde_json::to_string(&blocks).unwrap();
     if is_recording {
         let mut file = File::create(path).unwrap();
@@ -59,11 +66,16 @@ pub fn assert_slack_view_snapshot(
     }
 }
 
+#[derive(Debug, Serialize)]
+struct BlockKitBuilderCompatibleBlocks {
+    blocks: SlackBlocks
+}
+
 #[cfg(test)]
 mod tests {
     use crate::slack::ui_lib::{block_kit_views::SlackSection, slack_view::SlackView};
 
-    use super::assert_slack_view_snapshot;
+    use super::{assert_slack_view_snapshot, SnapshotMode};
 
     struct SomeView;
 
@@ -75,6 +87,6 @@ mod tests {
 
     #[test]
     fn record_snapshot() {
-        assert_slack_view_snapshot("test-snapshot", &SomeView, false)
+        assert_slack_view_snapshot("test-snapshot", &SomeView, SnapshotMode::Comparing)
     }
 }
