@@ -26,6 +26,7 @@ impl RemoveTestsView {
         match self.status.borrow() {
             RemoveTestsStatus::Success { removed_test_names, should_warn_undeleted_branch } => {
                 self.test_names_view(removed_test_names)
+                    .flat_chain_block(SlackDivider)
                     .flat_chain_block(SlackHeader::new("Next Steps"))
                     .flat_chain_block(
                         SlackSection::from_markdown("Approve the PR found in <#C01B7FFKDCP> to finish the remooooooval!")
