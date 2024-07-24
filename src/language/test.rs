@@ -35,6 +35,6 @@ impl RoswaalTest {
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum RoswaalTestCommand {
-    Step { name: String, requirement: String },
+    Step { label: String, name: String, requirement: String },
     SetLocation { location_name: RoswaalLocationName }
 }

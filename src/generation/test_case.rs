@@ -26,7 +26,7 @@ impl TestCaseTypescript {
 impl RoswaalTypescriptGenerate<TestCaseTypescript> for RoswaalTestCommand {
     fn typescript(&self) -> TestCaseTypescript {
         match self {
-            Self::Step { name, requirement } => {
+            Self::Step { label: _, name, requirement } => {
                 let mut function_name = requirement.to_ascii_camel_case();
                 function_name.retain(|c| !r#"()$@#*,".;:'"#.contains(c));
                 TestCaseTypescript {
@@ -163,6 +163,7 @@ mod tests {
     #[test]
     fn test_step_command_action_typescript() {
         let command = RoswaalTestCommand::Step {
+            label: "Step 1".to_string(),
             name: String::from("Anna is about to arrive at an event"),
             requirement: String::from("Mark Anna as being present at an event")
         };
@@ -179,6 +180,7 @@ export const markAnnaAsBeingPresentAtAnEvent = async () => {
     #[test]
     fn test_step_command_test_case_typescript() {
         let command = RoswaalTestCommand::Step {
+            label: "Step 1".to_string(),
             name: String::from("Anna is about to arrive at an event"),
             requirement: String::from("Mark Anna as being present at an event")
         };
@@ -222,10 +224,12 @@ export const setLocationToSanFrancisco = async () => {
     #[test]
     fn test_generate_test_actions_command_typescript_only_steps() {
         let step1 = RoswaalTestCommand::Step {
+            label: "Step 1".to_string(),
             name: "Johnny is signed in".to_string(),
             requirement: "Ensure Johnny is signed into his account".to_string()
         };
         let step2 = RoswaalTestCommand::Step {
+            label: "Step 2".to_string(),
             name: "Johnny is bored".to_string(),
             requirement: "Ensure that Johnny is not bored".to_string()
         };
@@ -255,6 +259,7 @@ export const ensureThatJohnnyIsNotBored = async () => {
     #[test]
     fn test_generate_test_actions_command_typescript_steps_and_location_changes() {
         let command1 = RoswaalTestCommand::Step {
+            label: "Step 1".to_string(),
             name: "Johnny is signed in".to_string(),
             requirement: "Ensure Johnny is signed into his account,,,, and is (*$)(*)($# alive".to_string()
         };
@@ -287,10 +292,12 @@ export const setLocationToOakland = async () => {
     #[test]
     fn test_generate_test_case_command_typescript_only_steps() {
         let step1 = RoswaalTestCommand::Step {
+            label: "Step 1".to_string(),
             name: "Johnny is signed in".to_string(),
             requirement: "Ensure Johnny is signed into his account,,,, and is (*$)(*)($# alive".to_string()
         };
         let step2 = RoswaalTestCommand::Step {
+            label: "Step 2".to_string(),
             name: "Johnny is bored".to_string(),
             requirement: "Ensure that Johnny is not bored".to_string()
         };
@@ -318,6 +325,7 @@ test(\"B\", async () => {
     #[test]
     fn test_generate_test_case_command_typescript_steps_and_location_changes() {
         let command1 = RoswaalTestCommand::Step {
+            label: "Step 1".to_string(),
             name: "Johnny is signed in".to_string(),
             requirement: "Ensure Johnny is signed into his account".to_string()
         };
