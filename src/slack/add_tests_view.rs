@@ -32,18 +32,22 @@ impl AddTestsView {
                 .flat_chain_block(
                     If::is_true(
                         results.has_non_compiling_tests(),
-                        ||  self.non_compiling_tests_view(&results.errors())
+                        || self.non_compiling_tests_view(&results.errors())
                     )
                 )
                 .flat_chain_block(
                     If::is_true(
                         results.has_compiling_tests(),
-                        || SlackHeader::new("Next Steps")
-                            .flat_chain_block(
-                                SlackSection::from_markdown(
-                                    "Approve the PR found in <#C01B7FFKDCP> to finish the adding the teeeeeeeests!"
-                                )
+                        || {
+                            SlackDivider.flat_chain_block(
+                                SlackHeader::new("Next Steps")
+                                    .flat_chain_block(
+                                        SlackSection::from_markdown(
+                                            "Approve the PR found in <#C01B7FFKDCP> to finish the adding the teeeeeeeests!"
+                                        )
+                                    )
                             )
+                        }
                     )
                 )
                 .flat_chain_block(
@@ -70,31 +74,39 @@ impl AddTestsView {
 
 impl AddTestsView {
     fn compiling_tests_view(&self, tests: &Vec<RoswaalTest>) -> impl SlackView {
-        let mut body = "📝 *The following tests were compiled succeeeeeeeeessfully!*\n".to_string();
+        let mut body = "✅ *The following tests were compiled succeeeeeeeeessfully!*\n".to_string();
         for test in tests {
             body.push_str(&format!("- {}\n", test.name()))
         }
         SlackSection::from_markdown(&body)
     }
 
-    fn non_compiling_tests_view(&self, errors: &Vec<(usize, Vec<RoswaalCompilationError>)>) -> impl SlackView {
-        SlackSection::from_markdown("⚠️ The following tests did not compile succeeeeeessfully. They are only listed by naaaaaaaame!")
-            .flat_chain_block(
-                ForEachView::new(errors.iter().map(|e| e.clone()), |(test_index, errors)| {
-                    NonCompilingTestView { test_index: (*test_index as u32) + 1, errors: errors.clone() }
-                })
-            )
+    fn non_compiling_tests_view(&self, tests: &Vec<(usize, Vec<RoswaalCompilationError>)>) -> impl SlackView {
+        let tests_iter = tests.iter()
+            .map(|e| e.clone())
+            .enumerate()
+            .map(|(index, value)| (index < tests.len() - 1, value));
+        SlackSection::from_markdown(
+            "⚠️ *The following tests did not compile succeeeeeessfully. They are only listed by naaaaaaaame!*"
+        )
+        .flat_chain_block(
+            ForEachView::new(tests_iter, |(is_showing_divider, (test_number, errors))| {
+                let test_number = (*test_number as u32) + 1;
+                NonCompilingTestView { test_number, errors: errors.clone() }
+                    .flat_chain_block(If::is_true(*is_showing_divider, || SlackDivider))
+            })
+        )
     }
 }
 
 struct NonCompilingTestView {
-    test_index: u32,
+    test_number: u32,
     errors: Vec<RoswaalCompilationError>
 }
 
 impl SlackView for NonCompilingTestView {
     fn slack_body(&self) -> impl SlackView {
-        SlackSection::from_markdown(&format!("❗️ *Test Number: {}*", self.test_index))
+        SlackSection::from_markdown(&format!("❗️ *Test {}*", self.test_number))
             .flat_chain_block(
                 ForEachView::new(self.errors.iter(), |error| CompilationErrorView { error })
             )
@@ -121,7 +133,7 @@ impl <'v> SlackView for CompilationErrorView<'v> {
             RoswaalCompilationErrorCode::NoStepRequirement { step_name, step_description } => {
                 body.push_str(
                     &format!(
-                        "Step \"{}: {}\" has no matching requiremeeeeeeeeeeent.",
+                        "\"{}: {}\" has no matching requiremeeeeeeeeeeent.",
                         step_name,
                         step_description
                     )
@@ -130,7 +142,7 @@ impl <'v> SlackView for CompilationErrorView<'v> {
             RoswaalCompilationErrorCode::NoRequirementStep { requirement_name, requirement_description } => {
                 body.push_str(
                     &format!(
-                        "Requirement \"{}: {}\" has no matching steeeeeeeeeeep.",
+                        "\"{}: {}\" has no matching steeeeeeeeeeep.",
                         requirement_name,
                         requirement_description
                     )
@@ -139,7 +151,7 @@ impl <'v> SlackView for CompilationErrorView<'v> {
             RoswaalCompilationErrorCode::UnknownLocationName(name) => {
                 body.push_str(
                     &format!(
-                        "\"{}\" is an unknown location naaaaaaaame. Add it using the /add-locations commaaaaaand!",
+                        "\"{}\" is an unknown location naaaaaaaame. Add it using the `/add-locations` commaaaaaand!",
                         name
                     )
                 )
@@ -151,7 +163,7 @@ impl <'v> SlackView for CompilationErrorView<'v> {
                     RoswaalLocationNameParsingError::InvalidFormat => {
                         body.push_str(
                             &format!(
-                                "\"{}\" was in an invalid foooooormat. Make sure you don't include any special chaaaaaracters.",
+                                "\"{}\" was in an invalid foooooormat. Make sure you don't include any special characters in the location naaaaaaaaaame.",
                                 name
                             )
                         )
@@ -287,6 +299,27 @@ Fake Command: This is a fake command!
     }
 
     #[test]
+    fn success_mixed_compilation_results_snapshot() {
+        let tests = vec![
+            RoswaalTestSyntax::from("\
+New Test: Big Chungus III
+Step 1: Big
+"),
+            RoswaalTestSyntax::from("\
+New Test: This is a Valid Test
+Step 1: Thing
+Requirement 1: Thhing
+")
+        ];
+        let results = RoswaalTestCompilationResults::compile(&tests, &vec![]);
+        assert_slack_view_snapshot(
+            "add-tests-success-mixed-compilation-results",
+            &AddTestsView::new(AddTestsStatus::Success { results, should_warn_undeleted_branch: true }),
+            SnapshotMode::Comparing
+        )
+    }
+
+    #[test]
     fn success_warn_undeleted_branch_snapshot() {
         let tests = vec![
             RoswaalTestSyntax::from("\
@@ -304,7 +337,7 @@ Requirement 1: Chungus
     }
 
     #[test]
-    fn no_locations_snapshot() {
+    fn no_tests_found_snapshot() {
         assert_slack_view_snapshot(
             "add-tests-no-tests-found",
             &AddTestsView::new(AddTestsStatus::NoTestsFound),

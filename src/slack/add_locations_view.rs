@@ -36,12 +36,16 @@ impl AddLocationsView {
                 .flat_chain_block(
                     If::is_true(
                         locations.has_valid_locations(),
-                        || SlackHeader::new("Next Steps")
-                            .flat_chain_block(
-                                SlackSection::from_markdown(
-                                    "Approve the PR found in <#C01B7FFKDCP> to finish the adding the locaaaaaations!"
-                                )
+                        || {
+                            SlackDivider.flat_chain_block(
+                                SlackHeader::new("Next Steps")
+                                    .flat_chain_block(
+                                        SlackSection::from_markdown(
+                                            "Approve the PR found in <#C01B7FFKDCP> to finish the adding the locaaaaaations!"
+                                        )
+                                    )
                             )
+                        }
                     )
                 )
                 .flat_chain_block(
@@ -66,7 +70,7 @@ impl AddLocationsView {
     }
 
     fn success_locations_view(&self, locations: &RoswaalStringLocations) -> impl SlackView {
-        let mut body = "✅ The following locations were added succeeeeeeesfully!\n".to_string();
+        let mut body = "✅ *The following locations were added succeeeeeeesfully!*\n".to_string();
         for location in locations.locations() {
             let line = format!(
                 "- *{}* (Latitude: {:.8}, Longitude: {:.8})\n",
@@ -80,7 +84,7 @@ impl AddLocationsView {
     }
 
     fn failure_locations_view(&self, string_locations: &RoswaalStringLocations) -> impl SlackView {
-        let mut body = "⚠️ The following locations were invaaaaaaalid...\n".to_string();
+        let mut body = "⚠️ *The following locations were invaaaaaaalid...*\n".to_string();
         for error in string_locations.errors() {
             body.push_str(&format!("- *{}* ", error.raw_associated_location_name()));
             match error {
