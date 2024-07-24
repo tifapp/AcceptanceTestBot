@@ -20,6 +20,10 @@ impl SlackSection {
             text: SlackText::markdown(markdown)
         }
     }
+
+    pub fn empty() -> Self {
+        Self::from_markdown("")
+    }
 }
 
 impl SlackView for SlackSection {

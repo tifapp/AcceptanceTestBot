@@ -34,7 +34,7 @@ impl AddTestsStatus {
         let metadata = git_transaction.metadata().clone();
         let branch_name = RoswaalOwnedGitBranchName::for_adding_tests();
         let results = RoswaalTestCompilationResults::compile(&tests_syntax, &location_names);
-        if !results.has_passing_tests() {
+        if !results.has_compiling_tests() {
             return Ok(Self::Success { results, should_warn_undeleted_branch: false })
         }
 
@@ -85,13 +85,16 @@ impl AddTestsStatus {
 }
 
 /// A data type constructed from compiling multiple test cases at a time.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct RoswaalTestCompilationResults {
     results: Vec<Result<RoswaalTest, Vec<RoswaalCompilationError>>>
 }
 
 impl RoswaalTestCompilationResults {
-    fn compile(syntax: &Vec<RoswaalTestSyntax<'_>>, location_names: &Vec<RoswaalLocationName>) -> Self {
+    pub fn compile(
+        syntax: &Vec<RoswaalTestSyntax<'_>>,
+        location_names: &Vec<RoswaalLocationName>
+    ) -> Self {
         let results = syntax
             .iter()
             .map(|syntax| {
@@ -109,14 +112,25 @@ impl RoswaalTestCompilationResults {
         &self.results
     }
 
-    fn tests(&self) -> Vec<RoswaalTest> {
+    pub fn tests(&self) -> Vec<RoswaalTest> {
         self.results.iter()
             .filter_map(|r| r.clone().ok())
-            .collect::<Vec<RoswaalTest>>()
+            .collect()
     }
 
-    fn has_passing_tests(&self) -> bool {
+    pub fn errors(&self) -> Vec<(usize, Vec<RoswaalCompilationError>)> {
+        self.results.iter()
+            .enumerate()
+            .filter_map(|(i, r)| r.clone().err().map(|e| (i, e)))
+            .collect()
+    }
+
+    pub fn has_compiling_tests(&self) -> bool {
         self.results.iter().filter(|r| r.is_ok()).count() > 0
+    }
+
+    pub fn has_non_compiling_tests(&self) -> bool {
+        self.results.iter().filter(|r| r.is_err()).count() > 0
     }
 
     fn pull_request(

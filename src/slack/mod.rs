@@ -8,3 +8,4 @@ pub mod locations_list_view;
 #[cfg(test)]
 pub mod test_support;
 pub mod remove_tests_view;
+pub mod add_tests_view;
