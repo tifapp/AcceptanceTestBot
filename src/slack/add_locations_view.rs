@@ -2,7 +2,7 @@ use std::borrow::Borrow;
 
 use crate::{location::location::{RoswaalLocationStringError, RoswaalStringLocations}, operations::add_locations::AddLocationsStatus};
 
-use super::{merge_conflict_view::MergeConflictView, pr_open_fail_view::FailedToOpenPullRequestView, ui_lib::{block_kit_views::{SlackDivider, SlackHeader, SlackSection}, empty_view::EmptySlackView, slack_view::SlackView}, users::MATTHEW_SLACK_USER_ID, warn_undeleted_branch_view::WarnUndeletedBranchView};
+use super::{merge_conflict_view::MergeConflictView, pr_open_fail_view::FailedToOpenPullRequestView, ui_lib::{block_kit_views::{SlackDivider, SlackHeader, SlackSection}, empty_view::EmptySlackView, if_view::If, slack_view::SlackView}, users::MATTHEW_SLACK_USER_ID, warn_undeleted_branch_view::WarnUndeletedBranchView};
 
 /// A view for adding locations.
 pub struct AddLocationsView {
@@ -26,14 +26,18 @@ impl AddLocationsView {
     fn status_view(&self) -> impl SlackView {
         match self.status.borrow() {
             AddLocationsStatus::Success { locations, did_delete_branch } => {
-                EmptySlackView.flat_chain_block_if(
+                If::is_true(
                     locations.has_valid_locations(),
                     || self.success_locations_view(locations)
                 )
-                .flat_chain_block_if(locations.has_errors(),|| self.failure_locations_view(locations))
-                .flat_chain_block_if(
-                    !did_delete_branch,
-                    || SlackDivider.flat_chain_block(WarnUndeletedBranchView)
+                .flat_chain_block(
+                    If::is_true(locations.has_errors(), || self.failure_locations_view(locations))
+                )
+                .flat_chain_block(
+                    If::is_true(
+                        !did_delete_branch,
+                        || SlackDivider.flat_chain_block(WarnUndeletedBranchView)
+                    )
                 )
                 .erase_to_any_view()
             },

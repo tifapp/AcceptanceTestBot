@@ -56,17 +56,4 @@ mod tests {
             r#"[{"type":"divider"},{"type":"divider"},{"type":"divider"},{"type":"divider"},{"type":"divider"},{"type":"divider"}]"#
         );
     }
-
-    #[test]
-    fn flat_chain_if_renders_when_true() {
-        assert_blocks_json(
-            &EmptySlackView.flat_chain_block_if(true, || DividersView),
-            r#"[{"type":"divider"},{"type":"divider"},{"type":"divider"},{"type":"divider"},{"type":"divider"},{"type":"divider"}]"#
-        );
-    }
-
-    #[test]
-    fn flat_chain_if_renders_nothing_when_false() {
-        assert_blocks_json(&EmptySlackView.flat_chain_block_if(false, || DividersView), r#"[]"#);
-    }
 }
