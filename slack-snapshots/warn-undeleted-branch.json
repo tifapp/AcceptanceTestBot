@@ -1,1 +1,1 @@
-{"blocks":[{"text":{"text":"🟡 _The branch created by this operation could not be deleted._","type":"mrkdwn"},"type":"section"}]}
+{"blocks":[{"text":{"text":"🟡 _The local branch created by this operation was not deleted._","type":"mrkdwn"},"type":"section"}]}

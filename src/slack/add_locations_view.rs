@@ -35,6 +35,17 @@ impl AddLocationsView {
                 )
                 .flat_chain_block(
                     If::is_true(
+                        locations.has_valid_locations(),
+                        || SlackHeader::new("Next Steps")
+                            .flat_chain_block(
+                                SlackSection::from_markdown(
+                                    "Approve the PR found in <#C01B7FFKDCP> to finish the adding the locaaaaaations!"
+                                )
+                            )
+                    )
+                )
+                .flat_chain_block(
+                    If::is_true(
                         !did_delete_branch,
                         || SlackDivider.flat_chain_block(WarnUndeletedBranchView)
                     )
