@@ -27,7 +27,7 @@ impl SlackView for MergeConflictView {
 
 #[cfg(test)]
 mod tests {
-    use crate::slack::{ui_lib::test_support::assert_slack_view_snapshot, users::MATTHEW_SLACK_USER_ID};
+    use crate::slack::{ui_lib::test_support::{assert_slack_view_snapshot, SnapshotMode}, users::MATTHEW_SLACK_USER_ID};
 
     use super::MergeConflictView;
 
@@ -36,7 +36,7 @@ mod tests {
         assert_slack_view_snapshot(
             "merge-conflict",
             &MergeConflictView::new(MATTHEW_SLACK_USER_ID),
-            false
+            SnapshotMode::Comparing
         )
     }
 }

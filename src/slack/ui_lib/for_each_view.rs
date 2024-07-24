@@ -1,4 +1,4 @@
-use super::{blocks::_SlackBlocks, empty_view::EmptySlackView, slack_view::SlackView};
+use super::{blocks::_SlackBlocksCollection, empty_view::EmptySlackView, slack_view::SlackView};
 
 /// A view for displaying a list of items.
 pub struct ForEachView<
@@ -26,9 +26,9 @@ impl <
     View: SlackView,
     MakeView: Fn(&Item) -> View
 > SlackView for ForEachView<Item, View, MakeView> {
-    fn _push_blocks_into(&self, slack_blocks: &mut _SlackBlocks) where Self: Sized {
+    fn __push_blocks_into(&self, slack_blocks: &mut _SlackBlocksCollection) where Self: Sized {
         for item in self.items.iter() {
-            (self.make_view)(item)._push_blocks_into(slack_blocks);
+            (self.make_view)(item).__push_blocks_into(slack_blocks);
         }
     }
 

@@ -1,15 +1,15 @@
-use super::{any_view::AnySlackView, blocks::_SlackBlocks, primitive_view::PrimitiveView, slack_view::SlackView};
+use super::{any_view::AnySlackView, blocks::_SlackBlocksCollection, primitive_view::PrimitiveView, slack_view::SlackView};
 
 /// A view to use as a placeholder when no other view can be returned from the `slack_body` method
 /// of another view.
 pub struct EmptySlackView;
 
 impl SlackView for EmptySlackView {
-    fn _push_blocks_into(&self, _: &mut _SlackBlocks) where Self: Sized {
+    fn __push_blocks_into(&self, _: &mut _SlackBlocksCollection) where Self: Sized {
     }
 
     fn erase_to_any_view(self) -> AnySlackView {
-        AnySlackView::from(_SlackBlocks::new())
+        AnySlackView::from(_SlackBlocksCollection::new())
     }
 
     fn slack_body(&self) -> impl SlackView {

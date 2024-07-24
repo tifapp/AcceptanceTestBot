@@ -1,4 +1,4 @@
-use super::{blocks::{SlackBlocks, _SlackBlocks}, empty_view::EmptySlackView, slack_view::SlackView};
+use super::{blocks::{SlackBlocks, _SlackBlocksCollection}, empty_view::EmptySlackView, slack_view::{render_slack_view, SlackView}};
 
 /// A type-erased view.
 pub struct AnySlackView {
@@ -13,17 +13,17 @@ impl AnySlackView {
 
     /// Erases a reference to the specified view.
     pub fn erasing_ref(view: &impl SlackView) -> Self {
-        Self { blocks: SlackBlocks::render(view) }
+        Self { blocks: render_slack_view(view) }
     }
 
-    pub(super) fn from(_blocks: _SlackBlocks) -> Self {
+    pub(super) fn from(_blocks: _SlackBlocksCollection) -> Self {
         Self { blocks: SlackBlocks::from(_blocks) }
     }
 }
 
 impl SlackView for AnySlackView {
-    fn _push_blocks_into(&self, slack_blocks: &mut _SlackBlocks) where Self: Sized {
-        slack_blocks.extend(&self.blocks._blocks())
+    fn __push_blocks_into(&self, slack_blocks: &mut _SlackBlocksCollection) where Self: Sized {
+        slack_blocks.extend(&self.blocks.collection())
     }
 
     fn slack_body(&self) -> impl SlackView {

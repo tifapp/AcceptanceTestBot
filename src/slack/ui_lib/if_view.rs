@@ -1,4 +1,4 @@
-use super::{blocks::_SlackBlocks, empty_view::EmptySlackView, slack_view::SlackView};
+use super::{blocks::_SlackBlocksCollection, empty_view::EmptySlackView, slack_view::SlackView};
 
 /// A view that conditionally renders `View`.
 pub struct If<View: SlackView, MakeView: Fn() -> View> {
@@ -13,9 +13,9 @@ impl <View: SlackView, MakeView: Fn() -> View> If<View, MakeView> {
 }
 
 impl <View: SlackView, MakeView: Fn() -> View> SlackView for If<View, MakeView> {
-    fn _push_blocks_into(&self, slack_blocks: &mut _SlackBlocks) where Self: Sized {
+    fn __push_blocks_into(&self, slack_blocks: &mut _SlackBlocksCollection) where Self: Sized {
         if self.condition {
-            (self.make_view)()._push_blocks_into(slack_blocks)
+            (self.make_view)().__push_blocks_into(slack_blocks)
         }
     }
 

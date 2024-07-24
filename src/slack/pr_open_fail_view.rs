@@ -14,7 +14,7 @@ impl SlackView for FailedToOpenPullRequestView {
 
 #[cfg(test)]
 mod tests {
-    use crate::slack::ui_lib::test_support::assert_slack_view_snapshot;
+    use crate::slack::ui_lib::test_support::{assert_slack_view_snapshot, SnapshotMode};
 
     use super::FailedToOpenPullRequestView;
 
@@ -23,7 +23,7 @@ mod tests {
         assert_slack_view_snapshot(
             "failed-to-open-pull-request",
             &FailedToOpenPullRequestView,
-            false
+            SnapshotMode::Comparing
         )
     }
 }

@@ -21,8 +21,9 @@ impl SlackSection {
         }
     }
 
+    /// Constructs an empty section.
     pub fn empty() -> Self {
-        Self::from_markdown("")
+        Self::from_markdown(" ")
     }
 }
 
@@ -66,6 +67,7 @@ impl SlackView for _SlackDivider {
     }
 }
 
+/// A Slack Header view.
 #[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct SlackHeader {
     #[serde(rename = "type")]

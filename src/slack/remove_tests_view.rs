@@ -62,7 +62,7 @@ impl RemoveTestsView {
 
 #[cfg(test)]
 mod tests {
-    use crate::{operations::remove_tests::RemoveTestsStatus, slack::ui_lib::test_support::assert_slack_view_snapshot};
+    use crate::{operations::remove_tests::RemoveTestsStatus, slack::ui_lib::test_support::{assert_slack_view_snapshot, SnapshotMode}};
 
     use super::RemoveTestsView;
 
@@ -81,7 +81,7 @@ mod tests {
                     should_warn_undeleted_branch: false
                 }
             ),
-            false
+            SnapshotMode::Comparing
         )
     }
 
@@ -100,7 +100,7 @@ mod tests {
                     should_warn_undeleted_branch: true
                 }
             ),
-            false
+            SnapshotMode::Comparing
         )
     }
 
@@ -109,7 +109,7 @@ mod tests {
         assert_slack_view_snapshot(
             "remove-tests-none-removed",
             &RemoveTestsView::new(RemoveTestsStatus::NoTestsRemoved),
-            false
+            SnapshotMode::Comparing
         )
     }
 
@@ -118,7 +118,7 @@ mod tests {
         assert_slack_view_snapshot(
             "remove-tests-merge-conflict",
             &RemoveTestsView::new(RemoveTestsStatus::MergeConflict),
-            false
+            SnapshotMode::Comparing
         )
     }
 
@@ -127,7 +127,7 @@ mod tests {
         assert_slack_view_snapshot(
             "remove-tests-pr-fail",
             &RemoveTestsView::new(RemoveTestsStatus::FailedToOpenPullRequest),
-            false
+            SnapshotMode::Comparing
         )
     }
 }

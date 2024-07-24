@@ -99,7 +99,7 @@ impl AddLocationsView {
 
 #[cfg(test)]
 mod tests {
-    use crate::{location::location::RoswaalStringLocations, operations::add_locations::AddLocationsStatus, slack::ui_lib::test_support::assert_slack_view_snapshot};
+    use crate::{location::location::RoswaalStringLocations, operations::add_locations::AddLocationsStatus, slack::ui_lib::test_support::{assert_slack_view_snapshot, SnapshotMode}};
 
     use super::AddLocationsView;
 
@@ -114,7 +114,7 @@ New York
         assert_slack_view_snapshot(
             "add-locations-success",
             &AddLocationsView::new(AddLocationsStatus::Success { locations, did_delete_branch: true }),
-            false
+            SnapshotMode::Comparing
         )
     }
 
@@ -129,7 +129,7 @@ New York
         assert_slack_view_snapshot(
             "add-locations-warn-undeleted-branch",
             &AddLocationsView::new(AddLocationsStatus::Success { locations, did_delete_branch: false }),
-            false
+            SnapshotMode::Comparing
         )
     }
 
@@ -142,7 +142,7 @@ Antarctica, 50.20982098092, 50.09830883
         assert_slack_view_snapshot(
             "add-locations-no-failures",
             &AddLocationsView::new(AddLocationsStatus::Success { locations, did_delete_branch: true }),
-            false
+            SnapshotMode::Comparing
         )
     }
 
@@ -155,7 +155,7 @@ Antarctica, 50.20982098092, 50.09830883
         assert_slack_view_snapshot(
             "add-locations-no-successes",
             &AddLocationsView::new(AddLocationsStatus::Success { locations, did_delete_branch: true }),
-            false
+            SnapshotMode::Comparing
         )
     }
 
@@ -164,7 +164,7 @@ Antarctica, 50.20982098092, 50.09830883
         assert_slack_view_snapshot(
             "add-locations-no-locations",
             &AddLocationsView::new(AddLocationsStatus::NoLocationsAdded),
-            false
+            SnapshotMode::Comparing
         )
     }
 
@@ -173,7 +173,7 @@ Antarctica, 50.20982098092, 50.09830883
         assert_slack_view_snapshot(
             "add-locations-pr-fail",
             &AddLocationsView::new(AddLocationsStatus::FailedToOpenPullRequest),
-            false
+            SnapshotMode::Comparing
         )
     }
 
@@ -182,7 +182,7 @@ Antarctica, 50.20982098092, 50.09830883
         assert_slack_view_snapshot(
             "add-locations-merge-conflict",
             &AddLocationsView::new(AddLocationsStatus::MergeConflict),
-            false
+            SnapshotMode::Comparing
         )
     }
 }

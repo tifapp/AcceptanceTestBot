@@ -1,9 +1,9 @@
-use super::{blocks::_SlackBlocks, empty_view::EmptySlackView, slack_view::SlackView};
+use super::{blocks::_SlackBlocksCollection, empty_view::EmptySlackView, slack_view::SlackView};
 
 impl <View: SlackView> SlackView for Option<View> {
-    fn _push_blocks_into(&self, slack_blocks: &mut _SlackBlocks) where Self: Sized {
+    fn __push_blocks_into(&self, slack_blocks: &mut _SlackBlocksCollection) where Self: Sized {
         if let Some(view) = self {
-            view._push_blocks_into(slack_blocks)
+            view.__push_blocks_into(slack_blocks)
         }
     }
 
