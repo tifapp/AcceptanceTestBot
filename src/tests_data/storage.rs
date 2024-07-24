@@ -349,6 +349,7 @@ mod tests {
                 None,
                 vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step 1".to_string(),
                         requirement: "Requirement 1".to_string()
                     },
@@ -362,6 +363,7 @@ mod tests {
                 None,
                 vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step A".to_string(),
                         requirement: "Requirement A".to_string()
                     }
@@ -378,6 +380,7 @@ mod tests {
                 description: None,
                 steps: vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step 1".to_string(),
                         requirement: "Requirement 1".to_string()
                     },
@@ -395,6 +398,7 @@ mod tests {
                 description: None,
                 steps: vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step A".to_string(),
                         requirement: "Requirement A".to_string()
                     }
@@ -419,6 +423,7 @@ mod tests {
                 None,
                 vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step 1".to_string(),
                         requirement: "Requirement 1".to_string()
                     },
@@ -432,6 +437,7 @@ mod tests {
                 None,
                 vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step A".to_string(),
                         requirement: "Requirement A".to_string()
                     }
@@ -448,6 +454,7 @@ mod tests {
                 description: None,
                 steps: vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step A".to_string(),
                         requirement: "Requirement A".to_string()
                     }
@@ -473,6 +480,7 @@ mod tests {
                 None,
                 vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step 1".to_string(),
                         requirement: "Requirement 1".to_string()
                     }
@@ -486,6 +494,7 @@ mod tests {
                 None,
                 vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step A".to_string(),
                         requirement: "Requirement A".to_string()
                     }
@@ -502,6 +511,7 @@ mod tests {
                 description: None,
                 steps: vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step 1".to_string(),
                         requirement: "Requirement 1".to_string()
                     }
@@ -516,6 +526,7 @@ mod tests {
                 description: None,
                 steps: vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step A".to_string(),
                         requirement: "Requirement A".to_string()
                     }
@@ -550,6 +561,7 @@ mod tests {
                 None,
                 vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step 1".to_string(),
                         requirement: "Requirement 1".to_string()
                     },
@@ -567,6 +579,7 @@ mod tests {
                 None,
                 vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step A".to_string(),
                         requirement: "Requirement A".to_string()
                     }
@@ -595,6 +608,7 @@ mod tests {
                 None,
                 vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step 1".to_string(),
                         requirement: "Requirement 1".to_string()
                     },
@@ -613,6 +627,7 @@ mod tests {
                 None,
                 vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step A".to_string(),
                         requirement: "Requirement A".to_string()
                     }
@@ -630,6 +645,7 @@ mod tests {
                 description: None,
                 steps: vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step A".to_string(),
                         requirement: "Requirement A".to_string()
                     }
@@ -654,6 +670,7 @@ mod tests {
                 None,
                 vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step 1".to_string(),
                         requirement: "Requirement 1".to_string()
                     },
@@ -667,6 +684,7 @@ mod tests {
                 None,
                 vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step A".to_string(),
                         requirement: "Requirement A".to_string()
                     }
@@ -677,6 +695,7 @@ mod tests {
                 None,
                 vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step B".to_string(),
                         requirement: "Requirement C".to_string()
                     }
@@ -707,6 +726,7 @@ l
                 None,
                 vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step A".to_string(),
                         requirement: "Requirement A".to_string()
                     }
@@ -739,6 +759,7 @@ l
                 None,
                 vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step 1".to_string(),
                         requirement: "Requirement 1".to_string()
                     },
@@ -752,6 +773,7 @@ l
                 None,
                 vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step A".to_string(),
                         requirement: "Requirement A".to_string()
                     }
@@ -767,6 +789,7 @@ l
                 None,
                 vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step B".to_string(),
                         requirement: "Requirement C".to_string()
                     }
@@ -802,6 +825,7 @@ L
                 None,
                 vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step A".to_string(),
                         requirement: "Requirement A".to_string()
                     }
@@ -815,6 +839,7 @@ L
                 None,
                 vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step A".to_string(),
                         requirement: "Requirement A".to_string()
                     }
@@ -842,6 +867,7 @@ L
                 None,
                 vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step A".to_string(),
                         requirement: "Requirement A".to_string()
                     }
@@ -862,6 +888,7 @@ L
                 None,
                 vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step A".to_string(),
                         requirement: "Requirement A".to_string()
                     }
@@ -889,6 +916,7 @@ L
                 None,
                 vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step 1".to_string(),
                         requirement: "Requirement 1".to_string()
                     },
@@ -902,6 +930,7 @@ L
                 None,
                 vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step A".to_string(),
                         requirement: "Requirement A".to_string()
                     }
@@ -917,6 +946,7 @@ L
                 None,
                 vec![
                     RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
                         name: "Step B".to_string(),
                         requirement: "Requirement C".to_string()
                     }

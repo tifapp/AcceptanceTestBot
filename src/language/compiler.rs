@@ -232,6 +232,7 @@ impl <'a> RoswaalCompileContext<'a> {
         let mut did_match = false;
         if let Some(requirement_info) = self.matchable_requirements.get_mut(&label_key) {
             let command = RoswaalTestCommand::Step {
+                label: step_label_name(label),
                 name: description.to_string(),
                 requirement: requirement_info.description.clone()
             };
@@ -263,6 +264,7 @@ impl <'a> RoswaalCompileContext<'a> {
         let mut did_match = false;
         if let Some(step_info) = self.matchable_steps.get_mut(&label_key) {
             let command = RoswaalTestCommand::Step {
+                label: step_label_name(label),
                 name: step_info.description.clone(),
                 requirement: description.to_string()
             };
@@ -320,6 +322,10 @@ impl AppendCompililationError for Vec<RoswaalCompilationError> {
 struct CompiledCommand {
     line_number: u32,
     command: RoswaalTestCommand
+}
+
+fn step_label_name(label: &str) -> String {
+    format!("Step {}", label)
 }
 
 #[cfg(test)]
@@ -669,6 +675,7 @@ Requirement 1: Have Piccolo charge his special-beam-cannon
             None,
             vec![
                 RoswaalTestCommand::Step {
+                    label: "Step 1".to_string(),
                     name: "Piccolo can use special-beam-cannon".to_string(),
                     requirement: "Have Piccolo charge his special-beam-cannon".to_string()
                 }
@@ -692,10 +699,12 @@ Requirement 2: What???
             None,
             vec![
                 RoswaalTestCommand::Step {
+                    label: "Step 1".to_string(),
                     name: "He means Saiyan".to_string(),
                     requirement: "Have the guy dying on the floor clarify that the other guy means Saiyan".to_string()
                 },
                 RoswaalTestCommand::Step {
+                    label: "Step 2".to_string(),
                     name: "I'm gonna deck you in the shnaz".to_string(),
                     requirement: "What???".to_string()
                 }
@@ -719,10 +728,12 @@ Requirement 1: Have the guy dying on the floor clarify that the other guy means 
             None,
             vec![
                 RoswaalTestCommand::Step {
+                    label: "Step 1".to_string(),
                     name: "He means Saiyan".to_string(),
                     requirement: "Have the guy dying on the floor clarify that the other guy means Saiyan".to_string()
                 },
                 RoswaalTestCommand::Step {
+                    label: "Step 2".to_string(),
                     name: "I'm gonna deck you in the shnaz".to_string(),
                     requirement: "What???".to_string()
                 }
@@ -746,10 +757,12 @@ Requirement 1: Have the guy dying on the floor clarify that the other guy means 
             None,
             vec![
                 RoswaalTestCommand::Step {
+                    label: "Step 1".to_string(),
                     name: "He means Saiyan".to_string(),
                     requirement: "Have the guy dying on the floor clarify that the other guy means Saiyan".to_string()
                 },
                 RoswaalTestCommand::Step {
+                    label: "Step 2".to_string(),
                     name: "I'm gonna deck you in the shnaz".to_string(),
                     requirement: "What???".to_string()
                 }
@@ -777,11 +790,13 @@ Requirement 1: Have the guy dying on the floor ask why he didn't block that
             None,
             vec![
                 RoswaalTestCommand::Step {
+                    label: "Step 1".to_string(),
                     name: "Why didn't you block that".to_string(),
                     requirement: "Have the guy dying on the floor ask why he didn't block that".to_string()
                 },
                 RoswaalTestCommand::SetLocation { location_name: "New York".parse().unwrap() },
                 RoswaalTestCommand::Step {
+                    label: "Step 2".to_string(),
                     name: "I thought you had it".to_string(),
                     requirement: "NAAAAHHHH".to_string()
                 }
@@ -807,10 +822,12 @@ Requirement 2: D
             Some("This is a super cool test.".to_string()),
             vec![
                 RoswaalTestCommand::Step {
+                    label: "Step 1".to_string(),
                     name: "A".to_string(),
                     requirement: "B".to_string()
                 },
                 RoswaalTestCommand::Step {
+                    label: "Step 2".to_string(),
                     name: "C".to_string(),
                     requirement: "D".to_string()
                 }
