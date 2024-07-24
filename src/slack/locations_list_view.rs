@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 
-use crate::{git::branch_name, location::storage::RoswaalStoredLocation, operations::load_all_locations::LoadAllLocationsStatus};
+use crate::{location::storage::RoswaalStoredLocation, operations::load_all_locations::LoadAllLocationsStatus};
 
 use super::ui_lib::{block_kit_views::{SlackHeader, SlackSection}, empty_view::EmptySlackView, for_each_view::ForEachView, slack_view::SlackView};
 

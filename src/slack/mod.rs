@@ -7,3 +7,4 @@ pub mod add_locations_view;
 pub mod locations_list_view;
 #[cfg(test)]
 pub mod test_support;
+pub mod remove_tests_view;
