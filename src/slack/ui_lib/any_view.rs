@@ -15,11 +15,15 @@ impl AnySlackView {
     pub fn erasing_ref(view: &impl SlackView) -> Self {
         Self { blocks: SlackBlocks::render(view) }
     }
+
+    pub(super) fn from(_blocks: _SlackBlocks) -> Self {
+        Self { blocks: SlackBlocks::from(_blocks) }
+    }
 }
 
 impl SlackView for AnySlackView {
     fn _push_blocks_into(&self, slack_blocks: &mut _SlackBlocks) where Self: Sized {
-        slack_blocks.extend(&self.blocks)
+        slack_blocks.extend(&self.blocks._blocks())
     }
 
     fn slack_body(&self) -> impl SlackView {

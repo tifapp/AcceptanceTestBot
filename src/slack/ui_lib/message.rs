@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use super::{blocks::{SlackBlocks, _SlackBlocks}, slack_view::SlackView};
+use super::{blocks::SlackBlocks, slack_view::SlackView};
 
 /// A slack message.
 ///

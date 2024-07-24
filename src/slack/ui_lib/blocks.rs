@@ -4,14 +4,24 @@ use super::{primitive_view::PrimitiveView, slack_view::SlackView};
 
 /// A struct to render a `SlackView` into a flat array of serialized slack blocks.
 #[derive(Debug, PartialEq, Eq, Serialize)]
-pub struct SlackBlocks(Vec<serde_json::Value>);
+pub struct SlackBlocks(_SlackBlocks);
 
 impl SlackBlocks {
     /// Renders the specified view into a `SlackBlocks` instance.
     pub fn render(view: &impl SlackView) -> Self {
         let mut blocks = _SlackBlocks::new();
         view._push_blocks_into(&mut blocks);
-        Self(blocks.0)
+        Self(blocks)
+    }
+
+    pub(super) fn from(_blocks: _SlackBlocks) -> Self {
+        Self(_blocks)
+    }
+}
+
+impl SlackBlocks {
+    pub(super) fn _blocks(&self) -> &_SlackBlocks {
+        &self.0
     }
 }
 
@@ -35,7 +45,7 @@ impl _SlackBlocks {
         }
     }
 
-    pub(super) fn extend(&mut self, other: &SlackBlocks) {
+    pub(super) fn extend(&mut self, other: &Self) {
         self.0.extend(other.0.iter().map(|v| v.to_owned()))
     }
 }
