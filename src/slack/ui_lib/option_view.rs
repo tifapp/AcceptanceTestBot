@@ -1,6 +1,6 @@
 use super::{any_view::AnySlackView, empty_view::EmptySlackView, slack_view::SlackView};
 
-impl <View: SlackView> SlackView for Option<&View> {
+impl <View: SlackView> SlackView for Option<View> {
     fn slack_body(&self) -> impl SlackView {
         if let Some(view) = self {
             return AnySlackView::erasing_ref(view.to_owned())
@@ -14,13 +14,13 @@ mod tests {
     use crate::slack::ui_lib::{block_kit_views::{SlackDivider, _SlackDivider}, slack_view::SlackView, test_support::assert_blocks_json};
     use super::*;
 
-    struct TestView<Base: SlackView> {
+    struct TestView<Base: SlackView + Clone> {
         child: Option<Base>
     }
 
-    impl <Base: SlackView> SlackView for TestView<Base> {
+    impl <Base: SlackView + Clone> SlackView for TestView<Base> {
         fn slack_body(&self) -> impl SlackView {
-            self.child.as_ref()
+            self.child.clone()
         }
     }
 

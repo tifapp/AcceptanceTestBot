@@ -124,6 +124,16 @@ impl RoswaalStringLocations {
 }
 
 impl RoswaalStringLocations {
+    pub fn has_errors(&self) -> bool {
+        self.results.iter().find(|r| r.is_err()).is_some()
+    }
+
+    pub fn has_valid_locations(&self) -> bool {
+        self.results.iter().find(|r| r.is_ok()).is_some()
+    }
+}
+
+impl RoswaalStringLocations {
     /// Returns a vector of the raw location names of each location line.
     pub fn raw_names(&self) -> Vec<&str> {
         self.results().iter().map(|r| {

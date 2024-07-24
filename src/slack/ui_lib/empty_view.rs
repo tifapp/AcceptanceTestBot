@@ -1,16 +1,12 @@
-use super::{primitive_view::_PrimitiveView, slack_view::SlackView};
+use super::{primitive_view::PrimitiveView, slack_view::SlackView};
 
 /// A view to use as a placeholder when no other view can be returned from the `slack_body` method
 /// of another view.
 pub struct EmptySlackView;
 
 impl SlackView for EmptySlackView {
-    fn _as_primitive_view(&self) -> Option<_PrimitiveView> {
-        Some(_PrimitiveView::empty())
-    }
-
     fn slack_body(&self) -> impl SlackView {
-        _PrimitiveView::empty()
+        PrimitiveView::empty()
     }
 }
 

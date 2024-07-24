@@ -16,6 +16,16 @@ impl RoswaalCompilationError {
     }
 }
 
+impl RoswaalCompilationError {
+    pub fn line_number(&self) -> u32 {
+        self.line_number
+    }
+
+    pub fn code(&self) -> &RoswaalCompilationErrorCode {
+        &self.code
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum RoswaalCompilationErrorCode {
     NoTestName,
