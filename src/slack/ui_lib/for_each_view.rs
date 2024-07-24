@@ -28,11 +28,26 @@ impl <
 > SlackView for ForEachView<Item, View, MakeView> {
     fn _push_blocks_into(&self, slack_blocks: &mut _SlackBlocks) where Self: Sized {
         for item in self.items.iter() {
-            slack_blocks.push_view(&(self.make_view)(item))
+            (self.make_view)(item)._push_blocks_into(slack_blocks);
         }
     }
 
     fn slack_body(&self) -> impl SlackView {
         EmptySlackView
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::slack::ui_lib::{block_kit_views::SlackDivider, slack_view::SlackView, test_support::assert_blocks_json};
+
+    use super::ForEachView;
+
+    #[test]
+    fn for_each_with_chain() {
+        let view = ForEachView::new((0..2).into_iter(), |_| {
+            SlackDivider.flat_chain_block(SlackDivider)
+        });
+        assert_blocks_json(&view, r#"[{"type":"divider"},{"type":"divider"},{"type":"divider"},{"type":"divider"}]"#)
     }
 }
