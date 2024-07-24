@@ -16,8 +16,8 @@ impl AnySlackView {
         Self { blocks: render_slack_view(view) }
     }
 
-    pub(super) fn from(_blocks: _SlackBlocksCollection) -> Self {
-        Self { blocks: SlackBlocks::from(_blocks) }
+    pub(super) fn from(collection: _SlackBlocksCollection) -> Self {
+        Self { blocks: SlackBlocks::from(collection) }
     }
 }
 
