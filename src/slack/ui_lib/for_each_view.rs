@@ -1,4 +1,4 @@
-use super::{empty_view::EmptySlackView, flat_chain_view::_FlatChainSlackView, slack_view::SlackView};
+use super::{blocks::_SlackBlocks, empty_view::EmptySlackView, slack_view::SlackView};
 
 /// A view for displaying a list of items.
 pub struct ForEachView<
@@ -26,10 +26,13 @@ impl <
     View: SlackView,
     MakeView: Fn(&Item) -> View
 > SlackView for ForEachView<Item, View, MakeView> {
+    fn _push_blocks_into(&self, slack_blocks: &mut _SlackBlocks) where Self: Sized {
+        for item in self.items.iter() {
+            slack_blocks.push_view(&(self.make_view)(item))
+        }
+    }
+
     fn slack_body(&self) -> impl SlackView {
-        _FlatChainSlackView::new_with_others(
-            EmptySlackView,
-            self.items.iter().map(|i| (self.make_view)(i)).collect()
-        )
+        EmptySlackView
     }
 }

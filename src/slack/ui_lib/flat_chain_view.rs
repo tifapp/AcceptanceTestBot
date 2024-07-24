@@ -3,15 +3,11 @@ use super::{blocks::_SlackBlocks, empty_view::EmptySlackView, slack_view::SlackV
 #[derive(Debug, PartialEq, Eq)]
 pub struct _FlatChainSlackView<Base: SlackView, Other: SlackView> {
     base: Base,
-    other: Vec<Other>
+    other: Other
 }
 
 impl <Base: SlackView, Other: SlackView> _FlatChainSlackView<Base, Other> {
     pub(super) fn new(base: Base, other: Other) -> Self {
-        Self { base, other: vec![other] }
-    }
-
-    pub(super) fn new_with_others(base: Base, other: Vec<Other>) -> Self {
         Self { base, other }
     }
 }
@@ -23,9 +19,7 @@ impl <Base: SlackView, Other: SlackView> SlackView for _FlatChainSlackView<Base,
 
     fn _push_blocks_into(&self, slack_blocks: &mut _SlackBlocks) {
         self.base._push_blocks_into(slack_blocks);
-        for view in self.other.iter() {
-            view._push_blocks_into(slack_blocks)
-        }
+        self.other._push_blocks_into(slack_blocks)
     }
 }
 
