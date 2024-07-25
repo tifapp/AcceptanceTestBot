@@ -1,1 +1,1 @@
-{"blocks":[{"text":{"text":"Add Locations","type":"plain_text"},"type":"header"},{"text":{"text":"⚠️ The following locations were invaaaaaaalid...\n- *50.20982098092* (Invalid Name)\n","type":"mrkdwn"},"type":"section"}]}
+{"blocks":[{"text":{"text":"Add Locations","type":"plain_text"},"type":"header"},{"text":{"text":"⚠️ *The following locations were invaaaaaaalid...*\n- *50.20982098092* (Invalid Name)\n","type":"mrkdwn"},"type":"section"}]}

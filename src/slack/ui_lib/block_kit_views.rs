@@ -15,10 +15,12 @@ pub struct SlackSection {
 impl SlackSection {
     /// A convenience constructor to create a section from markdown.
     pub fn from_markdown(markdown: &str) -> Self {
-        Self {
-            _type: "section",
-            text: SlackText::markdown(markdown)
-        }
+        Self { _type: "section", text: SlackText::markdown(markdown) }
+    }
+
+    /// A convenience constructor to create a section from plain text.
+    pub fn from_plaintext(text: &str) -> Self {
+        Self { _type: "section", text: SlackText::plain(text) }
     }
 
     /// Constructs an empty section.
