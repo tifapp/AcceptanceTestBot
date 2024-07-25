@@ -11,3 +11,4 @@ pub mod option_view;
 pub mod any_view;
 pub mod for_each_view;
 pub mod if_view;
+pub mod if_let_view;

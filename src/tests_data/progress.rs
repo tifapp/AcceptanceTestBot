@@ -42,11 +42,11 @@ impl RoswaalTestProgress {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RoswaalTestProgressErrorDescription {
-    message: String,
-    stack_trace: String
+    pub(super) message: String,
+    pub(super) stack_trace: String
 }
 
 impl RoswaalTestProgressErrorDescription {

@@ -7,7 +7,7 @@ use sqlx::{query, query_as, FromRow, Sqlite};
 
 use super::{ordinal::RoswaalTestCommandOrdinal, progress::{RoswaalTestProgress, RoswaalTestProgressErrorDescription}, query::{RoswaalSearchTestsQuery, RoswaalTestNamesString}};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct RoswaalStoredTest {
     name: String,
     description: Option<String>,
@@ -19,6 +19,26 @@ pub struct RoswaalStoredTest {
 }
 
 impl RoswaalStoredTest {
+    pub fn new(
+        name: String,
+        description: Option<String>,
+        steps: Vec<RoswaalTestCommand>,
+        command_failure_ordinal: Option<RoswaalTestCommandOrdinal>,
+        error: Option<RoswaalTestProgressErrorDescription>,
+        unmerged_branch_name: Option<RoswaalOwnedGitBranchName>,
+        last_run_date: Option<DateTime<Utc>>
+    ) -> Self {
+        Self {
+            name,
+            description,
+            steps,
+            command_failure_ordinal,
+            error,
+            unmerged_branch_name,
+            last_run_date
+        }
+    }
+
     fn from_sqlite_row(sqlite_test: &SqliteStoredTestRow, steps: Vec<RoswaalTestCommand>) -> Self {
         let error = (sqlite_test.error_message.clone(), sqlite_test.error_stack_trace.clone());
         Self {
@@ -42,8 +62,66 @@ impl RoswaalStoredTest {
         &self.name
     }
 
+    pub fn description(&self) -> Option<&String> {
+        self.description.as_ref()
+    }
+
     pub fn command_failure_ordinal(&self) -> Option<RoswaalTestCommandOrdinal> {
         self.command_failure_ordinal
+    }
+
+    pub fn did_pass_before_launch(&self) -> Option<bool> {
+        self.did_pass(RoswaalTestCommandOrdinal::for_before_launch())
+    }
+
+    pub fn commands(&self) -> Vec<RoswaalStoredTestCommand> {
+        self.steps.iter().enumerate().map(|(i, c)| {
+            RoswaalStoredTestCommand {
+                did_pass: self.did_pass(RoswaalTestCommandOrdinal::new(i as i32)),
+                command: c.clone()
+            }
+        })
+        .collect()
+    }
+
+    fn did_pass(&self, ordinal: RoswaalTestCommandOrdinal) -> Option<bool> {
+        match (self.last_run_date(), self.command_failure_ordinal()) {
+            (None, _) => None,
+            (Some(_), None) => Some(true),
+            (Some(_), Some(failure_ordinal)) => Some(ordinal < failure_ordinal)
+        }
+    }
+
+    pub fn error_message(&self) -> Option<&String> {
+        self.error.as_ref().map(|e| &e.message)
+    }
+
+    pub fn error_stack_trace(&self) -> Option<&String> {
+        self.error.as_ref().map(|e| &e.stack_trace)
+    }
+
+    pub fn last_run_date(&self) -> Option<DateTime<Utc>> {
+        self.last_run_date
+    }
+
+    pub fn unmerged_branch_name(&self) -> Option<&RoswaalOwnedGitBranchName> {
+        self.unmerged_branch_name.as_ref()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RoswaalStoredTestCommand {
+    did_pass: Option<bool>,
+    command: RoswaalTestCommand
+}
+
+impl RoswaalStoredTestCommand {
+    pub fn did_pass(&self) -> Option<bool> {
+        self.did_pass
+    }
+
+    pub fn command(&self) -> &RoswaalTestCommand {
+        &self.command
     }
 }
 

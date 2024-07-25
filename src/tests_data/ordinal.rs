@@ -5,7 +5,7 @@ use sqlx::{prelude::Type, sqlite::SqliteTypeInfo, Decode, Encode, Sqlite};
 ///
 /// Each test case has a before launch step which gets the special zero ordinal that can be
 /// obtained through the `for_before_launch` constructor.
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Deserialize, Encode, Decode)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Deserialize, Encode, Decode, PartialOrd, Ord)]
 pub struct RoswaalTestCommandOrdinal(i32);
 
 impl RoswaalTestCommandOrdinal {
