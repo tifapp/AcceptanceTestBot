@@ -2,7 +2,7 @@ use std::borrow::Borrow;
 
 use crate::{language::test::RoswaalTestCommand, operations::search_tests::SearchTestsStatus, tests_data::storage::{RoswaalStoredTest, RoswaalStoredTestCommand}};
 
-use super::{branch_name_view::BranchNameView, ui_lib::{block_kit_views::{SlackDivider, SlackHeader, SlackSection}, for_each_view::ForEachView, if_let_view::IfLet, if_view::If, slack_view::SlackView}};
+use super::{branch_name_view::OptionalBranchNameView, ui_lib::{block_kit_views::{SlackDivider, SlackHeader, SlackSection}, for_each_view::ForEachView, if_let_view::IfLet, if_view::If, slack_view::SlackView}};
 
 pub struct SearchTestsView {
     status: SearchTestsStatus
@@ -84,7 +84,7 @@ impl SlackView for TestView {
                     SlackSection::from_markdown(&stack_trace)
                 })
             )
-            .flat_chain_block(BranchNameView::new(self.test.unmerged_branch_name()))
+            .flat_chain_block(OptionalBranchNameView::new(self.test.unmerged_branch_name()))
     }
 }
 

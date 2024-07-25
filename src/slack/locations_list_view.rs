@@ -2,7 +2,7 @@ use std::borrow::Borrow;
 
 use crate::{location::storage::RoswaalStoredLocation, operations::load_all_locations::LoadAllLocationsStatus};
 
-use super::ui_lib::{block_kit_views::{SlackHeader, SlackSection}, empty_view::EmptySlackView, for_each_view::ForEachView, slack_view::SlackView};
+use super::{branch_name_view::OptionalBranchNameView, ui_lib::{block_kit_views::{SlackDivider, SlackHeader, SlackSection}, empty_view::EmptySlackView, for_each_view::ForEachView, if_let_view::IfLet, if_view::If, slack_view::SlackView}};
 
 pub struct LocationsListView {
     status: LoadAllLocationsStatus
@@ -25,8 +25,11 @@ impl LocationsListView {
     fn status_view(&self) -> impl SlackView {
         match self.status.borrow() {
             LoadAllLocationsStatus::Success(locations) => {
-                ForEachView::new(locations.iter(), |location| LocationView { location })
-                    .erase_to_any_view()
+                ForEachView::new(locations.iter().enumerate(), |(index, location)| {
+                    LocationView { location }
+                        .flat_chain_block(If::is_true(*index < locations.len() - 1, || SlackDivider))
+                })
+                .erase_to_any_view()
             },
             LoadAllLocationsStatus::NoLocations => {
                 SlackSection::from_markdown("No locations were fooooound!")
@@ -42,24 +45,25 @@ struct LocationView<'l> {
 
 impl <'l> SlackView for LocationView<'l> {
     fn slack_body(&self) -> impl SlackView {
-        let mut body = format!("🏔️ *{}*\n", self.location.location().name().raw_name());
-        body.push_str(
-            &format!(
-                "Latitude: _{:.8}_ Longitude: _{:.8}_\n",
-                self.location.location().coordinate().latitude(),
-                self.location.location().coordinate().longitude()
+        SlackSection::from_markdown(
+            &format!("🏔️ *{}*\n", self.location.location().name().raw_name())
+        )
+        .flat_chain_block(
+            SlackSection::from_markdown(
+                &format!(
+                    "*Latitude:* {:.8}\n*Longitude:* {:.8}\n",
+                    self.location.location().coordinate().latitude(),
+                    self.location.location().coordinate().longitude()
+                )
             )
-        );
-        if let Some(branch_name) = self.location.unmerged_branch_name() {
-            body.push_str(&format!("_(Branch: {})_", branch_name.to_string()))
-        }
-        SlackSection::from_markdown(&body)
+        )
+        .flat_chain_block(OptionalBranchNameView::new(self.location.unmerged_branch_name()))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{git::branch_name::RoswaalOwnedGitBranchName, location::{location::RoswaalLocation, storage::RoswaalStoredLocation}, operations::load_all_locations::LoadAllLocationsStatus, slack::{test_support::SlackTestConstantBranches, ui_lib::test_support::{assert_slack_view_snapshot, SnapshotMode}}};
+    use crate::{location::{location::RoswaalLocation, storage::RoswaalStoredLocation}, operations::load_all_locations::LoadAllLocationsStatus, slack::{test_support::SlackTestConstantBranches, ui_lib::test_support::{assert_slack_view_snapshot, SnapshotMode}}};
 
     use super::LocationsListView;
 
@@ -79,7 +83,7 @@ mod tests {
         assert_slack_view_snapshot(
             "locations-list-success",
             &LocationsListView::new(LoadAllLocationsStatus::Success(locations)),
-            SnapshotMode::Comparing
+            SnapshotMode::Recording
         )
     }
 
