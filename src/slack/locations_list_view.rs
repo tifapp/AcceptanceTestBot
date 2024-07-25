@@ -83,7 +83,7 @@ mod tests {
         assert_slack_view_snapshot(
             "locations-list-success",
             &LocationsListView::new(LoadAllLocationsStatus::Success(locations)),
-            SnapshotMode::Recording
+            SnapshotMode::Comparing
         )
     }
 
