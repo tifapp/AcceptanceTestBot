@@ -4,3 +4,4 @@
 /FitnessProject
 /FitnessProjectTest
 /slack-snapshot-diffs
+*.sqlite

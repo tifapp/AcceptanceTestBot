@@ -6,6 +6,7 @@ mod git;
 mod operations;
 mod tests_data;
 mod slack;
+mod http;
 
 fn main() {
     println!("Hello, world!");
