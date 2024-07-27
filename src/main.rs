@@ -10,11 +10,12 @@ mod http;
 
 use anyhow::Result;
 use dotenv::dotenv;
-use http::{routes::run_http_server, server_environment::ServerEnvironment};
+use http::{server::run_http_server, server_environment::ServerEnvironment};
+use utils::log::bootstrap_logging;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv()?;
-    let environment = ServerEnvironment::dev().await?;
-    run_http_server(environment).await
+    bootstrap_logging();
+    run_http_server(&ServerEnvironment::current().await?).await
 }

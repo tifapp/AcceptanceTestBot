@@ -1,5 +1,8 @@
+use std::env;
+
 use crate::{git::{metadata::RoswaalGitRepositoryMetadata, repo::{LibGit2RepositoryClient, RoswaalGitRepository}}, utils::sqlite::RoswaalSqlite};
 use anyhow::Result;
+use log::info;
 use reqwest::Client;
 
 /// A data type containing necessary structs for server operations.
@@ -18,8 +21,8 @@ impl ServerEnvironment {
                 &RoswaalGitRepositoryMetadata::for_tif_react_frontend()
             ).await?,
             http_client: Client::new(),
-            sqlite: RoswaalSqlite::open("sqlite://roswaal.sqlite").await?,
-            address: "TODO"
+            sqlite: RoswaalSqlite::open("./roswaal.sqlite").await?,
+            address: "0.0.0.0:8080"
         })
     }
 
@@ -33,6 +36,20 @@ impl ServerEnvironment {
             sqlite: RoswaalSqlite::open("./roswaal-dev.sqlite").await?,
             address: "127.0.0.1:8082"
         })
+    }
+
+    /// Returns the current environment.
+    ///
+    /// If the ROSWAAL_ENV environment variable is "dev", then the development environment is used.
+    /// Otherwise, the production environment is used.
+    pub async fn current() -> Result<Self> {
+        if env::var("ROSWAAL_ENV").map(|d| d == "dev").is_ok() {
+            info!("Using dev ServerEnvironment.");
+            Self::dev().await
+        } else {
+            info!("Using production ServerEnvironment.");
+            Self::prod().await
+        }
     }
 }
 
