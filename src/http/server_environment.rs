@@ -6,7 +6,8 @@ use reqwest::Client;
 pub struct ServerEnvironment {
     git_repository: RoswaalGitRepository<LibGit2RepositoryClient>,
     http_client: Client,
-    sqlite: RoswaalSqlite
+    sqlite: RoswaalSqlite,
+    address: &'static str
 }
 
 impl ServerEnvironment {
@@ -17,7 +18,8 @@ impl ServerEnvironment {
                 &RoswaalGitRepositoryMetadata::for_tif_react_frontend()
             ).await?,
             http_client: Client::new(),
-            sqlite: RoswaalSqlite::open("./roswaal.sqlite").await?
+            sqlite: RoswaalSqlite::open("sqlite://roswaal.sqlite").await?,
+            address: "TODO"
         })
     }
 
@@ -28,7 +30,8 @@ impl ServerEnvironment {
                 &RoswaalGitRepositoryMetadata::for_testing()
             ).await?,
             http_client: Client::new(),
-            sqlite: RoswaalSqlite::open("./roswaal-dev.sqlite").await?
+            sqlite: RoswaalSqlite::open("./roswaal-dev.sqlite").await?,
+            address: "127.0.0.1:8082"
         })
     }
 }
@@ -44,5 +47,9 @@ impl ServerEnvironment {
 
     pub fn sqlite(&self) -> &RoswaalSqlite {
         &self.sqlite
+    }
+
+    pub fn address(&self) -> &str {
+        self.address
     }
 }
