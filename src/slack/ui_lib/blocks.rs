@@ -6,7 +6,7 @@ use super::{primitive_view::PrimitiveView, slack_view::SlackView};
 ///
 /// You create instances of this struct via the `render_slack_blocks` function which will convert
 /// a `SlackView` hierarchy into a flat array of JSON-serializeable slack blocks.
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Clone)]
 pub struct SlackBlocks(_SlackBlocksCollection);
 
 impl SlackBlocks {
@@ -25,7 +25,7 @@ impl SlackBlocks {
 ///
 /// This struct is an implementation detail of the library, and it could be removed or changed in
 /// the future. Do not depend on this struct directly.
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Clone)]
 pub struct _SlackBlocksCollection(Vec<serde_json::Value>);
 
 impl _SlackBlocksCollection {

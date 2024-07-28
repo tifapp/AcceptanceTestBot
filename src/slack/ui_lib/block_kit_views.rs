@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use serde::Serialize;
+use serde::{ser::SerializeStruct, Serialize};
 
 use super::{primitive_view::PrimitiveView, slack_view::SlackView};
 
@@ -35,21 +35,58 @@ impl SlackView for SlackSection {
     }
 }
 
+impl SlackSection {
+    /// Enables slack emojis on this section if `is_enabled` is true.
+    ///
+    /// This has no effect on markdown text.
+    pub fn emoji_enabled(self, is_enabled: bool) -> Self {
+        Self { text: self.text.emoji_enabled(is_enabled), ..self }
+    }
+}
+
 /// Slack Text for use in a Section.
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct SlackText {
-    #[serde(rename = "type")]
     _type: &'static str,
-    text: String
+    text: String,
+    emoji: bool
 }
 
 impl SlackText {
     pub fn markdown(markdown: &str) -> Self {
-        Self { _type: "mrkdwn", text: markdown.to_string() }
+        Self { _type: "mrkdwn", text: markdown.to_string(), emoji: true }
     }
 
     pub fn plain(text: &str) -> Self {
-        Self { _type: "plain_text", text: text.to_string() }
+        Self { _type: "plain_text", text: text.to_string(), emoji: true }
+    }
+}
+
+impl SlackText {
+    /// Enables slack emojis on this text if `is_enabled` is true.
+    ///
+    /// This has no effect on markdown text.
+    pub fn emoji_enabled(self, is_enabled: bool) -> Self {
+        Self { emoji: is_enabled, ..self }
+    }
+
+    fn is_markdown(&self) -> bool {
+        self._type == "mrkdwn"
+    }
+}
+
+impl Serialize for SlackText {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
+        let mut state = serializer.serialize_struct(
+            "SlackText",
+            if self.is_markdown() { 2 } else { 3 }
+        )?;
+        if !self.is_markdown() && !self.emoji {
+            state.serialize_field("emoji", &self.emoji)?
+        }
+        state.serialize_field("text", &self.text)?;
+        state.serialize_field("type", &self._type)?;
+        state.end()
     }
 }
 
