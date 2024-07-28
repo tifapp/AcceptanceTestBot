@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 
 use super::slack_view::SlackView;
-use super::message::SlackMessage;
 use std::path::Path;
 use std::{fs::File, io::Write};
 use std::io::Read;
@@ -11,10 +10,9 @@ use super::slack_view::render_slack_view;
 /// Asserts the json rendered by a slack view.
 #[cfg(test)]
 pub fn assert_blocks_json(view: &impl SlackView, json: &str) {
-    let message = SlackMessage::for_testing(view);
-    let expected_json = format!("{{\"channel\":\"__TEST__\",\"blocks\":{}}}", json);
-    let json = serde_json::to_string(&message).unwrap();
-    assert_eq!(json, expected_json)
+    let blocks = render_slack_view(view);
+    let blocks_json = serde_json::to_string(&blocks).unwrap();
+    assert_eq!(blocks_json, json)
 }
 
 /// An enum to determine the behavior of `assert_slack_view_snapshot`.
