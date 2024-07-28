@@ -4,7 +4,7 @@ use strum::IntoEnumIterator;
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 
 /// The slack slash commands that this tool must respond to.
-#[derive(Debug, PartialEq, Eq, EnumString, EnumIter, IntoStaticStr)]
+#[derive(Debug, PartialEq, Eq, EnumString, EnumIter, IntoStaticStr, Clone, Copy)]
 pub enum RoswaalSlackCommand {
     #[strum(serialize="/view-tests")]
     ViewTests,
@@ -24,7 +24,7 @@ impl RoswaalSlackCommand {
     ///
     /// Any commands that would imply an interaction with git, github, or an external service
     /// should return true from this method.
-    fn is_long_running(&self) -> bool {
+    pub fn is_long_running(&self) -> bool {
         match self {
             Self::AddTests | Self::AddLocations | Self::RemoveTests => true,
             _ => false

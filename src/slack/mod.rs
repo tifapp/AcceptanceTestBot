@@ -14,3 +14,5 @@ pub mod branch_name_view;
 pub mod command;
 pub mod command_handler;
 pub mod message;
+pub mod pending_view;
+pub mod error_view;

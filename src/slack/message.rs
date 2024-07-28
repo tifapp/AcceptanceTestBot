@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, future::Future};
 
 use reqwest::Client;
 use serde::Serialize;
@@ -9,7 +9,7 @@ use super::ui_lib::{blocks::SlackBlocks, slack_view::{render_slack_view, SlackVi
 /// A slack message.
 ///
 /// A slack message is created from a `SlackView` and a string channel identifier.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
 pub struct SlackMessage {
     #[serde(rename = "channel")]
     channel_id: String,
@@ -30,7 +30,7 @@ impl SlackMessage {
 
 /// A trait for sending a slack message.
 pub trait SlackSendMessage {
-    async fn send(&self, message: &SlackMessage) -> Result<()>;
+    fn send(&self, message: &SlackMessage) -> impl Future<Output = Result<()>> + Send;
 }
 
 impl SlackSendMessage for Client {
