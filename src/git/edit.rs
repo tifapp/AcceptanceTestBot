@@ -67,7 +67,7 @@ mod tests {
     use tokio::fs::{try_exists, File};
 
     use super::*;
-    use crate::git::{metadata::{RoswaalGitRepositoryMetadata, TEST_REPO_BASE_BRANCH_NAME}, repo::{LibGit2RepositoryClient, PullBranchStatus, RoswaalGitRepository}, test_support::{repo_with_test_metadata, with_clean_test_repo_access, write_string, TestGithubPullRequestOpen}};
+    use crate::{git::{metadata::{RoswaalGitRepositoryMetadata, TEST_REPO_BASE_BRANCH_NAME}, repo::{LibGit2RepositoryClient, PullBranchStatus, RoswaalGitRepository}, test_support::{repo_with_test_metadata, with_clean_test_repo_access, write_string, TestGithubPullRequestOpen}}, utils::test_error::TestError};
 
     #[tokio::test]
     async fn test_basic_flow_returns_successfully_with_proper_pr_opened_and_correct_repo_state() {
@@ -277,17 +277,6 @@ mod tests {
         assert!(try_exists(&file_path).await?);
         Ok(())
     }
-
-    #[derive(Debug)]
-    struct TestError;
-
-    impl Display for TestError {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "TestError")
-        }
-    }
-
-    impl Error for TestError {}
 
     impl GithubPullRequest {
         fn test(head_branch: &RoswaalOwnedGitBranchName) -> Self {
