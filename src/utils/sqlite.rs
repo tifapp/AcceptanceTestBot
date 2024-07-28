@@ -3,7 +3,7 @@ use std::sync::Arc;
 use sqlx::database::HasArguments;
 use sqlx::query::{Query, QueryAs};
 use sqlx::{query, query_as, Executor, FromRow, Pool, Transaction};
-use sqlx::sqlite::{Sqlite, SqliteArguments, SqliteQueryResult, SqliteRow};
+use sqlx::sqlite::{Sqlite, SqliteArguments, SqliteConnectOptions, SqliteQueryResult, SqliteRow};
 use anyhow::Result;
 use tokio::sync::{Mutex, MutexGuard};
 
@@ -12,17 +12,24 @@ pub struct RoswaalSqlite {
     mutex: Arc<Mutex<Pool<Sqlite>>>
 }
 
+const SQLITE_IN_MEMORY_PATH: &str = ":memory:";
+
 impl RoswaalSqlite {
     /// Attempts to open a new sqlite connection at the specified path.
     pub async fn open(path: &str) -> Result<Self> {
-        let pool = Pool::<Sqlite>::connect(path).await?;
+        let pool = if path != SQLITE_IN_MEMORY_PATH {
+            let options = SqliteConnectOptions::new().filename(path).create_if_missing(true);
+            Pool::<Sqlite>::connect_with(options).await?
+        } else {
+            Pool::<Sqlite>::connect(path).await?
+        };
         Self::migrate_v1(&pool).await?;
         Ok(RoswaalSqlite { mutex: Arc::new(Mutex::new(pool)) })
     }
 
     /// Attempts to open an in-memory sqlite connection.
     pub async fn in_memory() -> Result<Self> {
-        Self::open(":memory:").await
+        Self::open(SQLITE_IN_MEMORY_PATH).await
     }
 
     async fn migrate_v1(pool: &Pool<Sqlite>) -> Result<()> {
