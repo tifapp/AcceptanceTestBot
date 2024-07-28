@@ -3,7 +3,7 @@ use std::{future::Future, sync::Arc};
 use serde::Deserialize;
 use anyhow::Error;
 use tokio::spawn;
-use super::{command::RoswaalSlackCommand, message::{SlackMessage, SlackSendMessage}, pending_view::PendingView, ui_lib::{blocks::SlackBlocks, empty_view::EmptySlackView, slack_view::{render_slack_view, SlackView}}};
+use super::{command::RoswaalSlackCommand, error_view::ErrorView, message::{SlackMessage, SlackSendMessage}, pending_view::PendingView, ui_lib::{blocks::SlackBlocks, slack_view::{render_slack_view, SlackView}}};
 
 /// A request from slack.
 #[derive(Debug, PartialEq, Eq, Deserialize, Clone)]
@@ -30,30 +30,34 @@ pub trait RoswaalSlackHandler: Sized + 'static {
     /// If the command in the request is long running, then the function immediately returns a
     /// message to indicating that the request is being handled. In the meantime, the request is
     /// being handled on a background task, and it the returned message will be sent to slack in
-    /// the background via `message_sender` when the request is fully handled.
+    /// the background via `messenger` when the handling of the request is finished.
     async fn handle_request(
         self,
         request: RoswaalSlackRequest,
-        message_sender: Arc<(impl SlackSendMessage + Send + Sync + 'static)>
-    ) -> Result<SlackBlocks, Error> where Self: Send, Self: Sync {
+        messenger: Arc<(impl SlackSendMessage + Send + Sync + 'static)>
+    ) -> SlackBlocks where Self: Send, Self: Sync {
         if request.command.is_long_running() {
             // NB: A long running command must spin up an unstructered background task since we
             // have to send an ack response to slack within 3 seconds.
             spawn(async move {
-                let message = self.handle_command(&request.command, &request.text)
-                    .await
-                    .map(|view| {
-                        SlackMessage::new(&request.channel_id, &view, &request.response_url)
-                    })?;
-                message_sender.send(&message).await?;
-                Ok::<(), Error>(())
+                let view = view_for_request(self, &request).await;
+                let message = SlackMessage::new(&request.channel_id, &view, &request.response_url);
+                messenger.send(&message).await
             });
-            Ok(render_slack_view(&PendingView))
+            render_slack_view(&PendingView)
         } else {
-            self.handle_command(&request.command, &request.text)
-                .await
-                .map(|view| render_slack_view(&view))
+            render_slack_view(&view_for_request(self, &request).await)
         }
+    }
+}
+
+async fn view_for_request(
+    handler: impl RoswaalSlackHandler,
+    request: &RoswaalSlackRequest
+) -> impl SlackView {
+    match handler.handle_command(&request.command, &request.text).await {
+        Ok(view) => view.erase_to_any_view(),
+        Err(error) => ErrorView::new(error).erase_to_any_view()
     }
 }
 
@@ -61,9 +65,10 @@ pub trait RoswaalSlackHandler: Sized + 'static {
 mod tests {
     use std::{sync::Arc, time::Duration};
 
+    use serde::Serialize;
     use tokio::{sync::Mutex, time::sleep};
 
-    use crate::slack::{message::{SlackMessage, SlackSendMessage}, pending_view::PendingView, ui_lib::block_kit_views::SlackDivider};
+    use crate::{slack::{message::{SlackMessage, SlackSendMessage}, pending_view::PendingView, ui_lib::{block_kit_views::SlackDivider, empty_view::EmptySlackView}}, utils::test_error::TestError};
 
     use super::*;
 
@@ -87,11 +92,19 @@ mod tests {
 
     const TEST_VIEW: SlackDivider = SlackDivider;
 
-    struct TestCommandHandler;
+    struct SuccessfulHandler;
 
-    impl RoswaalSlackHandler for TestCommandHandler {
+    impl RoswaalSlackHandler for SuccessfulHandler {
         async fn handle_command(self, _: &RoswaalSlackCommand, _: &str) -> Result<impl SlackView, Error> {
             Ok(TEST_VIEW)
+        }
+    }
+
+    struct FailingHandler;
+
+    impl RoswaalSlackHandler for FailingHandler {
+        async fn handle_command(self, _: &RoswaalSlackCommand, _: &str) -> Result<impl SlackView, Error> {
+            Err::<EmptySlackView, Error>(Error::new(TestError))
         }
     }
 
@@ -107,12 +120,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn non_long_living_command_does_uses_view_as_direct_response() {
+    async fn non_long_running_command_does_uses_view_as_direct_response() {
         let messenger = Arc::new(TestSlackMessager::new());
-        let blocks = TestCommandHandler.handle_request(
+        let blocks = SuccessfulHandler.handle_request(
             RoswaalSlackRequest::for_testing(RoswaalSlackCommand::ViewLocations),
             messenger.clone()
-        ).await.unwrap();
+        ).await;
         assert_eq!(blocks, render_slack_view(&TEST_VIEW));
         assert!(messenger.messages.lock().await.is_empty())
     }
@@ -126,15 +139,45 @@ mod tests {
             &TEST_VIEW,
             &request.response_url
         );
-        let blocks = TestCommandHandler.handle_request(
+        let blocks = SuccessfulHandler.handle_request(
             request,
             messenger.clone()
-        ).await.unwrap();
+        ).await;
         assert_eq!(blocks, render_slack_view(&PendingView));
         wait().await;
         let messages = messenger.messages.lock().await;
         let messages = (*messages).clone();
         assert_eq!(messages, vec![expected_message])
+    }
+
+    #[tokio::test]
+    async fn non_long_running_command_returns_error_view_when_failure_occurs() {
+        let messenger = Arc::new(TestSlackMessager::new());
+        let blocks = FailingHandler.handle_request(
+            RoswaalSlackRequest::for_testing(RoswaalSlackCommand::ViewLocations),
+            messenger.clone()
+        ).await;
+        assert_error_blocks(&blocks);
+        assert!(messenger.messages.lock().await.is_empty())
+    }
+
+    #[tokio::test]
+    async fn long_running_command_sends_a_deffered_error_message_when_failure_occurs() {
+        let messenger = Arc::new(TestSlackMessager::new());
+        let request = RoswaalSlackRequest::for_testing(RoswaalSlackCommand::AddTests);
+        let blocks = FailingHandler.handle_request(
+            request,
+            messenger.clone()
+        ).await;
+        assert_eq!(blocks, render_slack_view(&PendingView));
+        wait().await;
+        let messages = messenger.messages.lock().await;
+        assert_error_blocks((*messages).first().unwrap())
+    }
+
+    fn assert_error_blocks(blocks: &impl Serialize) {
+        let json = serde_json::to_string(&blocks).unwrap();
+        assert!(json.contains("An Error Occurred"));
     }
 
     async fn wait() {
