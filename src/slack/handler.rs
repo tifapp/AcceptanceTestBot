@@ -19,40 +19,40 @@ pub trait RoswaalSlackHandler: Sized + 'static {
     /// Handles the specified command and command text, and returns a `SlackView` with the contents
     /// of the response to the command.
     fn handle_command(
-        self,
+        &self,
         command: &RoswaalSlackCommand,
         command_text: &str
     ) -> impl Future<Output = Result<impl SlackView + Send, Error>> + Send;
+}
 
-    /// Handles a `RoswaalSlackRequest` and returns the `SlackBlocks` that form the content of the
-    /// response.
-    ///
-    /// If the command in the request is long running, then the function immediately returns a
-    /// message to indicating that the request is being handled. In the meantime, the request is
-    /// being handled on a background task, and it the returned message will be sent to slack in
-    /// the background via `messenger` when the handling of the request is finished.
-    async fn handle_request(
-        self,
-        request: RoswaalSlackRequest,
-        messenger: Arc<(impl SlackSendMessage + Send + Sync + 'static)>
-    ) -> SlackBlocks where Self: Send, Self: Sync {
-        if request.command.is_long_running() {
-            // NB: A long running command must spin up an unstructered background task since we
-            // have to send an ack response to slack within 3 seconds.
-            spawn(async move {
-                let view = view_for_request(self, &request).await;
-                let message = SlackMessage::new(&request.channel_id, &view, &request.response_url);
-                messenger.send(&message).await
-            });
-            render_slack_view(&PendingView)
-        } else {
-            render_slack_view(&view_for_request(self, &request).await)
-        }
+/// Handles a `RoswaalSlackRequest` and returns the `SlackBlocks` that form the content of the
+/// response.
+///
+/// If the command in the request is long running, then the function immediately returns a
+/// message to indicating that the request is being handled. In the meantime, the request is
+/// being handled on a background task, and it the returned message will be sent to slack in
+/// the background via `messenger` when the handling of the request is finished.
+pub async fn handle_slack_request(
+    handler: Arc<impl RoswaalSlackHandler + Send + Sync>,
+    request: RoswaalSlackRequest,
+    messenger: Arc<(impl SlackSendMessage + Send + Sync + 'static)>
+) -> SlackBlocks {
+    if request.command.is_long_running() {
+        // NB: A long running command must spin up an unstructered background task since we
+        // have to send an ack response to slack within 3 seconds.
+        spawn(async move {
+            let view = view_for_request(handler.as_ref(), &request).await;
+            let message = SlackMessage::new(&request.channel_id, &view, &request.response_url);
+            messenger.send(&message).await
+        });
+        render_slack_view(&PendingView)
+    } else {
+        render_slack_view(&view_for_request(handler.as_ref(), &request).await)
     }
 }
 
 async fn view_for_request(
-    handler: impl RoswaalSlackHandler,
+    handler: &impl RoswaalSlackHandler,
     request: &RoswaalSlackRequest
 ) -> impl SlackView {
     match handler.handle_command(&request.command, &request.text).await {
@@ -95,7 +95,7 @@ mod tests {
     struct SuccessfulHandler;
 
     impl RoswaalSlackHandler for SuccessfulHandler {
-        async fn handle_command(self, _: &RoswaalSlackCommand, _: &str) -> Result<impl SlackView, Error> {
+        async fn handle_command(&self, _: &RoswaalSlackCommand, _: &str) -> Result<impl SlackView, Error> {
             Ok(TEST_VIEW)
         }
     }
@@ -103,7 +103,7 @@ mod tests {
     struct FailingHandler;
 
     impl RoswaalSlackHandler for FailingHandler {
-        async fn handle_command(self, _: &RoswaalSlackCommand, _: &str) -> Result<impl SlackView, Error> {
+        async fn handle_command(&self, _: &RoswaalSlackCommand, _: &str) -> Result<impl SlackView, Error> {
             Err::<EmptySlackView, Error>(Error::new(TestError))
         }
     }
@@ -122,7 +122,8 @@ mod tests {
     #[tokio::test]
     async fn non_long_running_command_does_uses_view_as_direct_response() {
         let messenger = Arc::new(TestSlackMessager::new());
-        let blocks = SuccessfulHandler.handle_request(
+        let blocks = handle_slack_request(
+            Arc::new(SuccessfulHandler),
             RoswaalSlackRequest::for_testing(RoswaalSlackCommand::ViewLocations),
             messenger.clone()
         ).await;
@@ -139,7 +140,8 @@ mod tests {
             &TEST_VIEW,
             &request.response_url
         );
-        let blocks = SuccessfulHandler.handle_request(
+        let blocks = handle_slack_request(
+            Arc::new(SuccessfulHandler),
             request,
             messenger.clone()
         ).await;
@@ -153,7 +155,8 @@ mod tests {
     #[tokio::test]
     async fn non_long_running_command_returns_error_view_when_failure_occurs() {
         let messenger = Arc::new(TestSlackMessager::new());
-        let blocks = FailingHandler.handle_request(
+        let blocks = handle_slack_request(
+            Arc::new(FailingHandler),
             RoswaalSlackRequest::for_testing(RoswaalSlackCommand::ViewLocations),
             messenger.clone()
         ).await;
@@ -165,7 +168,8 @@ mod tests {
     async fn long_running_command_sends_a_deffered_error_message_when_failure_occurs() {
         let messenger = Arc::new(TestSlackMessager::new());
         let request = RoswaalSlackRequest::for_testing(RoswaalSlackCommand::AddTests);
-        let blocks = FailingHandler.handle_request(
+        let blocks = handle_slack_request(
+            Arc::new(FailingHandler),
             request,
             messenger.clone()
         ).await;

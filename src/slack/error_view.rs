@@ -4,7 +4,6 @@ use anyhow::Error;
 
 use super::ui_lib::{block_kit_views::{SlackHeader, SlackSection}, slack_view::SlackView};
 
-///
 pub struct ErrorView {
     error: Error
 }

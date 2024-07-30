@@ -282,6 +282,7 @@ impl <'a> RoswaalCompileContext<'a> {
     }
 
     fn finalize(mut self) -> Result<RoswaalTest, Vec<RoswaalCompilationError>> {
+        self.errors.sort_by_key(|e| e.line_number());
         let test_name = match self.test_name {
             Some(name) => name,
             _ => return Err(self.errors)
@@ -865,6 +866,36 @@ Requirement 1: D
                 }
             ]
         )
+    }
+
+    #[test]
+    fn test_compile_errors_are_sorted_by_line_number() {
+        let test = "\
+New Test: Big Chungus III
+Step 1: Big
+Step 1: Big 2
+";
+        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty());
+        let errors = vec![
+            RoswaalCompilationError {
+                line_number: 2,
+                code: RoswaalCompilationErrorCode::NoStepRequirement {
+                    step_name: "Step 1".to_string(),
+                    step_description: "Big".to_string()
+                }
+            },
+            RoswaalCompilationError {
+                line_number: 3,
+                code: RoswaalCompilationErrorCode::Duplicate {
+                    name: "Step 1".to_string(),
+                    code: RoswaalCompilationDuplicateErrorCode::StepLabel
+                }
+            },
+            RoswaalCompilationError {
+                line_number: 3,
+                code: RoswaalCompilationErrorCode::NoTestSteps
+            }
+        ];
     }
 
     fn assert_contains_compile_error(
