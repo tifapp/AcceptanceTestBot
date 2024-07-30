@@ -294,7 +294,7 @@ Fake Command: This is a fake command!
         assert_slack_view_snapshot(
             "add-tests-success-all-compilation-errors",
             &AddTestsView::new(AddTestsStatus::Success { results, should_warn_undeleted_branch: false }),
-            SnapshotMode::Recording
+            SnapshotMode::Comparing
         )
     }
 
