@@ -5,12 +5,15 @@ use anyhow::Result;
 use log::info;
 use reqwest::Client;
 
+use super::password::EndpointPassword;
+
 /// A data type containing necessary structs for server operations.
 pub struct ServerEnvironment {
     git_repository: RoswaalGitRepository<LibGit2RepositoryClient>,
     http_client: Client,
     sqlite: RoswaalSqlite,
-    address: &'static str
+    address: &'static str,
+    password: EndpointPassword
 }
 
 impl ServerEnvironment {
@@ -22,7 +25,8 @@ impl ServerEnvironment {
             ).await?,
             http_client: Client::new(),
             sqlite: RoswaalSqlite::open("./roswaal.sqlite").await?,
-            address: "0.0.0.0:8080"
+            address: "0.0.0.0:8080",
+            password: EndpointPassword::prod()
         })
     }
 
@@ -34,7 +38,8 @@ impl ServerEnvironment {
             ).await?,
             http_client: Client::new(),
             sqlite: RoswaalSqlite::open("./roswaal-dev.sqlite").await?,
-            address: "127.0.0.1:8082"
+            address: "127.0.0.1:8082",
+            password: EndpointPassword::dev()
         })
     }
 
