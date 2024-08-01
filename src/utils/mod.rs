@@ -7,3 +7,4 @@ pub mod dedup;
 pub mod log;
 #[cfg(test)]
 pub mod test_error;
+pub mod env;

@@ -4,7 +4,9 @@ use reqwest::Client;
 use serde::Serialize;
 use anyhow::{Result, Error};
 
-use super::ui_lib::{blocks::SlackBlocks, slack_view::{render_slack_view, SlackView}};
+use crate::utils::env::RoswaalEnvironement;
+
+use super::ui_lib::{block_kit_views::SlackSection, blocks::SlackBlocks, if_view::If, slack_view::{render_slack_view, SlackView}};
 
 /// A slack message.
 ///
@@ -22,9 +24,23 @@ impl SlackMessage {
     pub fn new(channel_id: &str, view: &impl SlackView, response_url: &str) -> Self {
         Self {
             channel_id: channel_id.to_string(),
-            blocks: render_slack_view(view),
+            blocks: render_slack_view(&MessageView { base: view }),
             response_url: response_url.to_string()
         }
+    }
+}
+
+struct MessageView<'v, Base: SlackView> {
+    base: &'v Base
+}
+
+impl <'v, Base: SlackView> SlackView for MessageView<'v, Base> {
+    fn slack_body(&self) -> impl SlackView {
+        If::is_true(
+            RoswaalEnvironement::current() == RoswaalEnvironement::Dev,
+            || SlackSection::from_markdown("_This message was sent for development purposeeeeeeeeeees. Please ignoooooooore._")
+        )
+        .flat_chain_block_ref(self.base)
     }
 }
 

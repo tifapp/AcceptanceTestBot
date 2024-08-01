@@ -896,6 +896,7 @@ Step 1: Big 2
                 code: RoswaalCompilationErrorCode::NoTestSteps
             }
         ];
+        assert_eq!(result, Err(errors))
     }
 
     fn assert_contains_compile_error(

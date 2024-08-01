@@ -1,6 +1,6 @@
 use std::env;
 
-use crate::{git::{metadata::RoswaalGitRepositoryMetadata, repo::{LibGit2RepositoryClient, RoswaalGitRepository}}, utils::sqlite::RoswaalSqlite};
+use crate::{git::{metadata::RoswaalGitRepositoryMetadata, repo::{LibGit2RepositoryClient, RoswaalGitRepository}}, utils::{env::RoswaalEnvironement, sqlite::RoswaalSqlite}};
 use anyhow::Result;
 use log::info;
 use reqwest::Client;
@@ -48,7 +48,7 @@ impl ServerEnvironment {
     /// If the ROSWAAL_ENV environment variable is "dev", then the development environment is used.
     /// Otherwise, the production environment is used.
     pub async fn current() -> Result<Self> {
-        if env::var("ROSWAAL_ENV").map(|d| d == "dev").is_ok() {
+        if RoswaalEnvironement::current() == RoswaalEnvironement::Dev {
             info!("Using dev ServerEnvironment.");
             Self::dev().await
         } else {
