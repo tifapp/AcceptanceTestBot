@@ -39,7 +39,12 @@ struct QueryParameters {
     password: String
 }
 
-pub async fn check_password(req: Request, next: Next, password: EndpointPassword) -> Result<Response, StatusCode> {
+/// Middleware to check if the request has the correct `EndpointPassword`.
+pub async fn check_password_middleware(
+    req: Request,
+    next: Next,
+    password: EndpointPassword
+) -> Result<Response, StatusCode> {
     if let Ok::<Query<QueryParameters>, _>(query) = Query::try_from_uri(req.uri()) {
         if password.verify(&query.password) {
             Ok(next.run(req).await)
@@ -83,7 +88,7 @@ mod tests {
     }
 
     fn test_server(password: EndpointPassword) -> TestServer {
-        let f = from_fn(move |req, next| check_password(req, next, password.clone()));
+        let f = from_fn(move |req, next| check_password_middleware(req, next, password.clone()));
         let router = Router::new().route("/", post(endpoint)).route_layer(f);
         TestServer::new(router).unwrap()
     }

@@ -16,6 +16,17 @@ pub trait SlackView: Sized {
         self,
         other: Other
     ) -> _FlatChainSlackView<Self, Other> {
+        self.flat_chain_block_ref(&other)
+    }
+
+    /// Chains 2 slack view components as 2 separate blocks.
+    ///
+    /// `other` will be flattened when serialized into a slack message, so it is safe to call
+    /// `flat_chain_block` inside the `slack_body` of `other` without incurring uneccessary nesting.
+    fn flat_chain_block_ref<Other: SlackView>(
+        self,
+        other: &Other
+    ) -> _FlatChainSlackView<Self, Other> {
         _FlatChainSlackView::new(self, other)
     }
 

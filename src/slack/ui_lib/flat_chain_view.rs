@@ -10,7 +10,7 @@ pub struct _FlatChainSlackView<Base: SlackView, Other: SlackView> {
 }
 
 impl <Base: SlackView, Other: SlackView> _FlatChainSlackView<Base, Other> {
-    pub(super) fn new(base: Base, other: Other) -> Self {
+    pub(super) fn new(base: Base, other: &Other) -> Self {
         let mut blocks = _SlackBlocksCollection::new();
         base.__push_blocks_into(&mut blocks);
         other.__push_blocks_into(&mut blocks);
@@ -31,9 +31,9 @@ impl <Base: SlackView, Other: SlackView> SlackView for _FlatChainSlackView<Base,
         slack_blocks.extend(&self.blocks)
     }
 
-    fn flat_chain_block<View: SlackView>(
+    fn flat_chain_block_ref<View: SlackView>(
         mut self,
-        other: View
+        other: &View
     ) -> _FlatChainSlackView<Self, View> {
         other.__push_blocks_into(&mut self.blocks);
         _FlatChainSlackView::from(self.blocks)
