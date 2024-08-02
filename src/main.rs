@@ -8,6 +8,8 @@ mod tests_data;
 mod slack;
 mod http;
 
+use std::sync::Arc;
+
 use anyhow::Result;
 use dotenv::dotenv;
 use http::{server::run_http_server, server_environment::ServerEnvironment};
@@ -17,5 +19,5 @@ use utils::log::bootstrap_logging;
 async fn main() -> Result<()> {
     dotenv()?;
     bootstrap_logging();
-    run_http_server(&ServerEnvironment::current().await?).await
+    run_http_server(Arc::new(ServerEnvironment::current().await?)).await
 }

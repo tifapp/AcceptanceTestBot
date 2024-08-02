@@ -85,7 +85,6 @@ impl RoswaalGitRepositoryMetadata {
     /// the remote repository.
     pub fn ssh_private_key_path(&self) -> String {
         let home = env::var("HOME").unwrap();
-        println!("{} {}", home, self.ssh_private_key_home_path);
         format!("{}/{}", home, self.ssh_private_key_home_path)
     }
 

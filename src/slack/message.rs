@@ -1,8 +1,8 @@
-use std::{env, future::Future};
+use std::{env, error::Error, fmt::{Display, Formatter}, future::Future};
 
-use reqwest::Client;
-use serde::Serialize;
-use anyhow::{Result, Error};
+use reqwest::{header::CONTENT_TYPE, Client};
+use serde::{Deserialize, Serialize};
+use anyhow::Result;
 
 use crate::utils::env::RoswaalEnvironement;
 
@@ -49,21 +49,41 @@ pub trait SlackSendMessage {
     fn send(&self, message: &SlackMessage) -> impl Future<Output = Result<()>> + Send;
 }
 
+#[derive(Debug, Deserialize)]
+struct SlackResponse {
+    error: Option<String>,
+}
+
+#[derive(Debug)]
+struct SlackMessageSendingError {
+    message: String
+}
+
+impl Display for SlackMessageSendingError {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "Slack Message Sending Error: {}", self.message)
+    }
+}
+
+impl Error for SlackMessageSendingError {}
+
 impl SlackSendMessage for Client {
     async fn send(&self, message: &SlackMessage) -> Result<()> {
         let token = env::var("SLACK_BOT_TOKEN")
             .expect("SLACK_BOT_TOKEN not found in .env, you can get one from the slack app console.");
         let resp = self.post(message.response_url.to_string())
+            .header(CONTENT_TYPE, "application/json")
             .json(message)
             .bearer_auth(token)
             .send()
             .await?;
-        match resp.error_for_status() {
-            Ok(_) => Ok(()),
-            Err(error) => {
+        let slack_resp = resp.json::<SlackResponse>().await?;
+        match slack_resp.error {
+            Some(error) => {
                 log::error!("A Slack API error occured {}.", error);
-                Err(Error::new(error))
-            }
+                Err(anyhow::Error::new(SlackMessageSendingError { message: error }))
+            },
+            None => Ok(()),
         }
     }
 }
