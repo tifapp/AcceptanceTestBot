@@ -12,9 +12,9 @@ pub enum AddLocationsStatus {
 }
 
 impl AddLocationsStatus {
-    pub async fn from_adding_locations<GitClient: RoswaalGitRepositoryClient>(
+    pub async fn from_adding_locations(
         locations_str: &str,
-        git_repository: &RoswaalGitRepository<GitClient>,
+        git_repository: &RoswaalGitRepository<impl RoswaalGitRepositoryClient>,
         sqlite: &RoswaalSqlite,
         pr_open: &impl GithubPullRequestOpen
     ) -> Result<Self> {

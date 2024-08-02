@@ -1,10 +1,10 @@
-use std::env;
+use std::{env, future::Future};
 
 use anyhow::Result;
-use reqwest::{header::CONTENT_TYPE, Client};
+use reqwest::{header::{CONTENT_TYPE, USER_AGENT}, Client};
 use serde::Serialize;
 
-use crate::{language::ast::RoswaalTestSyntax, location::location::{RoswaalLocationStringError, RoswaalStringLocations}, tests_data::query::RoswaalTestNamesString};
+use crate::{language::ast::RoswaalTestSyntax, location::location::{RoswaalLocationStringError, RoswaalStringLocations}, tests_data::query::RoswaalTestNamesString, utils::env::RoswaalEnvironement};
 
 use super::branch_name::RoswaalOwnedGitBranchName;
 
@@ -132,6 +132,9 @@ impl GithubPullRequest {
         Self {
             title: format!("[Test - DO NOT MERGE] {}", self.title),
             body: format!("This is a test PR, please do not meeeeeeerge!!!\n\n{}", self.body),
+            owner: "roswaaltifbot".to_string(),
+            repo: "FitnessProjectTest".to_string(),
+            base: "main".to_string(),
             ..self
         }
     }
@@ -139,7 +142,7 @@ impl GithubPullRequest {
 
 pub trait GithubPullRequestOpen {
     /// Opens a PR on github, and returns true if it was created successfully.
-    async fn open(&self, pull_request: &GithubPullRequest) -> Result<bool>;
+    fn open(&self, pull_request: &GithubPullRequest) -> impl Future<Output = Result<bool>> + Send;
 }
 
 impl GithubPullRequestOpen for Client {
@@ -152,11 +155,16 @@ impl GithubPullRequestOpen for Client {
         let response = self.post(url)
             .bearer_auth(env::var("GITHUB_API_KEY").unwrap())
             .header(CONTENT_TYPE, "application/json")
+            .header(USER_AGENT, "roswaal-tif-bot")
             .header("X-GitHub-Api-Version", "2022-11-28")
             .json(&pull_request)
             .send()
             .await?;
-        Ok(response.status() == 201)
+        if !response.status().is_success() {
+            log::error!("Failed to open PR with status code {}.", response.status());
+            return Ok(false)
+        }
+        Ok(true)
     }
 }
 

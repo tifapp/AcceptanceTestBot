@@ -1,6 +1,6 @@
-use std::env;
+use std::{env, sync::Arc};
 
-use crate::{git::{metadata::RoswaalGitRepositoryMetadata, repo::{LibGit2RepositoryClient, RoswaalGitRepository}}, utils::{env::RoswaalEnvironement, sqlite::RoswaalSqlite}};
+use crate::{git::{metadata::RoswaalGitRepositoryMetadata, pull_request::GithubPullRequestOpen, repo::{LibGit2RepositoryClient, RoswaalGitRepository}}, slack::message::SlackSendMessage, utils::{env::RoswaalEnvironement, sqlite::RoswaalSqlite}};
 use anyhow::Result;
 use log::info;
 use reqwest::Client;
@@ -10,8 +10,8 @@ use super::password::EndpointPassword;
 /// A data type containing necessary structs for server operations.
 pub struct ServerEnvironment {
     git_repository: RoswaalGitRepository<LibGit2RepositoryClient>,
-    http_client: Client,
-    sqlite: RoswaalSqlite,
+    http_client: Arc<Client>,
+    sqlite: Arc<RoswaalSqlite>,
     address: &'static str,
     password: EndpointPassword
 }
@@ -23,8 +23,8 @@ impl ServerEnvironment {
             git_repository: RoswaalGitRepository::open(
                 &RoswaalGitRepositoryMetadata::for_tif_react_frontend()
             ).await?,
-            http_client: Client::new(),
-            sqlite: RoswaalSqlite::open("./roswaal.sqlite").await?,
+            http_client: Arc::new(Client::new()),
+            sqlite: Arc::new(RoswaalSqlite::open("./roswaal.sqlite").await?),
             address: "0.0.0.0:8080",
             password: EndpointPassword::prod()
         })
@@ -36,8 +36,8 @@ impl ServerEnvironment {
             git_repository: RoswaalGitRepository::open(
                 &RoswaalGitRepositoryMetadata::for_testing()
             ).await?,
-            http_client: Client::new(),
-            sqlite: RoswaalSqlite::open("./roswaal-dev.sqlite").await?,
+            http_client: Arc::new(Client::new()),
+            sqlite: Arc::new(RoswaalSqlite::open("./roswaal-dev.sqlite").await?),
             address: "127.0.0.1:8082",
             password: EndpointPassword::dev()
         })
@@ -63,15 +63,23 @@ impl ServerEnvironment {
         &self.git_repository
     }
 
-    pub fn http_client(&self) -> &Client {
-        &self.http_client
+    pub fn github_pull_request_open(&self) -> &impl GithubPullRequestOpen {
+        self.http_client.as_ref()
     }
 
-    pub fn sqlite(&self) -> &RoswaalSqlite {
-        &self.sqlite
+    pub fn slack_messenger(&self) -> Arc<impl SlackSendMessage + Send + Sync + 'static> {
+        self.http_client.clone()
     }
 
-    pub fn address(&self) -> &str {
-        self.address
+    pub fn sqlite(&self) -> Arc<RoswaalSqlite> {
+        self.sqlite.clone()
+    }
+
+    pub fn address(&self) -> String {
+        self.address.to_string()
+    }
+
+    pub fn password(&self) -> EndpointPassword {
+        self.password.clone()
     }
 }
