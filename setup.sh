@@ -1,3 +1,17 @@
+generate_uuid_v4() {
+    local N B C='89ab'
+    for (( N=0; N < 16; ++N )); do
+        B=$(( RANDOM%256 ))
+        case $N in
+            6) printf '4%x' $(( B%16 )) ;; # UUID version 4
+            8) printf '%c%x' ${C:$RANDOM%${#C}:1} $(( B%16 )) ;; # UUID variant
+            3|5|7|9) printf '%02x-' $B ;;
+            *) printf '%02x' $B ;;
+        esac
+    done
+    echo
+}
+
 echo "✅ Previous state cleared..."
 
 if [ -z "${!GITHUB_API_KEY}" ]; then
@@ -18,7 +32,7 @@ if [ -z "${!GITHUB_API_KEY}" ]; then
 
         sslpub="$(cat ${HOME}/.ssh/id_rsa.pub |tail -1)"
 
-        git_ssl_keyname="roswaal-$(uuidgen)"
+        git_ssl_keyname="roswaal-$(generate_uuid_v4)"
         echo "$git_ssl_keyname"
 
         curl -L \
