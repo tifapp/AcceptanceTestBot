@@ -35,7 +35,7 @@ if [ -z "${!GITHUB_API_KEY}" ]; then
         git_ssl_keyname="roswaal-$(generate_uuid_v4)"
         echo "$git_ssl_keyname"
 
-        echo "Host github.com\nUser roswaaltifbot\nAddKeysToAgent yes\nUseKeychain yes\nIdentityFile ~/.ssh/id_rsa" > "$HOME/.ssh/id_rsa.pub"
+        echo "Host github.com\nUser roswaaltifbot\nAddKeysToAgent yes\nUseKeychain yes\nIdentityFile ~/.ssh/id_rsa" > "$HOME/.ssh/config"
 
         curl -L \
         -X POST \
