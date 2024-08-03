@@ -1,18 +1,37 @@
 echo "✅ Previous state cleared..."
 
-# Define the SSH key path
-SSH_KEY_PATH="$HOME/.ssh/id_rsa"
+if [ -z "${!GITHUB_API_KEY}" ]; then
+    echo "Uploading SSH key to github"
 
-# Check if the SSH key already exists
-if [ -f "$SSH_KEY_PATH" ]; then
-    echo "SSH key already exists at $SSH_KEY_PATH"
+    # Define the SSH key path
+    SSH_KEY_PATH="$HOME/.ssh/id_rsa"
+
+    # Check if the SSH key already exists
+    if [ -f "$SSH_KEY_PATH" ]; then
+        echo "SSH key already exists at $SSH_KEY_PATH"
+    else
+        # Generate a new SSH key
+        ssh-keygen -t rsa -b 4096 -f "$SSH_KEY_PATH" -N ""
+        echo "SSH key generated at $SSH_KEY_PATH"
+        echo "SSH Public Key"
+        cat "$HOME/.ssh/id_rsa.pub"
+
+        sslpub="$(cat ${HOME}/.ssh/id_rsa.pub |tail -1)"
+
+        git_ssl_keyname="roswaal-$(uuidgen)"
+        echo "$git_ssl_keyname"
+
+        curl -L \
+        -X POST \
+        -H "Accept: application/vnd.github+json" \
+        -H "Authorization: Bearer $GITHUB_API_KEY" \
+        -H "X-GitHub-Api-Version: 2022-11-28" \
+        https://api.github.com/user/keys \
+        -d "{\"title\":\"$git_ssl_keyname\",\"key\":\"$sslpub\"}"
+    fi
 else
-    # Generate a new SSH key
-    ssh-keygen -t rsa -b 4096 -f "$SSH_KEY_PATH" -N ""
-    echo "SSH key generated at $SSH_KEY_PATH"
+    echo "No GITHUB_API_KEY environment variable was specified, set this variable to generate a new SSH Key"
 fi
-echo "SSH Public Key"
-cat "$HOME/.ssh/id_rsa.pub"
 
 if [ -d "FitnessProject" ]; then
     echo "🔵 Main frontend repo found, skipping cloning step..."
