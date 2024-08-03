@@ -1,4 +1,19 @@
 echo "✅ Previous state cleared..."
+
+# Define the SSH key path
+SSH_KEY_PATH="$HOME/.ssh/id_rsa"
+
+# Check if the SSH key already exists
+if [ -f "$SSH_KEY_PATH" ]; then
+    echo "SSH key already exists at $SSH_KEY_PATH"
+else
+    # Generate a new SSH key
+    ssh-keygen -t rsa -b 4096 -f "$SSH_KEY_PATH" -N ""
+    echo "SSH key generated at $SSH_KEY_PATH"
+fi
+echo "SSH Public Key"
+cat "$HOME/.ssh/id_rsa.pub"
+
 if [ -d "FitnessProject" ]; then
     echo "🔵 Main frontend repo found, skipping cloning step..."
 else
