@@ -8,7 +8,7 @@ use reqwest::{
 use serde::Serialize;
 
 use crate::{
-    language::ast::RoswaalTestSyntax,
+    language::compilation_results::RoswaalTestCompilationResults,
     location::location::{RoswaalLocationStringError, RoswaalStringLocations},
     tests_data::query::RoswaalTestNamesString,
 };
@@ -93,17 +93,19 @@ TASK_UNTRACKED
     }
 
     /// Creates a PR for test case creation on the frontend repo.
-    pub fn for_test_cases_tif_react_frontend<'a, 'b>(
-        test_names_with_syntax: &Vec<(&'a str, &RoswaalTestSyntax<'b>)>,
+    pub fn for_test_cases_tif_react_frontend(
+        results: &RoswaalTestCompilationResults,
         head_branch: &RoswaalOwnedGitBranchName,
     ) -> Self {
-        let joined_names = test_names_with_syntax
+        let tests_with_syntax = results.tests_with_syntax();
+        let names = tests_with_syntax
             .iter()
-            .map(|(name, _)| name.to_string())
-            .collect::<Vec<String>>()
+            .map(|(t, _)| t.name())
+            .collect::<Vec<&str>>()
             .join("\", \"");
-        let title = format!("Add Tests \"{}\"", joined_names);
-        let joined_test_cases = test_names_with_syntax
+        let title = format!("Add Tests \"{}\"", names);
+        let joined_test_cases = results
+            .tests_with_syntax()
             .iter()
             .map(|(_, syntax)| format!("```\n{}\n```", syntax.source_code()))
             .collect::<Vec<String>>()
@@ -193,7 +195,7 @@ impl GithubPullRequestOpen for Client {
 mod tests {
     use crate::{
         git::branch_name::{self, RoswaalOwnedGitBranchName},
-        language::ast::RoswaalTestSyntax,
+        language::{ast::RoswaalTestSyntax, compilation_results::RoswaalTestCompilationResults},
         location::location::RoswaalStringLocations,
         tests_data::query::RoswaalTestNamesString,
     };
@@ -267,7 +269,6 @@ Test 2, -78.290782973, 54.309983793
         let test1 = "New Test: I am the test
 Step 1: Stuff
 Step 2: More Stuff
-Set Location: Antarctica
 Step 3: More Stuff
 Requirement 1: Do stuff
 Requirement 2: Do more stuff
@@ -275,14 +276,15 @@ Requirement 3: Do more stuff";
         let test2 = "New Test: I am the next test
 Step 1: A
 Requirement 1: B";
-        let t1_syntax = RoswaalTestSyntax::from(test1);
-        let t2_syntax = RoswaalTestSyntax::from(test2);
-        let tests_with_names = vec![
-            ("I am the test", &t1_syntax),
-            ("I am the next test", &t2_syntax),
-        ];
+        let results = RoswaalTestCompilationResults::compile(
+            &vec![
+                RoswaalTestSyntax::from(test1),
+                RoswaalTestSyntax::from(test2),
+            ],
+            &vec![],
+        );
         let pr = GithubPullRequest::for_test_cases_tif_react_frontend(
-            &tests_with_names,
+            &results,
             &RoswaalOwnedGitBranchName::new("test-cases"),
         );
         assert_eq!(
@@ -295,7 +297,6 @@ Requirement 1: B";
 New Test: I am the test
 Step 1: Stuff
 Step 2: More Stuff
-Set Location: Antarctica
 Step 3: More Stuff
 Requirement 1: Do stuff
 Requirement 2: Do more stuff

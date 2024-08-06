@@ -1,31 +1,25 @@
-use std::{iter::zip, process::Output};
-
 use anyhow::Result;
 use tokio::spawn;
 
 use crate::{
-    generation::{interface::RoswaalTypescriptGenerate, test_case::TestCaseTypescript},
+    generation::interface::RoswaalTypescriptGenerate,
     git::{
-        branch_name::{self, RoswaalOwnedGitBranchName},
+        branch_name::RoswaalOwnedGitBranchName,
         edit::EditGitRepositoryStatus,
-        metadata::{self, RoswaalGitRepositoryMetadata},
-        pull_request::{GithubPullRequest, GithubPullRequestOpen},
+        metadata::RoswaalGitRepositoryMetadata,
+        pull_request::GithubPullRequestOpen,
         repo::{RoswaalGitRepository, RoswaalGitRepositoryClient},
     },
-    language::{
-        ast::{extract_tests_syntax, RoswaalTestSyntax},
-        compiler::{RoswaalCompilationError, RoswaalCompile, RoswaalCompileContext},
-        test::RoswaalTest,
-    },
-    location::{name::RoswaalLocationName, storage::LoadLocationsFilter},
+    language::{ast::extract_tests_syntax, compilation_results::RoswaalTestCompilationResults},
+    location::storage::LoadLocationsFilter,
     utils::sqlite::RoswaalSqlite,
     with_transaction,
 };
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum AddTestsStatus {
+pub enum AddTestsStatus<'r> {
     Success {
-        results: RoswaalTestCompilationResults,
+        results: RoswaalTestCompilationResults<'r>,
         should_warn_undeleted_branch: bool,
     },
     NoTestsFound,
@@ -33,9 +27,9 @@ pub enum AddTestsStatus {
     FailedToOpenPullRequest,
 }
 
-impl AddTestsStatus {
+impl<'r> AddTestsStatus<'r> {
     pub async fn from_adding_tests(
-        tests_str: &str,
+        tests_str: &'r str,
         sqlite: &RoswaalSqlite,
         pr_open: &impl GithubPullRequestOpen,
         git_repository: &RoswaalGitRepository<impl RoswaalGitRepositoryClient>,
@@ -69,10 +63,7 @@ impl AddTestsStatus {
             pr_open,
             async {
                 Self::generate_typescript(&results, &metadata).await?;
-                Ok((
-                    results.pull_request(&tests_syntax, &branch_name, &metadata),
-                    (),
-                ))
+                Ok((metadata.add_tests_pull_request(&results, &branch_name), ()))
             },
         )
         .await?;
@@ -99,7 +90,7 @@ impl AddTestsStatus {
     }
 
     async fn generate_typescript(
-        results: &RoswaalTestCompilationResults,
+        results: &RoswaalTestCompilationResults<'r>,
         metadata: &RoswaalGitRepositoryMetadata,
     ) -> Result<()> {
         let mut tests = results.tests();
@@ -116,84 +107,19 @@ impl AddTestsStatus {
     }
 }
 
-/// A data type constructed from compiling multiple test cases at a time.
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct RoswaalTestCompilationResults {
-    results: Vec<Result<RoswaalTest, Vec<RoswaalCompilationError>>>,
-}
-
-impl RoswaalTestCompilationResults {
-    pub fn compile(
-        syntax: &Vec<RoswaalTestSyntax<'_>>,
-        location_names: &Vec<RoswaalLocationName>,
-    ) -> Self {
-        let results = syntax
-            .iter()
-            .map(|syntax| {
-                let compile_context = RoswaalCompileContext::new(&location_names);
-                RoswaalTest::compile_syntax(syntax, compile_context)
-            })
-            .collect::<Vec<Result<RoswaalTest, Vec<RoswaalCompilationError>>>>();
-        Self { results }
-    }
-}
-
-impl RoswaalTestCompilationResults {
-    /// Returns the raw results associated with the compilation results.
-    pub fn raw_results(&self) -> &[Result<RoswaalTest, Vec<RoswaalCompilationError>>] {
-        &self.results
-    }
-
-    pub fn tests(&self) -> Vec<RoswaalTest> {
-        self.results.iter().filter_map(|r| r.clone().ok()).collect()
-    }
-
-    pub fn errors(&self) -> Vec<(usize, Vec<RoswaalCompilationError>)> {
-        self.results
-            .iter()
-            .enumerate()
-            .filter_map(|(i, r)| r.clone().err().map(|e| (i, e)))
-            .collect()
-    }
-
-    pub fn has_compiling_tests(&self) -> bool {
-        self.results.iter().filter(|r| r.is_ok()).count() > 0
-    }
-
-    pub fn has_non_compiling_tests(&self) -> bool {
-        self.results.iter().filter(|r| r.is_err()).count() > 0
-    }
-
-    fn pull_request(
-        &self,
-        syntax: &Vec<RoswaalTestSyntax<'_>>,
-        branch_name: &RoswaalOwnedGitBranchName,
-        metadata: &RoswaalGitRepositoryMetadata,
-    ) -> GithubPullRequest {
-        let test_names_with_syntax = zip(self.results.iter(), syntax.iter())
-            .filter_map(|(r, syntax)| {
-                if let Ok(test) = r {
-                    Some((test.name(), syntax))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<(&str, &RoswaalTestSyntax<'_>)>>();
-        metadata.add_tests_pull_request(&test_names_with_syntax, &branch_name)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
         git::{
-            branch_name,
             metadata::RoswaalGitRepositoryMetadata,
             repo::RoswaalGitRepository,
             test_support::{read_string, with_clean_test_repo_access, TestGithubPullRequestOpen},
         },
-        language::{compiler::RoswaalCompilationErrorCode, test::RoswaalTestCommand},
+        language::{
+            compiler::{RoswaalCompilationError, RoswaalCompilationErrorCode},
+            test::{RoswaalTest, RoswaalTestCommand},
+        },
         operations::{add_locations::AddLocationsStatus, merge_branch::MergeBranchStatus},
         utils::sqlite::RoswaalSqlite,
     };
@@ -228,55 +154,50 @@ This is like an invalid test or something...
                 &TestGithubPullRequestOpen::new(false),
                  &RoswaalGitRepository::noop().await?
             ).await?;
-            let expected_results = vec![
-                Ok(
-                    RoswaalTest::new(
-                        "Basic Leave Event through Exploration as Attendee".to_string(),
-                        Some("Justin is looking for an event. Once he finds one, he realizes that her has other plans, and decides to leave.".to_string()),
-                        vec![
-                            RoswaalTestCommand::Step {
-                                label: "Step 1".to_string(),
-                                name: "Justin is signed in".to_string(),
-                                requirement: "Ensure Justin has signed into his account".to_string()
-                            },
-                            RoswaalTestCommand::Step {
-                                label: "Step 2".to_string(),
-                                name: "Justin wants to find the nearest event".to_string(),
-                                requirement: "Search for the nearest events, and go to the details for the nearest one".to_string()
-                            },
-                            RoswaalTestCommand::Step {
-                                label: "Step 3".to_string(),
-                                name: "After finding an event, Justin wants to join it".to_string(),
-                                requirement: "Have Justin join the event".to_string()
-                            },
-                            RoswaalTestCommand::Step {
-                                label: "Step 4".to_string(),
-                                name: "After some pondering, Justin decides that he is not interested in the event and wants to leave".to_string(),
-                                requirement: "Have Justin leave the event".to_string()
-                            },
-                            RoswaalTestCommand::Step {
-                                label: "Step 5".to_string(),
-                                name: "Justin has now left the event".to_string(),
-                                requirement: "Ensure that Justin has left the event successfully".to_string()
-                            }
-                        ]
+            let expected_compiled_test = RoswaalTest::new(
+                "Basic Leave Event through Exploration as Attendee".to_string(),
+                Some("Justin is looking for an event. Once he finds one, he realizes that her has other plans, and decides to leave.".to_string()),
+                vec![
+                    RoswaalTestCommand::Step {
+                        label: "Step 1".to_string(),
+                        name: "Justin is signed in".to_string(),
+                        requirement: "Ensure Justin has signed into his account".to_string()
+                    },
+                    RoswaalTestCommand::Step {
+                        label: "Step 2".to_string(),
+                        name: "Justin wants to find the nearest event".to_string(),
+                        requirement: "Search for the nearest events, and go to the details for the nearest one".to_string()
+                    },
+                    RoswaalTestCommand::Step {
+                        label: "Step 3".to_string(),
+                        name: "After finding an event, Justin wants to join it".to_string(),
+                        requirement: "Have Justin join the event".to_string()
+                    },
+                    RoswaalTestCommand::Step {
+                        label: "Step 4".to_string(),
+                        name: "After some pondering, Justin decides that he is not interested in the event and wants to leave".to_string(),
+                        requirement: "Have Justin leave the event".to_string()
+                    },
+                    RoswaalTestCommand::Step {
+                        label: "Step 5".to_string(),
+                        name: "Justin has now left the event".to_string(),
+                        requirement: "Ensure that Justin has left the event successfully".to_string()
+                    }
+                ]
+            );
+            let expected_compiler_errors = vec![
+                RoswaalCompilationError::new(
+                    1,
+                    RoswaalCompilationErrorCode::InvalidCommandName(
+                        "This is like an invalid test or something...".to_string()
                     )
                 ),
-                Err(
-                    vec![
-                        RoswaalCompilationError::new(
-                            1,
-                            RoswaalCompilationErrorCode::InvalidCommandName(
-                                "This is like an invalid test or something...".to_string()
-                            )
-                        ),
-                        RoswaalCompilationError::new(1, RoswaalCompilationErrorCode::NoTestName)
-                    ]
-                )
+                RoswaalCompilationError::new(1, RoswaalCompilationErrorCode::NoTestName)
             ];
             match status {
                 AddTestsStatus::Success { results, should_warn_undeleted_branch } => {
-                    assert_eq!(results.raw_results(), expected_results);
+                    assert_eq!(results.tests(), vec![expected_compiled_test]);
+                    assert_eq!(results.failures()[0].errors(), expected_compiler_errors);
                     assert!(!should_warn_undeleted_branch)
                 },
                 _ => panic!()
@@ -336,8 +257,8 @@ Set Location: Test
                     results,
                     should_warn_undeleted_branch: _,
                 } => {
-                    assert!(results.raw_results()[0].is_ok());
-                    assert!(results.raw_results()[1].is_err());
+                    assert_eq!(results.tests()[0].name(), "ABC");
+                    assert_eq!(results.failures().len(), 1);
                 }
                 _ => panic!(),
             }

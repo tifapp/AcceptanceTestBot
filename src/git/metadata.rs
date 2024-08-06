@@ -2,8 +2,10 @@ use std::env;
 
 use super::{branch_name::RoswaalOwnedGitBranchName, pull_request::GithubPullRequest};
 use crate::{
-    language::ast::RoswaalTestSyntax, location::location::RoswaalStringLocations,
-    tests_data::query::RoswaalTestNamesString, utils::string::ToAsciiKebabCase,
+    language::{ast::RoswaalTestSyntax, compilation_results::RoswaalTestCompilationResults},
+    location::location::RoswaalStringLocations,
+    tests_data::query::RoswaalTestNamesString,
+    utils::string::ToAsciiKebabCase,
 };
 
 /// A struct containing neccessary metadata for operating in a roswaal compatible git repo.
@@ -14,7 +16,7 @@ pub struct RoswaalGitRepositoryMetadata {
     ssh_private_key_home_path: String,
     test_cases_root_dir_path: String,
     add_test_cases_pr: fn(
-        test_names_with_syntax: &Vec<(&str, &RoswaalTestSyntax)>,
+        results: &RoswaalTestCompilationResults,
         &RoswaalOwnedGitBranchName,
     ) -> GithubPullRequest,
     locations_path: String,
@@ -103,12 +105,12 @@ impl RoswaalGitRepositoryMetadata {
         (self.add_locations_pr)(locations, branch_name)
     }
 
-    pub fn add_tests_pull_request<'a>(
+    pub fn add_tests_pull_request(
         &self,
-        tests: &Vec<(&str, &RoswaalTestSyntax<'a>)>,
+        results: &RoswaalTestCompilationResults,
         branch_name: &RoswaalOwnedGitBranchName,
     ) -> GithubPullRequest {
-        (self.add_test_cases_pr)(tests, branch_name)
+        (self.add_test_cases_pr)(results, branch_name)
     }
 
     pub fn remove_tests_pull_request<'a>(
