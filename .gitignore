@@ -5,3 +5,4 @@
 /FitnessProjectTest
 /slack-snapshot-diffs
 *.sqlite
+.cargo
