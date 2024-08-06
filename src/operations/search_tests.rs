@@ -1,11 +1,15 @@
 use anyhow::Result;
 
-use crate::{tests_data::{query::RoswaalSearchTestsQuery, storage::RoswaalStoredTest}, utils::sqlite::RoswaalSqlite, with_transaction};
+use crate::{
+    tests_data::{query::RoswaalSearchTestsQuery, storage::RoswaalStoredTest},
+    utils::sqlite::RoswaalSqlite,
+    with_transaction,
+};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum SearchTestsStatus {
     Success(Vec<RoswaalStoredTest>),
-    NoTests
+    NoTests,
 }
 
 impl SearchTestsStatus {
@@ -26,12 +30,26 @@ impl SearchTestsStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{git::{repo::RoswaalGitRepository, test_support::{with_clean_test_repo_access, TestGithubPullRequestOpen}}, operations::{add_tests::AddTestsStatus, close_branch::CloseBranchStatus, merge_branch::MergeBranchStatus, remove_tests::RemoveTestsStatus, save_progress::save_test_progress}, tests_data::{ordinal::RoswaalTestCommandOrdinal, progress::RoswaalTestProgress}, utils::sqlite::RoswaalSqlite};
+    use crate::{
+        git::{
+            repo::RoswaalGitRepository,
+            test_support::{with_clean_test_repo_access, TestGithubPullRequestOpen},
+        },
+        operations::{
+            add_tests::AddTestsStatus, close_branch::CloseBranchStatus,
+            merge_branch::MergeBranchStatus, remove_tests::RemoveTestsStatus,
+            save_progress::save_test_progress,
+        },
+        tests_data::{ordinal::RoswaalTestCommandOrdinal, progress::RoswaalTestProgress},
+        utils::sqlite::RoswaalSqlite,
+    };
 
     #[tokio::test]
     async fn reports_no_tests_when_no_tests_saved() {
         let sqlite = RoswaalSqlite::in_memory().await.unwrap();
-        let status = SearchTestsStatus::from_searching_tests("", &sqlite).await.unwrap();
+        let status = SearchTestsStatus::from_searching_tests("", &sqlite)
+            .await
+            .unwrap();
         assert_eq!(status, SearchTestsStatus::NoTests)
     }
 
@@ -55,19 +73,21 @@ Requirement 1: Do the thing
                 tests_str,
                 &sqlite,
                 &TestGithubPullRequestOpen::new(false),
-                &RoswaalGitRepository::noop().await?
-            ).await?;
+                &RoswaalGitRepository::noop().await?,
+            )
+            .await?;
             let status = SearchTestsStatus::from_searching_tests("", &sqlite).await?;
             match status {
                 SearchTestsStatus::Success(tests) => {
                     assert_eq!(tests[0].name(), "ABC");
                     assert_eq!(tests[1].name(), "ABC 123")
-                },
-                _ => panic!()
+                }
+                _ => panic!(),
             }
             Ok(())
         })
-        .await.unwrap();
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -90,19 +110,26 @@ Requirement 1: Do the thing
                 tests_str,
                 &sqlite,
                 &TestGithubPullRequestOpen::new(false),
-                &RoswaalGitRepository::noop().await?
-            ).await?;
+                &RoswaalGitRepository::noop().await?,
+            )
+            .await?;
             let query_str = "bob";
-            let status = SearchTestsStatus::from_searching_tests(query_str, &sqlite).await.unwrap();
+            let status = SearchTestsStatus::from_searching_tests(query_str, &sqlite)
+                .await
+                .unwrap();
             match status {
                 SearchTestsStatus::Success(tests) => {
-                    assert_eq!(tests.iter().map(|t| t.name()).collect::<Vec<&str>>(), vec!["Bob"]);
-                },
-                _ => panic!()
+                    assert_eq!(
+                        tests.iter().map(|t| t.name()).collect::<Vec<&str>>(),
+                        vec!["Bob"]
+                    );
+                }
+                _ => panic!(),
             }
             Ok(())
         })
-        .await.unwrap();
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -125,11 +152,14 @@ Requirement 1: Do the thing
             branch_name = pr_open.most_recent_head_branch_name().await.unwrap();
             _ = MergeBranchStatus::from_merging_branch_with_name(&branch_name, &sqlite).await?;
             let query_str = "bob";
-            let status = SearchTestsStatus::from_searching_tests(query_str, &sqlite).await.unwrap();
+            let status = SearchTestsStatus::from_searching_tests(query_str, &sqlite)
+                .await
+                .unwrap();
             assert_eq!(status, SearchTestsStatus::NoTests);
             Ok(())
         })
-        .await.unwrap();
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -153,16 +183,19 @@ Requirement 1: Do the thing
             CloseBranchStatus::from_closing_branch(&branch_name, &sqlite).await?;
             MergeBranchStatus::from_merging_branch_with_name(&branch_name, &sqlite).await?;
             let query_str = "bob";
-            let status = SearchTestsStatus::from_searching_tests(query_str, &sqlite).await.unwrap();
+            let status = SearchTestsStatus::from_searching_tests(query_str, &sqlite)
+                .await
+                .unwrap();
             match status {
                 SearchTestsStatus::Success(tests) => {
                     assert_eq!(tests[0].name(), "Bob")
-                },
-                _ => panic!()
+                }
+                _ => panic!(),
             }
             Ok(())
         })
-        .await.unwrap();
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -182,11 +215,14 @@ Requirement 1: Do the thing
             let branch_name = pr_open.most_recent_head_branch_name().await.unwrap();
             CloseBranchStatus::from_closing_branch(&branch_name, &sqlite).await?;
             let query_str = "bob";
-            let status = SearchTestsStatus::from_searching_tests(query_str, &sqlite).await.unwrap();
+            let status = SearchTestsStatus::from_searching_tests(query_str, &sqlite)
+                .await
+                .unwrap();
             assert_eq!(status, SearchTestsStatus::NoTests);
             Ok(())
         })
-        .await.unwrap();
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -205,24 +241,28 @@ Requirement 1: Do the thing
             AddTestsStatus::from_adding_tests(tests_str, &sqlite, &pr_open, &repo).await?;
             let branch_name = pr_open.most_recent_head_branch_name().await.unwrap();
             MergeBranchStatus::from_merging_branch_with_name(&branch_name, &sqlite).await?;
-            let progress = vec![
-                RoswaalTestProgress::new(
-                    "Bob".to_string(),
-                    Some(RoswaalTestCommandOrdinal::new(0)),
-                    None
-                )
-            ];
+            let progress = vec![RoswaalTestProgress::new(
+                "Bob".to_string(),
+                Some(RoswaalTestCommandOrdinal::new(0)),
+                None,
+            )];
             save_test_progress(&progress, &sqlite).await?;
             let query_str = "bob";
-            let status = SearchTestsStatus::from_searching_tests(query_str, &sqlite).await.unwrap();
+            let status = SearchTestsStatus::from_searching_tests(query_str, &sqlite)
+                .await
+                .unwrap();
             match status {
                 SearchTestsStatus::Success(tests) => {
-                    assert_eq!(tests[0].command_failure_ordinal(), Some(RoswaalTestCommandOrdinal::new(0)))
-                },
-                _ => panic!()
+                    assert_eq!(
+                        tests[0].command_failure_ordinal(),
+                        Some(RoswaalTestCommandOrdinal::new(0))
+                    )
+                }
+                _ => panic!(),
             };
             Ok(())
         })
-        .await.unwrap();
+        .await
+        .unwrap();
     }
 }

@@ -1,14 +1,31 @@
 use anyhow::Result;
 use tokio::{fs::File, io::AsyncWriteExt};
 
-use crate::{generation::interface::RoswaalTypescriptGenerate, git::{branch_name::RoswaalOwnedGitBranchName, edit::EditGitRepositoryStatus, pull_request::GithubPullRequestOpen, repo::{RoswaalGitRepository, RoswaalGitRepositoryClient}}, location::{location::{RoswaalLocation, RoswaalStringLocations}, storage::{LoadLocationsFilter, RoswaalStoredLocation}}, utils::sqlite::RoswaalSqlite, with_transaction};
+use crate::{
+    generation::interface::RoswaalTypescriptGenerate,
+    git::{
+        branch_name::RoswaalOwnedGitBranchName,
+        edit::EditGitRepositoryStatus,
+        pull_request::GithubPullRequestOpen,
+        repo::{RoswaalGitRepository, RoswaalGitRepositoryClient},
+    },
+    location::{
+        location::{RoswaalLocation, RoswaalStringLocations},
+        storage::{LoadLocationsFilter, RoswaalStoredLocation},
+    },
+    utils::sqlite::RoswaalSqlite,
+    with_transaction,
+};
 
 #[derive(Debug, PartialEq)]
 pub enum AddLocationsStatus {
-    Success { locations: RoswaalStringLocations, did_delete_branch: bool },
+    Success {
+        locations: RoswaalStringLocations,
+        did_delete_branch: bool,
+    },
     NoLocationsAdded,
     FailedToOpenPullRequest,
-    MergeConflict
+    MergeConflict,
 }
 
 impl AddLocationsStatus {
@@ -16,18 +33,18 @@ impl AddLocationsStatus {
         locations_str: &str,
         git_repository: &RoswaalGitRepository<impl RoswaalGitRepositoryClient>,
         sqlite: &RoswaalSqlite,
-        pr_open: &impl GithubPullRequestOpen
+        pr_open: &impl GithubPullRequestOpen,
     ) -> Result<Self> {
         if locations_str.is_empty() {
-            return Ok(Self::NoLocationsAdded)
+            return Ok(Self::NoLocationsAdded);
         }
         let string_locations = RoswaalStringLocations::from_roswaal_locations_str(locations_str);
         let branch_name = RoswaalOwnedGitBranchName::for_adding_locations();
         let mut transaction = sqlite.transaction().await?;
         let (stored_locations, git_transaction) = with_transaction!(transaction, async {
-            let locations = transaction.locations_in_alphabetical_order(
-                LoadLocationsFilter::MergedOnly
-            ).await?;
+            let locations = transaction
+                .locations_in_alphabetical_order(LoadLocationsFilter::MergedOnly)
+                .await?;
             Ok((locations, git_repository.transaction().await))
         })?;
 
@@ -40,35 +57,45 @@ impl AddLocationsStatus {
                 Self::generate_locations_code(
                     &string_locations,
                     &stored_locations,
-                    metadata.locations_path()
-                ).await?;
-                Ok((metadata.add_locations_pull_request(&string_locations, &branch_name), ()))
-            }
-        ).await?;
+                    metadata.locations_path(),
+                )
+                .await?;
+                Ok((
+                    metadata.add_locations_pull_request(&string_locations, &branch_name),
+                    (),
+                ))
+            },
+        )
+        .await?;
 
         match edit_status {
-            EditGitRepositoryStatus::Success { did_delete_branch, value: _ } => {
+            EditGitRepositoryStatus::Success {
+                did_delete_branch,
+                value: _,
+            } => {
                 transaction = sqlite.transaction().await?;
                 with_transaction!(transaction, async {
-                    transaction.save_locations(&string_locations.locations(), &branch_name).await?;
-                    Ok(Self::Success { locations: string_locations, did_delete_branch })
+                    transaction
+                        .save_locations(&string_locations.locations(), &branch_name)
+                        .await?;
+                    Ok(Self::Success {
+                        locations: string_locations,
+                        did_delete_branch,
+                    })
                 })
-            },
-            EditGitRepositoryStatus::FailedToOpenPullRequest => {
-                Ok(Self::FailedToOpenPullRequest)
-            },
-            EditGitRepositoryStatus::MergeConflict => {
-                Ok(Self::MergeConflict)
             }
+            EditGitRepositoryStatus::FailedToOpenPullRequest => Ok(Self::FailedToOpenPullRequest),
+            EditGitRepositoryStatus::MergeConflict => Ok(Self::MergeConflict),
         }
     }
 
     async fn generate_locations_code(
         string_locations: &RoswaalStringLocations,
         stored_locations: &Vec<RoswaalStoredLocation>,
-        path: &str
+        path: &str,
     ) -> Result<()> {
-        let locations_code = stored_locations.iter()
+        let locations_code = stored_locations
+            .iter()
             .map(|l| l.location())
             .chain(string_locations.locations().iter())
             .collect::<Vec<&RoswaalLocation>>()
@@ -83,7 +110,17 @@ impl AddLocationsStatus {
 
 #[cfg(test)]
 mod tests {
-    use crate::{git::{metadata::{self, RoswaalGitRepositoryMetadata}, repo::RoswaalGitRepository, test_support::{read_string, with_clean_test_repo_access, TestGithubPullRequestOpen}}, is_case, location::location::RoswaalStringLocations, operations::{add_locations::AddLocationsStatus, merge_branch::MergeBranchStatus}, utils::sqlite::RoswaalSqlite};
+    use crate::{
+        git::{
+            metadata::{self, RoswaalGitRepositoryMetadata},
+            repo::RoswaalGitRepository,
+            test_support::{read_string, with_clean_test_repo_access, TestGithubPullRequestOpen},
+        },
+        is_case,
+        location::location::RoswaalStringLocations,
+        operations::{add_locations::AddLocationsStatus, merge_branch::MergeBranchStatus},
+        utils::sqlite::RoswaalSqlite,
+    };
 
     #[tokio::test]
     async fn test_success_when_adding_locations_smoothly() {
@@ -94,13 +131,21 @@ mod tests {
                 str,
                 &RoswaalGitRepository::noop().await?,
                 &sqlite,
-                &TestGithubPullRequestOpen::new(false)
-            ).await?;
+                &TestGithubPullRequestOpen::new(false),
+            )
+            .await?;
             let str_locations = RoswaalStringLocations::from_roswaal_locations_str(str);
-            assert_eq!(result, AddLocationsStatus::Success { locations: str_locations, did_delete_branch: true });
+            assert_eq!(
+                result,
+                AddLocationsStatus::Success {
+                    locations: str_locations,
+                    did_delete_branch: true
+                }
+            );
             Ok(())
         })
-        .await.unwrap()
+        .await
+        .unwrap()
     }
 
     #[tokio::test]
@@ -112,13 +157,21 @@ mod tests {
                 str,
                 &RoswaalGitRepository::noop().await.unwrap(),
                 &sqlite,
-                &TestGithubPullRequestOpen::new(false)
-            ).await?;
+                &TestGithubPullRequestOpen::new(false),
+            )
+            .await?;
             let str_locations = RoswaalStringLocations::from_roswaal_locations_str(str);
-            assert_eq!(result, AddLocationsStatus::Success { locations: str_locations, did_delete_branch: true });
+            assert_eq!(
+                result,
+                AddLocationsStatus::Success {
+                    locations: str_locations,
+                    did_delete_branch: true
+                }
+            );
             Ok(())
         })
-        .await.unwrap();
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -129,12 +182,14 @@ mod tests {
                 "",
                 &RoswaalGitRepository::noop().await.unwrap(),
                 &sqlite,
-                &TestGithubPullRequestOpen::new(false)
-            ).await;
+                &TestGithubPullRequestOpen::new(false),
+            )
+            .await;
             assert_eq!(result.ok(), Some(AddLocationsStatus::NoLocationsAdded));
             Ok(())
         })
-        .await.unwrap();
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -148,22 +203,25 @@ mod tests {
                 "Hello, 50.0, 50.0",
                 &repo,
                 &sqlite,
-                &pr_open
-            ).await;
+                &pr_open,
+            )
+            .await;
             _ = AddLocationsStatus::from_adding_locations(
                 "Test, 50.0, 50.0",
                 &repo,
                 &sqlite,
-                &pr_open
-            ).await;
+                &pr_open,
+            )
+            .await;
             let branch_name = pr_open.most_recent_head_branch_name().await.unwrap();
             _ = MergeBranchStatus::from_merging_branch_with_name(&branch_name, &sqlite).await?;
             _ = AddLocationsStatus::from_adding_locations(
                 "Test 2, 45.0, 45.0",
                 &repo,
                 &sqlite,
-                &pr_open
-            ).await;
+                &pr_open,
+            )
+            .await;
             let content = read_string(metadata.locations_path()).await?;
             let expected_content = "\
 // Generated by Roswaal, do not touch.
@@ -182,7 +240,8 @@ export namespace TestLocations {
             assert_eq!(&content, expected_content);
             Ok(())
         })
-        .await.unwrap();
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -194,13 +253,15 @@ export namespace TestLocations {
                 "Test, 50.0, 50.0",
                 &RoswaalGitRepository::noop().await.unwrap(),
                 &sqlite,
-                &pr_open
-            ).await?;
+                &pr_open,
+            )
+            .await?;
             let pr = pr_open.most_recent_pr().await.unwrap();
             assert!(pr.title().contains("Add Locations (Test)"));
             Ok(())
         })
-        .await.unwrap()
+        .await
+        .unwrap()
     }
 
     #[tokio::test]
@@ -212,12 +273,14 @@ export namespace TestLocations {
                 "Test, 50.0, 50.0",
                 &RoswaalGitRepository::noop().await.unwrap(),
                 &sqlite,
-                &pr_open
-            ).await?;
+                &pr_open,
+            )
+            .await?;
             assert_eq!(result, AddLocationsStatus::FailedToOpenPullRequest);
             Ok(())
         })
-        .await.unwrap()
+        .await
+        .unwrap()
     }
 
     #[tokio::test]
@@ -233,11 +296,13 @@ export namespace TestLocations {
                 "Test, 50.0, 50.0",
                 &repo,
                 &sqlite,
-                &pr_open
-            ).await?;
+                &pr_open,
+            )
+            .await?;
             assert_eq!(result, AddLocationsStatus::MergeConflict);
             Ok(())
         })
-        .await.unwrap()
+        .await
+        .unwrap()
     }
 }

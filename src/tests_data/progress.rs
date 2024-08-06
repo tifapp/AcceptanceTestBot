@@ -11,16 +11,20 @@ use super::ordinal::RoswaalTestCommandOrdinal;
 pub struct RoswaalTestProgress {
     test_name: String,
     command_failure_ordinal: Option<RoswaalTestCommandOrdinal>,
-    error: Option<RoswaalTestProgressErrorDescription>
+    error: Option<RoswaalTestProgressErrorDescription>,
 }
 
 impl RoswaalTestProgress {
     pub fn new(
         test_name: String,
         command_failure_ordinal: Option<RoswaalTestCommandOrdinal>,
-        error: Option<RoswaalTestProgressErrorDescription>
+        error: Option<RoswaalTestProgressErrorDescription>,
     ) -> Self {
-        Self { test_name, command_failure_ordinal, error }
+        Self {
+            test_name,
+            command_failure_ordinal,
+            error,
+        }
     }
 }
 
@@ -46,11 +50,14 @@ impl RoswaalTestProgress {
 #[serde(rename_all = "camelCase")]
 pub struct RoswaalTestProgressErrorDescription {
     pub(super) message: String,
-    pub(super) stack_trace: String
+    pub(super) stack_trace: String,
 }
 
 impl RoswaalTestProgressErrorDescription {
     pub fn new(message: String, stack_trace: String) -> Self {
-        Self { message, stack_trace }
+        Self {
+            message,
+            stack_trace,
+        }
     }
 }

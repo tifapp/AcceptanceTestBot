@@ -6,16 +6,20 @@ use crate::{location::name::RoswaalLocationName, utils::string::ToAsciiKebabCase
 pub struct RoswaalTest {
     name: String,
     description: Option<String>,
-    commands: Vec<RoswaalTestCommand>
+    commands: Vec<RoswaalTestCommand>,
 }
 
 impl RoswaalTest {
     pub fn new(
         name: String,
         description: Option<String>,
-        commands: Vec<RoswaalTestCommand>
+        commands: Vec<RoswaalTestCommand>,
     ) -> Self {
-        Self { name, description, commands }
+        Self {
+            name,
+            description,
+            commands,
+        }
     }
 }
 
@@ -35,6 +39,12 @@ impl RoswaalTest {
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum RoswaalTestCommand {
-    Step { label: String, name: String, requirement: String },
-    SetLocation { location_name: RoswaalLocationName }
+    Step {
+        label: String,
+        name: String,
+        requirement: String,
+    },
+    SetLocation {
+        location_name: RoswaalLocationName,
+    },
 }

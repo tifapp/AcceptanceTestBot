@@ -3,10 +3,10 @@
 macro_rules! is_case {
     ($val:ident, $var:path) => {
         match $val {
-            $var{..} => true,
-            _ => false
+            $var { .. } => true,
+            _ => false,
         }
-    }
+    };
 }
 
 #[cfg(test)]
@@ -14,7 +14,7 @@ mod is_case_tests {
     enum TestEnum {
         One,
         Two { _hello: u8 },
-        Three(u8)
+        Three(u8),
     }
 
     #[test]

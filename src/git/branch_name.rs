@@ -32,7 +32,7 @@ impl RoswaalOwnedGitBranchName {
 pub enum RoswaalOwnedBranchKind {
     AddLocations,
     AddTests,
-    RemoveTests
+    RemoveTests,
 }
 
 impl RoswaalOwnedGitBranchName {
@@ -95,9 +95,18 @@ mod tests {
     fn test_kind() {
         let names_to_kind = vec![
             (RoswaalOwnedGitBranchName::new("test-branch"), None),
-            (RoswaalOwnedGitBranchName::for_adding_tests(), Some(RoswaalOwnedBranchKind::AddTests)),
-            (RoswaalOwnedGitBranchName::for_removing_tests(), Some(RoswaalOwnedBranchKind::RemoveTests)),
-            (RoswaalOwnedGitBranchName::for_adding_locations(), Some(RoswaalOwnedBranchKind::AddLocations)),
+            (
+                RoswaalOwnedGitBranchName::for_adding_tests(),
+                Some(RoswaalOwnedBranchKind::AddTests),
+            ),
+            (
+                RoswaalOwnedGitBranchName::for_removing_tests(),
+                Some(RoswaalOwnedBranchKind::RemoveTests),
+            ),
+            (
+                RoswaalOwnedGitBranchName::for_adding_locations(),
+                Some(RoswaalOwnedBranchKind::AddLocations),
+            ),
             (RoswaalOwnedGitBranchName::new("i-am-groot"), None),
         ];
         for (name, kind) in names_to_kind {

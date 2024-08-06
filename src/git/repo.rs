@@ -1,7 +1,22 @@
 use anyhow::Result;
-use std::{path::{Path, PathBuf}, sync::{mpsc::{channel, Receiver, Sender}, Arc}, thread};
-use git2::{build::CheckoutBuilder, AnnotatedCommit, BranchType, Cred, FetchOptions, IndexAddOption, PushOptions, RemoteCallbacks, Repository, ResetType};
-use tokio::{fs::remove_file, spawn, sync::{oneshot, Mutex, MutexGuard}, task::spawn_blocking};
+use git2::{
+    build::CheckoutBuilder, AnnotatedCommit, BranchType, Cred, FetchOptions, IndexAddOption,
+    PushOptions, RemoteCallbacks, Repository, ResetType,
+};
+use std::{
+    path::{Path, PathBuf},
+    sync::{
+        mpsc::{channel, Receiver, Sender},
+        Arc,
+    },
+    thread,
+};
+use tokio::{
+    fs::remove_file,
+    spawn,
+    sync::{oneshot, Mutex, MutexGuard},
+    task::spawn_blocking,
+};
 
 use crate::utils::fs::remove_dir_all_empty;
 
@@ -9,22 +24,28 @@ use super::{branch_name::RoswaalOwnedGitBranchName, metadata::RoswaalGitReposito
 
 /// A wrapper for a git repository that serializes access to an underlying git client.
 pub struct RoswaalGitRepository<Client> {
-    mutex: Arc<Mutex<Client>>
+    mutex: Arc<Mutex<Client>>,
 }
 
-impl <Client> RoswaalGitRepository<Client>
-    where Client: RoswaalGitRepositoryClient {
+impl<Client> RoswaalGitRepository<Client>
+where
+    Client: RoswaalGitRepositoryClient,
+{
     /// Attempts to open a repository with the specified metadata.
     pub async fn open(metadata: &RoswaalGitRepositoryMetadata) -> Result<Self> {
         let client = Client::try_new(metadata).await?;
-        Ok(Self { mutex: Arc::new(Mutex::new(client)) })
+        Ok(Self {
+            mutex: Arc::new(Mutex::new(client)),
+        })
     }
 }
 
 pub type RoswaalGitRepositoryTransaction<'a, Client> = MutexGuard<'a, Client>;
 
-impl <Client> RoswaalGitRepository<Client>
-    where Client: RoswaalGitRepositoryClient {
+impl<Client> RoswaalGitRepository<Client>
+where
+    Client: RoswaalGitRepositoryClient,
+{
     /// Starts a transaction to this repository.
     pub async fn transaction(&self) -> RoswaalGitRepositoryTransaction<Client> {
         self.mutex.lock().await
@@ -34,7 +55,7 @@ impl <Client> RoswaalGitRepository<Client>
 #[derive(Debug, PartialEq, Eq)]
 pub enum PullBranchStatus {
     Success,
-    MergeConflict
+    MergeConflict,
 }
 
 type MergeBranchStatus = PullBranchStatus;
@@ -77,22 +98,44 @@ pub trait RoswaalGitRepositoryClient: Sized {
 /// A `RoswaalGitRepositoryClient` implementation using lib2git and the git2 crate.
 pub struct LibGit2RepositoryClient {
     sender: Sender<LibGit2ThreadRequest>,
-    metadata: RoswaalGitRepositoryMetadata
+    metadata: RoswaalGitRepositoryMetadata,
 }
 
 enum LibGit2ThreadRequest {
-    HardResetToHead { sender: oneshot::Sender<Result<()>> },
-    SwitchBranch { name: String, sender: oneshot::Sender<Result<()>> },
-    PullBranch { name: String, sender: oneshot::Sender<Result<PullBranchStatus>> },
-    CommitAll { message: String, sender: oneshot::Sender<Result<()>> },
-    CheckoutNewBranch { name: RoswaalOwnedGitBranchName, sender: oneshot::Sender<Result<()>> },
-    PushChanges { name: RoswaalOwnedGitBranchName, sender: oneshot::Sender<Result<()>> },
-    Statuses { sender: oneshot::Sender<Result<Vec<LibGit2StatusEntry>>> },
-    DeleteLocalBranch { name: RoswaalOwnedGitBranchName, sender: oneshot::Sender<Result<bool>> }
+    HardResetToHead {
+        sender: oneshot::Sender<Result<()>>,
+    },
+    SwitchBranch {
+        name: String,
+        sender: oneshot::Sender<Result<()>>,
+    },
+    PullBranch {
+        name: String,
+        sender: oneshot::Sender<Result<PullBranchStatus>>,
+    },
+    CommitAll {
+        message: String,
+        sender: oneshot::Sender<Result<()>>,
+    },
+    CheckoutNewBranch {
+        name: RoswaalOwnedGitBranchName,
+        sender: oneshot::Sender<Result<()>>,
+    },
+    PushChanges {
+        name: RoswaalOwnedGitBranchName,
+        sender: oneshot::Sender<Result<()>>,
+    },
+    Statuses {
+        sender: oneshot::Sender<Result<Vec<LibGit2StatusEntry>>>,
+    },
+    DeleteLocalBranch {
+        name: RoswaalOwnedGitBranchName,
+        sender: oneshot::Sender<Result<bool>>,
+    },
 }
 
 struct LibGit2StatusEntry {
-    path: PathBuf
+    path: PathBuf,
 }
 
 impl RoswaalGitRepositoryClient for LibGit2RepositoryClient {
@@ -101,7 +144,10 @@ impl RoswaalGitRepositoryClient for LibGit2RepositoryClient {
         let (tx, rx) = channel::<LibGit2ThreadRequest>();
         let repo = spawn_blocking(move || Repository::open(m1.relative_path("."))).await??;
         Self::thread(repo, metadata, rx);
-        Ok(Self { sender: tx, metadata: metadata.clone() })
+        Ok(Self {
+            sender: tx,
+            metadata: metadata.clone(),
+        })
     }
 
     fn metadata(&self) -> &RoswaalGitRepositoryMetadata {
@@ -110,45 +156,64 @@ impl RoswaalGitRepositoryClient for LibGit2RepositoryClient {
 
     async fn hard_reset_to_head(&self) -> Result<()> {
         let (sender, receiver) = oneshot::channel::<Result<()>>();
-        self.sender.send(LibGit2ThreadRequest::HardResetToHead { sender })?;
+        self.sender
+            .send(LibGit2ThreadRequest::HardResetToHead { sender })?;
         receiver.await?
     }
 
     async fn switch_branch(&self, name: &str) -> Result<()> {
         let (sender, receiver) = oneshot::channel::<Result<()>>();
-        self.sender.send(LibGit2ThreadRequest::SwitchBranch { name: name.to_string(), sender })?;
+        self.sender.send(LibGit2ThreadRequest::SwitchBranch {
+            name: name.to_string(),
+            sender,
+        })?;
         receiver.await?
     }
 
     async fn pull_branch(&self, name: &str) -> Result<PullBranchStatus> {
         let (sender, receiver) = oneshot::channel::<Result<PullBranchStatus>>();
-        self.sender.send(LibGit2ThreadRequest::PullBranch { name: name.to_string(), sender })?;
+        self.sender.send(LibGit2ThreadRequest::PullBranch {
+            name: name.to_string(),
+            sender,
+        })?;
         receiver.await?
     }
 
     async fn commit_all(&self, message: &str) -> Result<()> {
         let (sender, receiver) = oneshot::channel::<Result<()>>();
-        self.sender.send(LibGit2ThreadRequest::CommitAll { message: message.to_string(), sender })?;
+        self.sender.send(LibGit2ThreadRequest::CommitAll {
+            message: message.to_string(),
+            sender,
+        })?;
         receiver.await?
     }
 
     async fn checkout_new_branch(&self, name: &RoswaalOwnedGitBranchName) -> Result<()> {
         let (sender, receiver) = oneshot::channel::<Result<()>>();
-        self.sender.send(LibGit2ThreadRequest::CheckoutNewBranch { name: name.clone(), sender })?;
+        self.sender.send(LibGit2ThreadRequest::CheckoutNewBranch {
+            name: name.clone(),
+            sender,
+        })?;
         receiver.await?
     }
 
     async fn push_changes(&self, branch_name: &RoswaalOwnedGitBranchName) -> Result<()> {
         let (sender, receiver) = oneshot::channel::<Result<()>>();
-        self.sender.send(LibGit2ThreadRequest::PushChanges { name: branch_name.clone(), sender })?;
+        self.sender.send(LibGit2ThreadRequest::PushChanges {
+            name: branch_name.clone(),
+            sender,
+        })?;
         receiver.await?
     }
 
     async fn clean_all_untracked(&self) -> Result<()> {
         let (sender, receiver) = oneshot::channel::<Result<Vec<LibGit2StatusEntry>>>();
-        self.sender.send(LibGit2ThreadRequest::Statuses { sender })?;
+        self.sender
+            .send(LibGit2ThreadRequest::Statuses { sender })?;
         let entries = receiver.await??;
-        let futures = entries.iter().map(|entry| spawn(remove_file(entry.path.clone())));
+        let futures = entries
+            .iter()
+            .map(|entry| spawn(remove_file(entry.path.clone())));
         for f in futures {
             f.await??;
         }
@@ -158,7 +223,10 @@ impl RoswaalGitRepositoryClient for LibGit2RepositoryClient {
 
     async fn delete_local_branch(&self, branch_name: &RoswaalOwnedGitBranchName) -> Result<bool> {
         let (sender, receiver) = oneshot::channel::<Result<bool>>();
-        self.sender.send(LibGit2ThreadRequest::DeleteLocalBranch { name: branch_name.clone(), sender })?;
+        self.sender.send(LibGit2ThreadRequest::DeleteLocalBranch {
+            name: branch_name.clone(),
+            sender,
+        })?;
         receiver.await?
     }
 }
@@ -170,7 +238,7 @@ impl LibGit2RepositoryClient {
     fn thread(
         repo: Repository,
         metadata: &RoswaalGitRepositoryMetadata,
-        receiver: Receiver<LibGit2ThreadRequest>
+        receiver: Receiver<LibGit2ThreadRequest>,
     ) {
         let metadata = metadata.clone();
         thread::spawn(move || {
@@ -178,28 +246,36 @@ impl LibGit2RepositoryClient {
                 match request {
                     LibGit2ThreadRequest::HardResetToHead { sender } => {
                         _ = sender.send(Self::hard_reset_to_head(&repo));
-                    },
+                    }
                     LibGit2ThreadRequest::SwitchBranch { name, sender } => {
                         _ = sender.send(Self::switch_branch(&repo, &name));
-                    },
+                    }
                     LibGit2ThreadRequest::PullBranch { name, sender } => {
-                        _ = sender.send(Self::pull_branch(&repo, &name, metadata.remote_callbacks()));
-                    },
+                        _ = sender.send(Self::pull_branch(
+                            &repo,
+                            &name,
+                            metadata.remote_callbacks(),
+                        ));
+                    }
                     LibGit2ThreadRequest::CommitAll { message, sender } => {
                         _ = sender.send(Self::commit_all(&repo, &message));
-                    },
+                    }
                     LibGit2ThreadRequest::CheckoutNewBranch { name, sender } => {
                         _ = sender.send(Self::checkout_new_branch(&repo, &name));
-                    },
+                    }
                     LibGit2ThreadRequest::PushChanges { name, sender } => {
-                        _ = sender.send(Self::push_changes(&repo, &name, metadata.remote_callbacks()));
-                    },
+                        _ = sender.send(Self::push_changes(
+                            &repo,
+                            &name,
+                            metadata.remote_callbacks(),
+                        ));
+                    }
                     LibGit2ThreadRequest::Statuses { sender } => {
                         _ = sender.send(Self::statuses(&repo));
-                    },
+                    }
                     LibGit2ThreadRequest::DeleteLocalBranch { name, sender } => {
                         _ = sender.send(Self::delete_local_branch(&repo, &name));
-                    },
+                    }
                 }
             }
         });
@@ -218,14 +294,18 @@ impl LibGit2RepositoryClient {
         Ok(())
     }
 
-    fn pull_branch(repo: &Repository, name: &str, callbacks: RemoteCallbacks) -> Result<PullBranchStatus> {
+    fn pull_branch(
+        repo: &Repository,
+        name: &str,
+        callbacks: RemoteCallbacks,
+    ) -> Result<PullBranchStatus> {
         Self::merge(repo, name, &Self::fetch(repo, name, callbacks)?)
     }
 
     fn fetch<'a>(
         repo: &'a Repository,
         branch_name: &str,
-        callbacks: RemoteCallbacks
+        callbacks: RemoteCallbacks,
     ) -> Result<AnnotatedCommit<'a>> {
         let mut remote = repo.find_remote("origin")?;
         let mut fetch_options = FetchOptions::new();
@@ -235,7 +315,11 @@ impl LibGit2RepositoryClient {
         Ok(repo.reference_to_annotated_commit(&fetch_head)?)
     }
 
-    fn merge(repo: &Repository, branch_name: &str, commit: &AnnotatedCommit) -> Result<MergeBranchStatus> {
+    fn merge(
+        repo: &Repository,
+        branch_name: &str,
+        commit: &AnnotatedCommit,
+    ) -> Result<MergeBranchStatus> {
         let (analysis, _) = repo.merge_analysis(&[commit])?;
         if analysis.is_fast_forward() {
             Self::merge_fast_forward(repo, branch_name, commit)
@@ -254,7 +338,7 @@ impl LibGit2RepositoryClient {
     fn merge_fast_forward(
         repo: &Repository,
         branch_name: &str,
-        commit: &AnnotatedCommit
+        commit: &AnnotatedCommit,
     ) -> Result<MergeBranchStatus> {
         // NB: Adopted from https://github.com/rust-lang/git2-rs/blob/master/examples/pull.rs#L159
         let branch_reference_name = format!("refs/heads/{}", branch_name);
@@ -269,7 +353,7 @@ impl LibGit2RepositoryClient {
                 repo.set_head(&name)?;
                 repo.checkout_head(Some(CheckoutBuilder::default().force()))?;
                 Self::current_merge_status(repo)
-            },
+            }
             Err(_) => {
                 repo.reference(
                     &branch_reference_name,
@@ -305,7 +389,14 @@ impl LibGit2RepositoryClient {
         let signature = repo.signature()?;
         let parent_commit = repo.head()?.peel_to_commit()?;
         let tree = repo.find_tree(oid)?;
-        repo.commit(Some("HEAD"), &signature, &signature, message, &tree, &[&parent_commit])?;
+        repo.commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            message,
+            &tree,
+            &[&parent_commit],
+        )?;
         Ok(())
     }
 
@@ -323,39 +414,49 @@ impl LibGit2RepositoryClient {
     fn push_changes(
         repo: &Repository,
         branch_name: &RoswaalOwnedGitBranchName,
-        callbacks: RemoteCallbacks
+        callbacks: RemoteCallbacks,
     ) -> Result<()> {
         let mut remote = repo.find_remote("origin")?;
         let mut push_options = PushOptions::new();
         push_options.remote_callbacks(callbacks);
-        remote.push(&[format!("refs/heads/{}", branch_name.to_string())], Some(&mut push_options))?;
+        remote.push(
+            &[format!("refs/heads/{}", branch_name.to_string())],
+            Some(&mut push_options),
+        )?;
         Ok(())
     }
 
-    fn delete_local_branch(repo: &Repository, branch_name: &RoswaalOwnedGitBranchName) -> Result<bool> {
-        let branch = repo.branches(Some(BranchType::Local))?
-            .filter_map(|branch_result| {
-                branch_result.ok().map(|(branch, _)| branch)
-            })
+    fn delete_local_branch(
+        repo: &Repository,
+        branch_name: &RoswaalOwnedGitBranchName,
+    ) -> Result<bool> {
+        let branch = repo
+            .branches(Some(BranchType::Local))?
+            .filter_map(|branch_result| branch_result.ok().map(|(branch, _)| branch))
             .find(|branch| {
-                branch.name().ok()
+                branch
+                    .name()
+                    .ok()
                     .map(|name| name == Some(&branch_name.to_string()))
                     .unwrap_or(false)
             });
         if let Some(mut branch) = branch {
             branch.delete()?;
-            return Ok(true)
+            return Ok(true);
         } else {
             Ok(false)
         }
     }
 
     fn statuses(repo: &Repository) -> Result<Vec<LibGit2StatusEntry>> {
-        let statuses = repo.statuses(None)?
+        let statuses = repo
+            .statuses(None)?
             .iter()
             .filter_map(|entry| {
                 if let (Some(entry_path), true) = (entry.path(), entry.status().is_wt_new()) {
-                    Some(LibGit2StatusEntry { path: repo.workdir().unwrap().join(entry_path) })
+                    Some(LibGit2StatusEntry {
+                        path: repo.workdir().unwrap().join(entry_path),
+                    })
                 } else {
                     None
                 }
@@ -381,7 +482,12 @@ mod tests {
     use super::*;
     use tokio::fs::{create_dir_all, try_exists, File};
 
-    use crate::git::{branch_name::RoswaalOwnedGitBranchName, test_support::{read_string, repo_with_test_metadata, write_string, with_clean_test_repo_access}};
+    use crate::git::{
+        branch_name::RoswaalOwnedGitBranchName,
+        test_support::{
+            read_string, repo_with_test_metadata, with_clean_test_repo_access, write_string,
+        },
+    };
 
     #[tokio::test]
     async fn test_add_commit_push_pull() {
@@ -391,12 +497,15 @@ mod tests {
             let branch_name = RoswaalOwnedGitBranchName::new("test");
             transaction.checkout_new_branch(&branch_name).await?;
 
-            let expected_file_contents = "In this world, all life will walk towards the future, hand in hand.";
+            let expected_file_contents =
+                "In this world, all life will walk towards the future, hand in hand.";
             write_string(&metadata.relative_path("test.txt"), expected_file_contents).await?;
 
             transaction.commit_all("I like this!").await?;
             transaction.push_changes(&branch_name).await?;
-            transaction.switch_branch(metadata.base_branch_name()).await?;
+            transaction
+                .switch_branch(metadata.base_branch_name())
+                .await?;
 
             assert!(!try_exists(metadata.relative_path("test.txt")).await?);
 
@@ -406,7 +515,9 @@ mod tests {
             let contents = read_string(&metadata.relative_path("test.txt")).await?;
             assert_eq!(contents, expected_file_contents);
             Ok(())
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -421,7 +532,9 @@ mod tests {
 
             assert!(read_string(metadata.locations_path()).await?.is_empty());
             Ok(())
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -437,13 +550,16 @@ mod tests {
             transaction.clean_all_untracked().await?;
 
             assert!(!try_exists(metadata.relative_path("test.txt")).await?);
-            assert!(!try_exists(metadata.relative_path("roswaal/nested/test-clean/test2.txt")).await?);
+            assert!(
+                !try_exists(metadata.relative_path("roswaal/nested/test-clean/test2.txt")).await?
+            );
             assert!(!try_exists(metadata.relative_path("roswaal/nested/test-clean")).await?);
             assert!(!try_exists(metadata.relative_path("roswaal/nested")).await?);
             assert!(try_exists(metadata.relative_path("roswaal")).await?);
             Ok(())
         })
-        .await.unwrap();
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -462,7 +578,8 @@ mod tests {
 
             Ok(())
         })
-        .await.unwrap();
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -477,7 +594,8 @@ mod tests {
 
             Ok(())
         })
-        .await.unwrap();
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -494,7 +612,9 @@ mod tests {
             write_string(metadata.locations_path(), "console.log(\"Hello world\")").await?;
 
             transaction.commit_all("console.log").await?;
-            transaction.switch_branch(metadata.base_branch_name()).await?;
+            transaction
+                .switch_branch(metadata.base_branch_name())
+                .await?;
             transaction.checkout_new_branch(&b2).await?;
 
             write_string(metadata.locations_path(), "console.log(\"Goodbye world\")").await?;
@@ -508,6 +628,7 @@ mod tests {
 
             Ok(())
         })
-        .await.unwrap();
+        .await
+        .unwrap();
     }
 }

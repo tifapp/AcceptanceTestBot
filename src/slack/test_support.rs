@@ -12,7 +12,7 @@ use crate::git::branch_name::RoswaalOwnedGitBranchName;
 pub struct SlackTestConstantBranches {
     add_locations: RoswaalOwnedGitBranchName,
     add_tests: RoswaalOwnedGitBranchName,
-    remove_tests: RoswaalOwnedGitBranchName
+    remove_tests: RoswaalOwnedGitBranchName,
 }
 
 impl SlackTestConstantBranches {

@@ -1,27 +1,37 @@
-use std::sync::Arc;
-use tokio::fs::File;
 use anyhow::Result;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use dotenv::dotenv;
 use once_cell::sync::Lazy;
 use std::future::Future;
+use std::sync::Arc;
+use tokio::fs::File;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
-use dotenv::dotenv;
 
 #[cfg(test)]
 use tokio::sync::Mutex;
 
-use super::{branch_name::RoswaalOwnedGitBranchName, metadata::{self, RoswaalGitRepositoryMetadata}, pull_request::{GithubPullRequest, GithubPullRequestOpen}, repo::{LibGit2RepositoryClient, PullBranchStatus, RoswaalGitRepository, RoswaalGitRepositoryClient}};
+use super::{
+    branch_name::RoswaalOwnedGitBranchName,
+    metadata::{self, RoswaalGitRepositoryMetadata},
+    pull_request::{GithubPullRequest, GithubPullRequestOpen},
+    repo::{
+        LibGit2RepositoryClient, PullBranchStatus, RoswaalGitRepository, RoswaalGitRepositoryClient,
+    },
+};
 
 #[cfg(test)]
 pub struct TestGithubPullRequestOpen {
     mutex: Arc<Mutex<Option<GithubPullRequest>>>,
-    should_fail: bool
+    should_fail: bool,
 }
 
 #[cfg(test)]
 impl TestGithubPullRequestOpen {
     pub fn new(should_fail: bool) -> Self {
-        Self { mutex: Arc::new(Mutex::new(None)), should_fail }
+        Self {
+            mutex: Arc::new(Mutex::new(None)),
+            should_fail,
+        }
     }
 }
 
@@ -33,7 +43,9 @@ impl TestGithubPullRequestOpen {
     }
 
     pub async fn most_recent_head_branch_name(&self) -> Option<RoswaalOwnedGitBranchName> {
-        self.most_recent_pr().await.map(|pr| pr.head_branch().clone())
+        self.most_recent_pr()
+            .await
+            .map(|pr| pr.head_branch().clone())
     }
 }
 
@@ -50,7 +62,7 @@ impl GithubPullRequestOpen for TestGithubPullRequestOpen {
 #[cfg(test)]
 pub struct NoopGitRepositoryClient {
     metadata: RoswaalGitRepositoryMetadata,
-    should_merge_conflict: bool
+    should_merge_conflict: bool,
 }
 
 impl NoopGitRepositoryClient {
@@ -62,7 +74,10 @@ impl NoopGitRepositoryClient {
 #[cfg(test)]
 impl RoswaalGitRepositoryClient for NoopGitRepositoryClient {
     async fn try_new(metadata: &RoswaalGitRepositoryMetadata) -> Result<Self> {
-        Ok(Self { metadata: metadata.clone(), should_merge_conflict: false })
+        Ok(Self {
+            metadata: metadata.clone(),
+            should_merge_conflict: false,
+        })
     }
 
     fn metadata(&self) -> &RoswaalGitRepositoryMetadata {
@@ -122,8 +137,8 @@ impl RoswaalGitRepository<NoopGitRepositoryClient> {
 
 #[cfg(test)]
 pub async fn repo_with_test_metadata() -> Result<(
-    RoswaalGitRepository::<LibGit2RepositoryClient>,
-    RoswaalGitRepositoryMetadata
+    RoswaalGitRepository<LibGit2RepositoryClient>,
+    RoswaalGitRepositoryMetadata,
 )> {
     let metadata = RoswaalGitRepositoryMetadata::for_testing();
     let repo = RoswaalGitRepository::<LibGit2RepositoryClient>::open(&metadata).await?;

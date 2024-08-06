@@ -2,10 +2,13 @@ use std::backtrace::Backtrace;
 
 use anyhow::Error;
 
-use super::ui_lib::{block_kit_views::{SlackHeader, SlackSection}, slack_view::SlackView};
+use super::ui_lib::{
+    block_kit_views::{SlackHeader, SlackSection},
+    slack_view::SlackView,
+};
 
 pub struct ErrorView {
-    error: Error
+    error: Error,
 }
 
 impl ErrorView {
@@ -19,13 +22,12 @@ impl SlackView for ErrorView {
         SlackHeader::new("An Error Occurred")
             .flat_chain_block(SlackSection::from_markdown("🔴 *Error*"))
             .flat_chain_block(
-                SlackSection::from_plaintext(&self.error.to_string())
-                    .emoji_enabled(false)
+                SlackSection::from_plaintext(&self.error.to_string()).emoji_enabled(false),
             )
             .flat_chain_block(SlackSection::from_markdown("⚠️ *Stack Trace*"))
             .flat_chain_block(
                 SlackSection::from_plaintext(&self.error.backtrace().to_string())
-                    .emoji_enabled(false)
+                    .emoji_enabled(false),
             )
     }
 }
@@ -37,7 +39,10 @@ mod tests {
     use anyhow::Error;
     use dotenv::dotenv;
 
-    use crate::{slack::ui_lib::test_support::{assert_slack_view_snapshot, SnapshotMode}, utils::test_error::TestError};
+    use crate::{
+        slack::ui_lib::test_support::{assert_slack_view_snapshot, SnapshotMode},
+        utils::test_error::TestError,
+    };
 
     use super::ErrorView;
 
@@ -49,7 +54,7 @@ mod tests {
         assert_slack_view_snapshot(
             "error-view",
             &ErrorView::new(Error::new(TestError)),
-            SnapshotMode::Comparing
+            SnapshotMode::Comparing,
         )
     }
 }

@@ -2,7 +2,11 @@ use std::future::Future;
 
 use anyhow::Result;
 
-use super::{branch_name::RoswaalOwnedGitBranchName, pull_request::{GithubPullRequest, GithubPullRequestOpen}, repo::{PullBranchStatus, RoswaalGitRepositoryClient, RoswaalGitRepositoryTransaction}};
+use super::{
+    branch_name::RoswaalOwnedGitBranchName,
+    pull_request::{GithubPullRequest, GithubPullRequestOpen},
+    repo::{PullBranchStatus, RoswaalGitRepositoryClient, RoswaalGitRepositoryTransaction},
+};
 
 /// A status type for creating a new branch, pushing changes, opening a pull request, and
 /// deleting the newly created branch.
@@ -10,10 +14,10 @@ use super::{branch_name::RoswaalOwnedGitBranchName, pull_request::{GithubPullReq
 pub enum EditGitRepositoryStatus<T> {
     Success { did_delete_branch: bool, value: T },
     FailedToOpenPullRequest,
-    MergeConflict
+    MergeConflict,
 }
 
-impl <T> EditGitRepositoryStatus<T> {
+impl<T> EditGitRepositoryStatus<T> {
     /// Performs the edit future within a git repository transaction, and opens a PR detailing
     /// those changes.
     ///
@@ -24,7 +28,7 @@ impl <T> EditGitRepositoryStatus<T> {
         new_branch_name: &RoswaalOwnedGitBranchName,
         transaction: RoswaalGitRepositoryTransaction<'_, impl RoswaalGitRepositoryClient>,
         pr_open: &impl GithubPullRequestOpen,
-        edit: impl Future<Output = Result<(GithubPullRequest, T)>>
+        edit: impl Future<Output = Result<(GithubPullRequest, T)>>,
     ) -> Result<Self> {
         let base_branch_name = transaction.metadata().base_branch_name();
         transaction.hard_reset_to_head().await?;
@@ -32,7 +36,7 @@ impl <T> EditGitRepositoryStatus<T> {
         transaction.switch_branch(base_branch_name).await?;
         let pull_status = transaction.pull_branch(base_branch_name).await?;
         if pull_status == PullBranchStatus::MergeConflict {
-            return Ok(Self::MergeConflict)
+            return Ok(Self::MergeConflict);
         }
         transaction.checkout_new_branch(new_branch_name).await?;
         match edit.await {
@@ -46,9 +50,12 @@ impl <T> EditGitRepositoryStatus<T> {
                 if !did_open {
                     Ok(Self::FailedToOpenPullRequest)
                 } else {
-                    Ok(Self::Success { did_delete_branch, value })
+                    Ok(Self::Success {
+                        did_delete_branch,
+                        value,
+                    })
                 }
-            },
+            }
             Err(err) => {
                 transaction.hard_reset_to_head().await?;
                 transaction.clean_all_untracked().await?;
@@ -67,7 +74,17 @@ mod tests {
     use tokio::fs::{try_exists, File};
 
     use super::*;
-    use crate::{git::{metadata::{RoswaalGitRepositoryMetadata, TEST_REPO_BASE_BRANCH_NAME}, repo::{LibGit2RepositoryClient, PullBranchStatus, RoswaalGitRepository}, test_support::{repo_with_test_metadata, with_clean_test_repo_access, write_string, TestGithubPullRequestOpen}}, utils::test_error::TestError};
+    use crate::{
+        git::{
+            metadata::{RoswaalGitRepositoryMetadata, TEST_REPO_BASE_BRANCH_NAME},
+            repo::{LibGit2RepositoryClient, PullBranchStatus, RoswaalGitRepository},
+            test_support::{
+                repo_with_test_metadata, with_clean_test_repo_access, write_string,
+                TestGithubPullRequestOpen,
+            },
+        },
+        utils::test_error::TestError,
+    };
 
     #[tokio::test]
     async fn test_basic_flow_returns_successfully_with_proper_pr_opened_and_correct_repo_state() {
@@ -85,18 +102,21 @@ mod tests {
                 async {
                     File::create(&file_path).await?;
                     Ok((ret_pr, ()))
-                }
-            ).await?;
+                },
+            )
+            .await?;
             assert_successful_single_file_created_edit(
                 &status,
                 &new_branch_name,
                 &expected_pr,
                 &file_path,
                 &repo,
-                &pr_open
-            ).await
+                &pr_open,
+            )
+            .await
         })
-        .await.unwrap()
+        .await
+        .unwrap()
     }
 
     #[tokio::test]
@@ -104,10 +124,16 @@ mod tests {
         let new_branch_name = RoswaalOwnedGitBranchName::new("test-edit");
         let status = EditGitRepositoryStatus::from_editing_new_branch(
             &new_branch_name,
-            RoswaalGitRepository::noop().await.unwrap().transaction().await,
+            RoswaalGitRepository::noop()
+                .await
+                .unwrap()
+                .transaction()
+                .await,
             &TestGithubPullRequestOpen::new(true),
-            async { Ok((GithubPullRequest::test(&new_branch_name), ())) }
-        ).await.unwrap();
+            async { Ok((GithubPullRequest::test(&new_branch_name), ())) },
+        )
+        .await
+        .unwrap();
         assert_eq!(status, EditGitRepositoryStatus::FailedToOpenPullRequest);
     }
 
@@ -125,13 +151,15 @@ mod tests {
                 async {
                     File::create(&failure_file_path).await?;
                     Err::<(GithubPullRequest, ()), anyhow::Error>(anyhow::Error::new(TestError))
-                }
-            ).await;
+                },
+            )
+            .await;
             assert!(edit_result.is_err());
             assert!(!try_exists(failure_file_path).await?);
 
             branch_name = RoswaalOwnedGitBranchName::new("test-edit-recovery-success");
-            let expected_pr = GithubPullRequest::for_tif_react_frontend("Test", "Test", &branch_name);
+            let expected_pr =
+                GithubPullRequest::for_tif_react_frontend("Test", "Test", &branch_name);
             let edit_pr = expected_pr.clone();
             let success_file_path = metadata.relative_path("test-success.txt");
             let status = EditGitRepositoryStatus::from_editing_new_branch(
@@ -141,18 +169,21 @@ mod tests {
                 async {
                     File::create(&success_file_path).await?;
                     Ok((edit_pr, ()))
-                }
-            ).await?;
+                },
+            )
+            .await?;
             assert_successful_single_file_created_edit(
                 &status,
                 &branch_name,
                 &expected_pr,
                 &success_file_path,
                 &repo,
-                &pr_open
-            ).await
+                &pr_open,
+            )
+            .await
         })
-        .await.unwrap()
+        .await
+        .unwrap()
     }
 
     #[tokio::test]
@@ -165,15 +196,19 @@ mod tests {
                 &branch_name,
                 repo.transaction().await,
                 &pr_open,
-                async { Err::<(GithubPullRequest, ()), anyhow::Error>(anyhow::Error::new(TestError)) }
-            ).await;
+                async {
+                    Err::<(GithubPullRequest, ()), anyhow::Error>(anyhow::Error::new(TestError))
+                },
+            )
+            .await;
 
             let transaction = repo.transaction().await;
             let result = transaction.switch_branch(&branch_name.to_string()).await;
             assert!(result.is_err());
             Ok(())
         })
-        .await.unwrap()
+        .await
+        .unwrap()
     }
 
     #[tokio::test]
@@ -181,7 +216,7 @@ mod tests {
         with_clean_test_repo_access(async {
             let base_branch_name = RoswaalOwnedGitBranchName::new("test-edit-pull-latest-base");
             let metadata = RoswaalGitRepositoryMetadata::for_testing_with_custom_base_branch(
-                &base_branch_name.to_string()
+                &base_branch_name.to_string(),
             );
             let repo = RoswaalGitRepository::<LibGit2RepositoryClient>::open(&metadata).await?;
             let pr_open = TestGithubPullRequestOpen::new(false);
@@ -192,7 +227,9 @@ mod tests {
             File::create(&file_path_1).await?;
             transaction.commit_all("test").await?;
             transaction.push_changes(&base_branch_name).await?;
-            transaction.switch_branch(TEST_REPO_BASE_BRANCH_NAME).await?;
+            transaction
+                .switch_branch(TEST_REPO_BASE_BRANCH_NAME)
+                .await?;
             drop(transaction);
 
             let transaction = repo.transaction().await;
@@ -209,19 +246,22 @@ mod tests {
                     assert!(try_exists(&file_path_1).await?);
                     assert!(!try_exists(&file_path_2).await?);
                     Ok((GithubPullRequest::test(&branch_name_2), ()))
-                }
-            ).await?;
+                },
+            )
+            .await?;
             Ok(())
         })
-        .await.unwrap()
+        .await
+        .unwrap()
     }
 
     #[tokio::test]
     async fn test_detects_merge_conflict_when_pulling_from_base_branch() {
         with_clean_test_repo_access(async {
-            let base_branch_name = RoswaalOwnedGitBranchName::new("test-edit-pull-merge-conflict-base");
+            let base_branch_name =
+                RoswaalOwnedGitBranchName::new("test-edit-pull-merge-conflict-base");
             let metadata = RoswaalGitRepositoryMetadata::for_testing_with_custom_base_branch(
-                &base_branch_name.to_string()
+                &base_branch_name.to_string(),
             );
             let repo = RoswaalGitRepository::<LibGit2RepositoryClient>::open(&metadata).await?;
             let pr_open = TestGithubPullRequestOpen::new(false);
@@ -231,7 +271,9 @@ mod tests {
             write_string(&metadata.relative_path("test.txt"), "Hello world").await?;
             transaction.commit_all("hello").await?;
             transaction.push_changes(&base_branch_name).await?;
-            transaction.switch_branch(TEST_REPO_BASE_BRANCH_NAME).await?;
+            transaction
+                .switch_branch(TEST_REPO_BASE_BRANCH_NAME)
+                .await?;
             transaction.delete_local_branch(&base_branch_name).await?;
             drop(transaction);
 
@@ -247,12 +289,14 @@ mod tests {
                 &new_branch_name,
                 transaction,
                 &pr_open,
-                async { Ok((GithubPullRequest::test(&new_branch_name), ())) }
-            ).await?;
+                async { Ok((GithubPullRequest::test(&new_branch_name), ())) },
+            )
+            .await?;
             assert_eq!(status, EditGitRepositoryStatus::MergeConflict);
             Ok(())
         })
-        .await.unwrap()
+        .await
+        .unwrap()
     }
 
     async fn assert_successful_single_file_created_edit(
@@ -261,15 +305,24 @@ mod tests {
         expected_pr: &GithubPullRequest,
         file_path: &str,
         repo: &RoswaalGitRepository<LibGit2RepositoryClient>,
-        pr_open: &TestGithubPullRequestOpen
+        pr_open: &TestGithubPullRequestOpen,
     ) -> Result<()> {
-        assert_eq!(status, &EditGitRepositoryStatus::Success { did_delete_branch: true, value: () });
+        assert_eq!(
+            status,
+            &EditGitRepositoryStatus::Success {
+                did_delete_branch: true,
+                value: ()
+            }
+        );
         assert_eq!(pr_open.most_recent_pr().await, Some(expected_pr.clone()));
 
         let transaction = repo.transaction().await;
 
         let switch_result = transaction.switch_branch(&branch_name.to_string()).await;
-        assert!(switch_result.is_err(), "The new local branch should've been deleted, so we cannot switch to it.");
+        assert!(
+            switch_result.is_err(),
+            "The new local branch should've been deleted, so we cannot switch to it."
+        );
 
         assert!(!try_exists(&file_path).await?);
         let status = transaction.pull_branch(&branch_name.to_string()).await?;

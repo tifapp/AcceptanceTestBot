@@ -1,6 +1,14 @@
 use std::{env, sync::Arc};
 
-use crate::{git::{metadata::RoswaalGitRepositoryMetadata, pull_request::GithubPullRequestOpen, repo::{LibGit2RepositoryClient, RoswaalGitRepository}}, slack::message::SlackSendMessage, utils::{env::RoswaalEnvironement, sqlite::RoswaalSqlite}};
+use crate::{
+    git::{
+        metadata::RoswaalGitRepositoryMetadata,
+        pull_request::GithubPullRequestOpen,
+        repo::{LibGit2RepositoryClient, RoswaalGitRepository},
+    },
+    slack::message::SlackSendMessage,
+    utils::{env::RoswaalEnvironement, sqlite::RoswaalSqlite},
+};
 use anyhow::Result;
 use log::info;
 use reqwest::Client;
@@ -13,7 +21,7 @@ pub struct ServerEnvironment {
     http_client: Arc<Client>,
     sqlite: Arc<RoswaalSqlite>,
     address: &'static str,
-    password: EndpointPassword
+    password: EndpointPassword,
 }
 
 impl ServerEnvironment {
@@ -21,25 +29,25 @@ impl ServerEnvironment {
     pub async fn prod() -> Result<Self> {
         Ok(Self {
             git_repository: RoswaalGitRepository::open(
-                &RoswaalGitRepositoryMetadata::for_tif_react_frontend()
-            ).await?,
+                &RoswaalGitRepositoryMetadata::for_tif_react_frontend(),
+            )
+            .await?,
             http_client: Arc::new(Client::new()),
             sqlite: Arc::new(RoswaalSqlite::open("./roswaal.sqlite").await?),
             address: "0.0.0.0:8080",
-            password: EndpointPassword::prod()
+            password: EndpointPassword::prod(),
         })
     }
 
     /// The development environment.
     pub async fn dev() -> Result<Self> {
         Ok(Self {
-            git_repository: RoswaalGitRepository::open(
-                &RoswaalGitRepositoryMetadata::for_testing()
-            ).await?,
+            git_repository:
+                RoswaalGitRepository::open(&RoswaalGitRepositoryMetadata::for_testing()).await?,
             http_client: Arc::new(Client::new()),
             sqlite: Arc::new(RoswaalSqlite::open("./roswaal-dev.sqlite").await?),
             address: "127.0.0.1:8082",
-            password: EndpointPassword::dev()
+            password: EndpointPassword::dev(),
         })
     }
 
