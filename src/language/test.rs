@@ -1,19 +1,19 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{location::name::RoswaalLocationName, utils::string::ToAsciiKebabCase};
+use crate::location::name::RoswaalLocationName;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct RoswaalTest {
+pub struct RoswaalCompiledTest {
     name: String,
     description: Option<String>,
-    commands: Vec<RoswaalTestCommand>,
+    commands: Vec<RoswaalCompiledTestCommand>,
 }
 
-impl RoswaalTest {
+impl RoswaalCompiledTest {
     pub fn new(
         name: String,
         description: Option<String>,
-        commands: Vec<RoswaalTestCommand>,
+        commands: Vec<RoswaalCompiledTestCommand>,
     ) -> Self {
         Self {
             name,
@@ -23,12 +23,12 @@ impl RoswaalTest {
     }
 }
 
-impl RoswaalTest {
+impl RoswaalCompiledTest {
     pub fn name(&self) -> &str {
         &self.name
     }
 
-    pub fn commands(&self) -> &Vec<RoswaalTestCommand> {
+    pub fn commands(&self) -> &Vec<RoswaalCompiledTestCommand> {
         &self.commands
     }
 
@@ -38,7 +38,7 @@ impl RoswaalTest {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub enum RoswaalTestCommand {
+pub enum RoswaalCompiledTestCommand {
     Step {
         label: String,
         name: String,

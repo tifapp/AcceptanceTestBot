@@ -4,7 +4,7 @@ use crate::location::name::{RoswaalLocationName, RoswaalLocationNameParsingError
 
 use super::{
     ast::{RoswaalTestSyntax, RoswaalTestSyntaxCommand, RoswaalTestSyntaxLineContent},
-    test::{RoswaalTest, RoswaalTestCommand},
+    test::{RoswaalCompiledTest, RoswaalCompiledTestCommand},
 };
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -114,7 +114,7 @@ pub trait RoswaalCompile: Sized {
     }
 }
 
-impl RoswaalCompile for RoswaalTest {
+impl RoswaalCompile for RoswaalCompiledTest {
     fn compile_syntax(
         syntax: &RoswaalTestSyntax,
         mut ctx: RoswaalCompileContext,
@@ -224,7 +224,7 @@ impl<'a> RoswaalCompileContext<'a> {
         } else {
             let command = CompiledCommand {
                 line_number,
-                command: RoswaalTestCommand::SetLocation { location_name },
+                command: RoswaalCompiledTestCommand::SetLocation { location_name },
             };
             self.commands.push(command);
         }
@@ -260,7 +260,7 @@ impl<'a> RoswaalCompileContext<'a> {
         }
         let mut did_match = false;
         if let Some(requirement_info) = self.matchable_requirements.get_mut(&label_key) {
-            let command = RoswaalTestCommand::Step {
+            let command = RoswaalCompiledTestCommand::Step {
                 label: step_label_name(label),
                 name: description.to_string(),
                 requirement: requirement_info.description.clone(),
@@ -295,7 +295,7 @@ impl<'a> RoswaalCompileContext<'a> {
         }
         let mut did_match = false;
         if let Some(step_info) = self.matchable_steps.get_mut(&label_key) {
-            let command = RoswaalTestCommand::Step {
+            let command = RoswaalCompiledTestCommand::Step {
                 label: step_label_name(label),
                 name: step_info.description.clone(),
                 requirement: description.to_string(),
@@ -316,7 +316,7 @@ impl<'a> RoswaalCompileContext<'a> {
         self.matchable_requirements.insert(label_key, info);
     }
 
-    fn finalize(mut self) -> Result<RoswaalTest, Vec<RoswaalCompilationError>> {
+    fn finalize(mut self) -> Result<RoswaalCompiledTest, Vec<RoswaalCompilationError>> {
         self.errors.sort_by_key(|e| e.line_number());
         let test_name = match self.test_name {
             Some(name) => name,
@@ -327,7 +327,7 @@ impl<'a> RoswaalCompileContext<'a> {
         }
         self.commands
             .sort_by(|a, b| a.line_number.cmp(&b.line_number));
-        return Ok(RoswaalTest::new(
+        return Ok(RoswaalCompiledTest::new(
             test_name,
             self.test_description,
             self.commands.iter().map(|c| c.command.clone()).collect(),
@@ -356,7 +356,7 @@ impl AppendCompililationError for Vec<RoswaalCompilationError> {
 #[derive(Debug)]
 struct CompiledCommand {
     line_number: u32,
-    command: RoswaalTestCommand,
+    command: RoswaalCompiledTestCommand,
 }
 
 fn step_label_name(label: &str) -> String {
@@ -367,13 +367,13 @@ fn step_label_name(label: &str) -> String {
 mod tests {
     use std::str::FromStr;
 
-    use crate::{language::test::RoswaalTestCommand, location::name::RoswaalLocationName};
+    use crate::{language::test::RoswaalCompiledTestCommand, location::name::RoswaalLocationName};
 
     use super::*;
 
     #[test]
     fn test_parse_returns_no_name_for_empty_string() {
-        let result = RoswaalTest::compile("", RoswaalCompileContext::empty());
+        let result = RoswaalCompiledTest::compile("", RoswaalCompileContext::empty());
         let error = RoswaalCompilationError {
             line_number: 1,
             code: RoswaalCompilationErrorCode::NoTestName,
@@ -384,7 +384,7 @@ mod tests {
     #[test]
     fn test_parse_returns_no_name_for_random_multiline_string() {
         let test = "\n\n\n\n";
-        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty());
+        let result = RoswaalCompiledTest::compile(test, RoswaalCompileContext::empty());
         let error = RoswaalCompilationError {
             line_number: 4,
             code: RoswaalCompilationErrorCode::NoTestName,
@@ -395,7 +395,7 @@ mod tests {
     #[test]
     fn test_parse_returns_unknown_command_and_no_test_name_for_random_string() {
         let code = "jkashdkjashdkjahsd ehiuh3ui2geuyg23urg";
-        let result = RoswaalTest::compile(code, RoswaalCompileContext::empty());
+        let result = RoswaalCompiledTest::compile(code, RoswaalCompileContext::empty());
         let errors = vec![
             RoswaalCompilationError {
                 line_number: 1,
@@ -412,7 +412,7 @@ mod tests {
 
     #[test]
     fn test_compile_does_not_return_a_no_test_steps_error_when_no_test_name() {
-        let result = RoswaalTest::compile("", RoswaalCompileContext::empty());
+        let result = RoswaalCompiledTest::compile("", RoswaalCompileContext::empty());
         let error = RoswaalCompilationError {
             line_number: 1,
             code: RoswaalCompilationErrorCode::NoTestSteps,
@@ -422,7 +422,8 @@ mod tests {
 
     #[test]
     fn test_parse_returns_no_steps_when_name_formatted_correctly_uppercase() {
-        let result = RoswaalTest::compile("New Test: Hello world", RoswaalCompileContext::empty());
+        let result =
+            RoswaalCompiledTest::compile("New Test: Hello world", RoswaalCompileContext::empty());
         let error = RoswaalCompilationError {
             line_number: 1,
             code: RoswaalCompilationErrorCode::NoTestSteps,
@@ -432,7 +433,8 @@ mod tests {
 
     #[test]
     fn test_parse_returns_no_steps_when_name_formatted_correctly_lowercase() {
-        let result = RoswaalTest::compile("new test: Hello world", RoswaalCompileContext::empty());
+        let result =
+            RoswaalCompiledTest::compile("new test: Hello world", RoswaalCompileContext::empty());
         let error = RoswaalCompilationError {
             line_number: 1,
             code: RoswaalCompilationErrorCode::NoTestSteps,
@@ -458,7 +460,7 @@ lsjkhadjkhasdfjkhasdjkfhkjsd
                 code: RoswaalCompilationErrorCode::NoTestSteps,
             },
         ];
-        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty());
+        let result = RoswaalCompiledTest::compile(test, RoswaalCompileContext::empty());
         assert_contains_compile_error(&result, &errors[0]);
         assert_contains_compile_error(&result, &errors[1])
     }
@@ -470,7 +472,7 @@ lsjkhadjkhasdfjkhasdjkfhkjsd
             line_number: 5,
             code: RoswaalCompilationErrorCode::NoTestSteps,
         };
-        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty());
+        let result = RoswaalCompiledTest::compile(test, RoswaalCompileContext::empty());
         assert_contains_compile_error(&result, &error)
     }
 
@@ -480,7 +482,7 @@ lsjkhadjkhasdfjkhasdjkfhkjsd
 New test: Test 1
 New Test: Test 2
 ";
-        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty());
+        let result = RoswaalCompiledTest::compile(test, RoswaalCompileContext::empty());
         let error = RoswaalCompilationError {
             line_number: 2,
             code: RoswaalCompilationErrorCode::TestNameAlreadyDeclared,
@@ -494,7 +496,7 @@ New Test: Test 2
 new test: Hello world
 passo 1: mamma mia
 ";
-        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty());
+        let result = RoswaalCompiledTest::compile(test, RoswaalCompileContext::empty());
         let step_name = "passo 1".to_string();
         let error = RoswaalCompilationError {
             line_number: 2,
@@ -509,7 +511,7 @@ passo 1: mamma mia
 New Test: Hello wordl
 Step 1:
 ";
-        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty());
+        let result = RoswaalCompiledTest::compile(test, RoswaalCompileContext::empty());
         let error = RoswaalCompilationError {
             line_number: 2,
             code: RoswaalCompilationErrorCode::NoCommandDescription {
@@ -525,7 +527,7 @@ Step 1:
 New test: This is an acceptance test
 Set Location:
 ";
-        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty());
+        let result = RoswaalCompiledTest::compile(test, RoswaalCompileContext::empty());
         let error = RoswaalCompilationError {
             line_number: 2,
             code: RoswaalCompilationErrorCode::NoCommandDescription {
@@ -542,7 +544,8 @@ Set Location:
 New test: This is an acceptance test
 Set Location: world
 ";
-        let result = RoswaalTest::compile(test, RoswaalCompileContext::new(&location_names));
+        let result =
+            RoswaalCompiledTest::compile(test, RoswaalCompileContext::new(&location_names));
         let error = RoswaalCompilationError {
             line_number: 2,
             code: RoswaalCompilationErrorCode::UnknownLocationName("world".to_string()),
@@ -559,7 +562,8 @@ Step 1: do the thing
 Set Location: 29783987
 Requirement 1: sure, do the thing
 ";
-        let result = RoswaalTest::compile(test, RoswaalCompileContext::new(&location_names));
+        let result =
+            RoswaalCompiledTest::compile(test, RoswaalCompileContext::new(&location_names));
         let error = RoswaalCompilationError {
             line_number: 3,
             code: RoswaalCompilationErrorCode::InvalidLocationName(
@@ -576,7 +580,7 @@ Requirement 1: sure, do the thing
 New Test: I am a test
 Step 1: Jump in the air
 ";
-        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty());
+        let result = RoswaalCompiledTest::compile(test, RoswaalCompileContext::empty());
         let error = RoswaalCompilationError {
             line_number: 2,
             code: RoswaalCompilationErrorCode::NoStepRequirement {
@@ -593,7 +597,7 @@ Step 1: Jump in the air
 New Test: I am a test
 Requirement 1: Jump in the air
 ";
-        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty());
+        let result = RoswaalCompiledTest::compile(test, RoswaalCompileContext::empty());
         let error = RoswaalCompilationError {
             line_number: 2,
             code: RoswaalCompilationErrorCode::NoRequirementStep {
@@ -612,7 +616,7 @@ New Test: I am a test
 Step 1: I am blob
 Requirement A: Jump in the air
 ";
-        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty());
+        let result = RoswaalCompiledTest::compile(test, RoswaalCompileContext::empty());
         let error = RoswaalCompilationError {
             line_number: 3,
             code: RoswaalCompilationErrorCode::NoRequirementStep {
@@ -630,7 +634,7 @@ New Test: I am a test
 Step 1: I am blob
 Requirement A: Jump in the air
 ";
-        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty());
+        let result = RoswaalCompiledTest::compile(test, RoswaalCompileContext::empty());
         let error = RoswaalCompilationError {
             line_number: 2,
             code: RoswaalCompilationErrorCode::NoStepRequirement {
@@ -650,7 +654,7 @@ Step 2: I am blob Jr.
 Requirement A: Jump in the air
 Requirement B: And summon Shenron
 ";
-        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty());
+        let result = RoswaalCompiledTest::compile(test, RoswaalCompileContext::empty());
         let errors = vec![
             RoswaalCompilationError {
                 line_number: 2,
@@ -691,11 +695,11 @@ New Test: Piccolo fights cyborgs
 Step 1: Piccolo can use special-beam-cannon
 Requirement 1: Have Piccolo charge his special-beam-cannon
 ";
-        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty()).unwrap();
-        let expected_test = RoswaalTest::new(
+        let result = RoswaalCompiledTest::compile(test, RoswaalCompileContext::empty()).unwrap();
+        let expected_test = RoswaalCompiledTest::new(
             "Piccolo fights cyborgs".to_string(),
             None,
-            vec![RoswaalTestCommand::Step {
+            vec![RoswaalCompiledTestCommand::Step {
                 label: "Step 1".to_string(),
                 name: "Piccolo can use special-beam-cannon".to_string(),
                 requirement: "Have Piccolo charge his special-beam-cannon".to_string(),
@@ -713,19 +717,19 @@ Requirement 1: Have the guy dying on the floor clarify that the other guy means 
 Step 2: I'm gonna deck you in the shnaz
 Requirement 2: What???
 ";
-        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty()).unwrap();
-        let expected_test = RoswaalTest::new(
+        let result = RoswaalCompiledTest::compile(test, RoswaalCompileContext::empty()).unwrap();
+        let expected_test = RoswaalCompiledTest::new(
             "I'm Insane, From Earth".to_string(),
             None,
             vec![
-                RoswaalTestCommand::Step {
+                RoswaalCompiledTestCommand::Step {
                     label: "Step 1".to_string(),
                     name: "He means Saiyan".to_string(),
                     requirement:
                         "Have the guy dying on the floor clarify that the other guy means Saiyan"
                             .to_string(),
                 },
-                RoswaalTestCommand::Step {
+                RoswaalCompiledTestCommand::Step {
                     label: "Step 2".to_string(),
                     name: "I'm gonna deck you in the shnaz".to_string(),
                     requirement: "What???".to_string(),
@@ -744,19 +748,19 @@ Step 2: I'm gonna deck you in the shnaz
 Requirement 2: What???
 Requirement 1: Have the guy dying on the floor clarify that the other guy means Saiyan
 ";
-        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty()).unwrap();
-        let expected_test = RoswaalTest::new(
+        let result = RoswaalCompiledTest::compile(test, RoswaalCompileContext::empty()).unwrap();
+        let expected_test = RoswaalCompiledTest::new(
             "I'm Insane, From Earth".to_string(),
             None,
             vec![
-                RoswaalTestCommand::Step {
+                RoswaalCompiledTestCommand::Step {
                     label: "Step 1".to_string(),
                     name: "He means Saiyan".to_string(),
                     requirement:
                         "Have the guy dying on the floor clarify that the other guy means Saiyan"
                             .to_string(),
                 },
-                RoswaalTestCommand::Step {
+                RoswaalCompiledTestCommand::Step {
                     label: "Step 2".to_string(),
                     name: "I'm gonna deck you in the shnaz".to_string(),
                     requirement: "What???".to_string(),
@@ -775,19 +779,19 @@ Step 1: He means Saiyan
 Step 2: I'm gonna deck you in the shnaz
 Requirement 1: Have the guy dying on the floor clarify that the other guy means Saiyan
 ";
-        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty()).unwrap();
-        let expected_test = RoswaalTest::new(
+        let result = RoswaalCompiledTest::compile(test, RoswaalCompileContext::empty()).unwrap();
+        let expected_test = RoswaalCompiledTest::new(
             "I'm Insane, From Earth".to_string(),
             None,
             vec![
-                RoswaalTestCommand::Step {
+                RoswaalCompiledTestCommand::Step {
                     label: "Step 1".to_string(),
                     name: "He means Saiyan".to_string(),
                     requirement:
                         "Have the guy dying on the floor clarify that the other guy means Saiyan"
                             .to_string(),
                 },
-                RoswaalTestCommand::Step {
+                RoswaalCompiledTestCommand::Step {
                     label: "Step 2".to_string(),
                     name: "I'm gonna deck you in the shnaz".to_string(),
                     requirement: "What???".to_string(),
@@ -807,25 +811,25 @@ Set Location: New York
 Step 2: I thought you had it
 Requirement 1: Have the guy dying on the floor ask why he didn't block that
 ";
-        let result = RoswaalTest::compile(
+        let result = RoswaalCompiledTest::compile(
             test,
             RoswaalCompileContext::new(&vec!["new york".parse().unwrap()]),
         )
         .unwrap();
-        let expected_test = RoswaalTest::new(
+        let expected_test = RoswaalCompiledTest::new(
             "I'm Insane, From New York".to_string(),
             None,
             vec![
-                RoswaalTestCommand::Step {
+                RoswaalCompiledTestCommand::Step {
                     label: "Step 1".to_string(),
                     name: "Why didn't you block that".to_string(),
                     requirement: "Have the guy dying on the floor ask why he didn't block that"
                         .to_string(),
                 },
-                RoswaalTestCommand::SetLocation {
+                RoswaalCompiledTestCommand::SetLocation {
                     location_name: "New York".parse().unwrap(),
                 },
-                RoswaalTestCommand::Step {
+                RoswaalCompiledTestCommand::Step {
                     label: "Step 2".to_string(),
                     name: "I thought you had it".to_string(),
                     requirement: "NAAAAHHHH".to_string(),
@@ -846,17 +850,17 @@ Requirement 1: B
 Step 2: C
 Requirement 2: D
 ";
-        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty()).unwrap();
-        let expected_test = RoswaalTest::new(
+        let result = RoswaalCompiledTest::compile(test, RoswaalCompileContext::empty()).unwrap();
+        let expected_test = RoswaalCompiledTest::new(
             "A really cool test.".to_string(),
             Some("This is a super cool test.".to_string()),
             vec![
-                RoswaalTestCommand::Step {
+                RoswaalCompiledTestCommand::Step {
                     label: "Step 1".to_string(),
                     name: "A".to_string(),
                     requirement: "B".to_string(),
                 },
-                RoswaalTestCommand::Step {
+                RoswaalCompiledTestCommand::Step {
                     label: "Step 2".to_string(),
                     name: "C".to_string(),
                     requirement: "D".to_string(),
@@ -875,7 +879,7 @@ Requirement 1: B
 Step 1: C
 Requirement 1: D
 ";
-        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty());
+        let result = RoswaalCompiledTest::compile(test, RoswaalCompileContext::empty());
         assert_contains_compile_errors(
             &result,
             &vec![
@@ -904,7 +908,7 @@ New Test: Big Chungus III
 Step 1: Big
 Step 1: Big 2
 ";
-        let result = RoswaalTest::compile(test, RoswaalCompileContext::empty());
+        let result = RoswaalCompiledTest::compile(test, RoswaalCompileContext::empty());
         let errors = vec![
             RoswaalCompilationError {
                 line_number: 2,
@@ -929,14 +933,14 @@ Step 1: Big 2
     }
 
     fn assert_contains_compile_error(
-        result: &Result<RoswaalTest, Vec<RoswaalCompilationError>>,
+        result: &Result<RoswaalCompiledTest, Vec<RoswaalCompilationError>>,
         error: &RoswaalCompilationError,
     ) {
         assert!(result.as_ref().err().unwrap().contains(error))
     }
 
     fn assert_contains_compile_errors(
-        result: &Result<RoswaalTest, Vec<RoswaalCompilationError>>,
+        result: &Result<RoswaalCompiledTest, Vec<RoswaalCompilationError>>,
         errors: &Vec<RoswaalCompilationError>,
     ) {
         for error in errors {
@@ -945,7 +949,7 @@ Step 1: Big 2
     }
 
     fn assert_not_contains_compile_error(
-        result: &Result<RoswaalTest, Vec<RoswaalCompilationError>>,
+        result: &Result<RoswaalCompiledTest, Vec<RoswaalCompilationError>>,
         error: &RoswaalCompilationError,
     ) {
         assert!(!result.as_ref().err().unwrap().contains(error))

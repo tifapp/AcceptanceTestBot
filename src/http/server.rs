@@ -31,7 +31,7 @@ use crate::{
         search_tests_view::SearchTestsView,
         ui_lib::slack_view::SlackView,
     },
-    tests_data::progress::RoswaalTestProgress,
+    tests_data::progress::RoswaalTestProgressUpload,
     utils::sqlite::RoswaalSqlite,
 };
 
@@ -80,7 +80,7 @@ fn roswaal_server(environment: Arc<ServerEnvironment>) -> Router<()> {
 
 #[derive(Debug, Deserialize)]
 struct ProgressUpload {
-    results: Vec<RoswaalTestProgress>,
+    results: Vec<RoswaalTestProgressUpload>,
 }
 
 async fn post_progess(

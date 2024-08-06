@@ -8,17 +8,17 @@ use super::ordinal::RoswaalTestCommandOrdinal;
 /// Note that the zero ordinal denotes the before launch command, which every test implicity has.
 #[derive(Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RoswaalTestProgress {
+pub struct RoswaalTestProgressUpload {
     test_name: String,
     command_failure_ordinal: Option<RoswaalTestCommandOrdinal>,
-    error: Option<RoswaalTestProgressErrorDescription>,
+    error: Option<RoswaalTestProgressUploadErrorDescription>,
 }
 
-impl RoswaalTestProgress {
+impl RoswaalTestProgressUpload {
     pub fn new(
         test_name: String,
         command_failure_ordinal: Option<RoswaalTestCommandOrdinal>,
-        error: Option<RoswaalTestProgressErrorDescription>,
+        error: Option<RoswaalTestProgressUploadErrorDescription>,
     ) -> Self {
         Self {
             test_name,
@@ -28,7 +28,7 @@ impl RoswaalTestProgress {
     }
 }
 
-impl RoswaalTestProgress {
+impl RoswaalTestProgressUpload {
     pub fn command_failure_ordinal(&self) -> Option<RoswaalTestCommandOrdinal> {
         self.command_failure_ordinal
     }
@@ -48,12 +48,12 @@ impl RoswaalTestProgress {
 
 #[derive(Debug, PartialEq, Eq, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct RoswaalTestProgressErrorDescription {
-    pub(super) message: String,
-    pub(super) stack_trace: String,
+pub struct RoswaalTestProgressUploadErrorDescription {
+    message: String,
+    stack_trace: String,
 }
 
-impl RoswaalTestProgressErrorDescription {
+impl RoswaalTestProgressUploadErrorDescription {
     pub fn new(message: String, stack_trace: String) -> Self {
         Self {
             message,

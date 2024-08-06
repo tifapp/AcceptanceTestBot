@@ -8,7 +8,7 @@ use crate::{
             RoswaalCompilationDuplicateErrorCode, RoswaalCompilationError,
             RoswaalCompilationErrorCode,
         },
-        test::RoswaalTest,
+        test::RoswaalCompiledTest,
     },
     location::name::RoswaalLocationNameParsingError,
     operations::add_tests::AddTestsStatus,
@@ -99,7 +99,7 @@ impl<'r> AddTestsView<'r> {
 impl<'r> AddTestsView<'r> {
     fn compiling_tests_view(
         &self,
-        tests_with_syntax: &Vec<(RoswaalTest, RoswaalTestSyntax<'r>)>,
+        tests_with_syntax: &Vec<(RoswaalCompiledTest, RoswaalTestSyntax<'r>)>,
     ) -> impl SlackView {
         let iter = tests_with_syntax
             .iter()

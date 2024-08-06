@@ -6,7 +6,7 @@ use tokio::{
 
 use crate::{
     is_case,
-    language::test::{RoswaalTest, RoswaalTestCommand},
+    language::test::{RoswaalCompiledTest, RoswaalCompiledTestCommand},
     utils::string::ToAsciiCamelCase,
 };
 
@@ -30,7 +30,7 @@ impl TestCaseTypescript {
     }
 }
 
-impl RoswaalTypescriptGenerate<TestCaseTypescript> for RoswaalTestCommand {
+impl RoswaalTypescriptGenerate<TestCaseTypescript> for RoswaalCompiledTestCommand {
     fn typescript(&self) -> TestCaseTypescript {
         match self {
             Self::Step {
@@ -122,7 +122,7 @@ test(\"{}\", async () => {{
     )
 }
 
-impl RoswaalTypescriptGenerate<TestCaseTypescript> for RoswaalTest {
+impl RoswaalTypescriptGenerate<TestCaseTypescript> for RoswaalCompiledTest {
     fn typescript(&self) -> TestCaseTypescript {
         TestCaseTypescript {
             test_case_code: self.test_case_typescript(),
@@ -131,7 +131,7 @@ impl RoswaalTypescriptGenerate<TestCaseTypescript> for RoswaalTest {
     }
 }
 
-impl RoswaalTest {
+impl RoswaalCompiledTest {
     fn test_case_typescript(&self) -> String {
         let mut ts = GENERATED_HEADER.to_string();
         ts.push_str(TEST_CASE_IMPORTS);
@@ -154,7 +154,7 @@ impl RoswaalTest {
         let has_location_command = self
             .commands()
             .iter()
-            .find(|c| is_case!(c, RoswaalTestCommand::SetLocation))
+            .find(|c| is_case!(c, RoswaalCompiledTestCommand::SetLocation))
             .is_some();
         if has_location_command {
             ts.push_str(TEST_ACTIONS_LOCATION_IMPORT)
@@ -187,7 +187,7 @@ mod tests {
 
     #[test]
     fn test_step_command_action_typescript() {
-        let command = RoswaalTestCommand::Step {
+        let command = RoswaalCompiledTestCommand::Step {
             label: "Step 1".to_string(),
             name: String::from("Anna is about to arrive at an event"),
             requirement: String::from("Mark Anna as being present at an event"),
@@ -204,7 +204,7 @@ export const markAnnaAsBeingPresentAtAnEvent = async () => {
 
     #[test]
     fn test_step_command_test_case_typescript() {
-        let command = RoswaalTestCommand::Step {
+        let command = RoswaalCompiledTestCommand::Step {
             label: "Step 1".to_string(),
             name: String::from("Anna is about to arrive at an event"),
             requirement: String::from("Mark Anna as being present at an event"),
@@ -219,7 +219,7 @@ export const markAnnaAsBeingPresentAtAnEvent = async () => {
 
     #[test]
     fn test_set_location_command_action_typescript() {
-        let command = RoswaalTestCommand::SetLocation {
+        let command = RoswaalCompiledTestCommand::SetLocation {
             location_name: RoswaalLocationName::from_str("San Francisco").unwrap(),
         };
         let ts = command.typescript();
@@ -233,7 +233,7 @@ export const setLocationToSanFrancisco = async () => {
 
     #[test]
     fn test_set_location_command_test_case_typescript() {
-        let command = RoswaalTestCommand::SetLocation {
+        let command = RoswaalCompiledTestCommand::SetLocation {
             location_name: RoswaalLocationName::from_str("San Francisco").unwrap(),
         };
         let ts = command.typescript();
@@ -246,17 +246,17 @@ export const setLocationToSanFrancisco = async () => {
 
     #[test]
     fn test_generate_test_actions_command_typescript_only_steps() {
-        let step1 = RoswaalTestCommand::Step {
+        let step1 = RoswaalCompiledTestCommand::Step {
             label: "Step 1".to_string(),
             name: "Johnny is signed in".to_string(),
             requirement: "Ensure Johnny is signed into his account".to_string(),
         };
-        let step2 = RoswaalTestCommand::Step {
+        let step2 = RoswaalCompiledTestCommand::Step {
             label: "Step 2".to_string(),
             name: "Johnny is bored".to_string(),
             requirement: "Ensure that Johnny is not bored".to_string(),
         };
-        let ts = RoswaalTest::new("A".to_string(), None, vec![step1, step2]).typescript();
+        let ts = RoswaalCompiledTest::new("A".to_string(), None, vec![step1, step2]).typescript();
         let expected_ts = "\
 import { TestAppLaunchConfig } from \"../Launch\"
 
@@ -281,16 +281,17 @@ export const ensureThatJohnnyIsNotBored = async () => {
 
     #[test]
     fn test_generate_test_actions_command_typescript_steps_and_location_changes() {
-        let command1 = RoswaalTestCommand::Step {
+        let command1 = RoswaalCompiledTestCommand::Step {
             label: "Step 1".to_string(),
             name: "Johnny is signed in".to_string(),
             requirement: "Ensure Johnny is signed into his account,,,, and is (*$)(*)($# alive"
                 .to_string(),
         };
-        let command2 = RoswaalTestCommand::SetLocation {
+        let command2 = RoswaalCompiledTestCommand::SetLocation {
             location_name: RoswaalLocationName::from_str("Oakland").unwrap(),
         };
-        let ts = RoswaalTest::new("A".to_string(), None, vec![command1, command2]).typescript();
+        let ts =
+            RoswaalCompiledTest::new("A".to_string(), None, vec![command1, command2]).typescript();
         let expected_ts = "\
 import { TestAppLaunchConfig } from \"../Launch\"
 import { TestLocations, setUserLocation } from \"../Location\"
@@ -315,18 +316,18 @@ export const setLocationToOakland = async () => {
 
     #[test]
     fn test_generate_test_case_command_typescript_only_steps() {
-        let step1 = RoswaalTestCommand::Step {
+        let step1 = RoswaalCompiledTestCommand::Step {
             label: "Step 1".to_string(),
             name: "Johnny is signed in".to_string(),
             requirement: "Ensure Johnny is signed into his account,,,, and is (*$)(*)($# alive"
                 .to_string(),
         };
-        let step2 = RoswaalTestCommand::Step {
+        let step2 = RoswaalCompiledTestCommand::Step {
             label: "Step 2".to_string(),
             name: "Johnny is bored".to_string(),
             requirement: "Ensure that Johnny is not bored".to_string(),
         };
-        let ts = RoswaalTest::new("B".to_string(), None, vec![step1, step2]).typescript();
+        let ts = RoswaalCompiledTest::new("B".to_string(), None, vec![step1, step2]).typescript();
         let expected_ts = "\
 // Generated by Roswaal, do not touch.
 
@@ -349,16 +350,17 @@ test(\"B\", async () => {
 
     #[test]
     fn test_generate_test_case_command_typescript_steps_and_location_changes() {
-        let command1 = RoswaalTestCommand::Step {
+        let command1 = RoswaalCompiledTestCommand::Step {
             label: "Step 1".to_string(),
             name: "Johnny is signed in".to_string(),
             requirement: "Ensure Johnny is signed into his account".to_string(),
         };
-        let command2 = RoswaalTestCommand::SetLocation {
+        let command2 = RoswaalCompiledTestCommand::SetLocation {
             location_name: RoswaalLocationName::from_str("Oakland").unwrap(),
         };
-        let ts = RoswaalTest::new("I am \"Bob\"".to_string(), None, vec![command1, command2])
-            .typescript();
+        let ts =
+            RoswaalCompiledTest::new("I am \"Bob\"".to_string(), None, vec![command1, command2])
+                .typescript();
         let expected_ts = r#"// Generated by Roswaal, do not touch.
 
 import * as TestActions from "./TestActions"

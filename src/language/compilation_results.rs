@@ -3,14 +3,14 @@ use crate::location::name::RoswaalLocationName;
 use super::{
     ast::RoswaalTestSyntax,
     compiler::{RoswaalCompilationError, RoswaalCompile, RoswaalCompileContext},
-    test::RoswaalTest,
+    test::RoswaalCompiledTest,
 };
 
 /// A data type constructed from compiling multiple test cases at a time.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct RoswaalTestCompilationResults<'a> {
     results: Vec<(
-        Result<RoswaalTest, Vec<RoswaalCompilationError>>,
+        Result<RoswaalCompiledTest, Vec<RoswaalCompilationError>>,
         RoswaalTestSyntax<'a>,
     )>,
 }
@@ -25,7 +25,7 @@ impl<'a> RoswaalTestCompilationResults<'a> {
                 .iter()
                 .map(|syntax| {
                     let compile_context = RoswaalCompileContext::new(&location_names);
-                    let result = RoswaalTest::compile_syntax(syntax, compile_context);
+                    let result = RoswaalCompiledTest::compile_syntax(syntax, compile_context);
                     (result, syntax.clone())
                 })
                 .collect(),
@@ -34,14 +34,14 @@ impl<'a> RoswaalTestCompilationResults<'a> {
 }
 
 impl<'a> RoswaalTestCompilationResults<'a> {
-    pub fn tests(&self) -> Vec<RoswaalTest> {
+    pub fn tests(&self) -> Vec<RoswaalCompiledTest> {
         self.results
             .iter()
             .filter_map(|r| r.0.clone().ok())
             .collect()
     }
 
-    pub fn tests_with_syntax(&self) -> Vec<(RoswaalTest, RoswaalTestSyntax<'a>)> {
+    pub fn tests_with_syntax(&self) -> Vec<(RoswaalCompiledTest, RoswaalTestSyntax<'a>)> {
         self.results
             .iter()
             .filter_map(|r| match r.0.clone() {

@@ -118,7 +118,7 @@ mod tests {
         },
         language::{
             compiler::{RoswaalCompilationError, RoswaalCompilationErrorCode},
-            test::{RoswaalTest, RoswaalTestCommand},
+            test::{RoswaalCompiledTest, RoswaalCompiledTestCommand},
         },
         operations::{add_locations::AddLocationsStatus, merge_branch::MergeBranchStatus},
         utils::sqlite::RoswaalSqlite,
@@ -154,31 +154,31 @@ This is like an invalid test or something...
                 &TestGithubPullRequestOpen::new(false),
                  &RoswaalGitRepository::noop().await?
             ).await?;
-            let expected_compiled_test = RoswaalTest::new(
+            let expected_compiled_test = RoswaalCompiledTest::new(
                 "Basic Leave Event through Exploration as Attendee".to_string(),
                 Some("Justin is looking for an event. Once he finds one, he realizes that her has other plans, and decides to leave.".to_string()),
                 vec![
-                    RoswaalTestCommand::Step {
+                    RoswaalCompiledTestCommand::Step {
                         label: "Step 1".to_string(),
                         name: "Justin is signed in".to_string(),
                         requirement: "Ensure Justin has signed into his account".to_string()
                     },
-                    RoswaalTestCommand::Step {
+                    RoswaalCompiledTestCommand::Step {
                         label: "Step 2".to_string(),
                         name: "Justin wants to find the nearest event".to_string(),
                         requirement: "Search for the nearest events, and go to the details for the nearest one".to_string()
                     },
-                    RoswaalTestCommand::Step {
+                    RoswaalCompiledTestCommand::Step {
                         label: "Step 3".to_string(),
                         name: "After finding an event, Justin wants to join it".to_string(),
                         requirement: "Have Justin join the event".to_string()
                     },
-                    RoswaalTestCommand::Step {
+                    RoswaalCompiledTestCommand::Step {
                         label: "Step 4".to_string(),
                         name: "After some pondering, Justin decides that he is not interested in the event and wants to leave".to_string(),
                         requirement: "Have Justin leave the event".to_string()
                     },
-                    RoswaalTestCommand::Step {
+                    RoswaalCompiledTestCommand::Step {
                         label: "Step 5".to_string(),
                         name: "Justin has now left the event".to_string(),
                         requirement: "Ensure that Justin has left the event successfully".to_string()
