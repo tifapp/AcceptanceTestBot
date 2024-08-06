@@ -125,6 +125,17 @@ impl<'a> RoswaalTestSyntax<'a> {
     pub fn source_code(&self) -> &str {
         &self.source_code
     }
+
+    /// Returns this syntax as a markdown code block.
+    ///
+    /// If this syntax is blank, then an indicator for empty source code will be returned.
+    pub fn markdown_code_block(&self) -> String {
+        if self.source_code().is_empty() {
+            "```(Empty Source Code)```".to_string()
+        } else {
+            format!("```{}```", self.source_code())
+        }
+    }
 }
 
 impl<'a> From<&'a str> for RoswaalTestSyntax<'a> {

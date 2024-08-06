@@ -2,6 +2,8 @@ use std::borrow::Borrow;
 
 use crate::{
     language::{
+        ast::RoswaalTestSyntax,
+        compilation_results::RoswaalTestCompilationFailure,
         compiler::{
             RoswaalCompilationDuplicateErrorCode, RoswaalCompilationError,
             RoswaalCompilationErrorCode,
@@ -17,7 +19,6 @@ use super::{
     pr_open_fail_view::FailedToOpenPullRequestView,
     ui_lib::{
         block_kit_views::{SlackDivider, SlackHeader, SlackSection},
-        empty_view::EmptySlackView,
         for_each_view::ForEachView,
         if_view::If,
         slack_view::SlackView,
@@ -51,14 +52,13 @@ impl<'r> AddTestsView<'r> {
             } => {
                 If::is_true(
                     results.has_compiling_tests(),
-                    || self.compiling_tests_view(&results.tests())
+                    || self.compiling_tests_view(&results.tests_with_syntax())
                 )
                 .flat_chain_block(
-                    // If::is_true(
-                    //     results.has_non_compiling_tests(),
-                    //     || self.non_compiling_tests_view(&results.errors())
-                    // )
-                    EmptySlackView
+                    If::is_true(
+                        results.has_non_compiling_tests(),
+                        || self.non_compiling_tests_view(&results.failures())
+                    )
                 )
                 .flat_chain_block(
                     If::is_true(
@@ -97,46 +97,68 @@ impl<'r> AddTestsView<'r> {
 }
 
 impl<'r> AddTestsView<'r> {
-    fn compiling_tests_view(&self, tests: &Vec<RoswaalTest>) -> impl SlackView {
-        let mut body = "✅ *The following tests were compiled succeeeeeeeeessfully!*\n".to_string();
-        for test in tests {
-            body.push_str(&format!("- {}\n", test.name()))
-        }
-        SlackSection::from_markdown(&body)
+    fn compiling_tests_view(
+        &self,
+        tests_with_syntax: &Vec<(RoswaalTest, RoswaalTestSyntax<'r>)>,
+    ) -> impl SlackView {
+        let iter = tests_with_syntax
+            .iter()
+            .map(|e| e.clone())
+            .enumerate()
+            .map(|(index, value)| (index < tests_with_syntax.len() - 1, value));
+        SlackSection::from_markdown("✅ *The following tests were compiled succeeeeeeeeessfully!*")
+            .flat_chain_block(ForEachView::new(
+                iter,
+                |(is_showing_divider, (test, syntax))| {
+                    SlackSection::from_markdown(&format!("📝 *{}*", test.name()))
+                        .flat_chain_block(SlackSection::from_markdown(
+                            &syntax.markdown_code_block(),
+                        ))
+                        .flat_chain_block(If::is_true(*is_showing_divider, || SlackDivider))
+                },
+            ))
+            .erase_to_any_view()
     }
 
     fn non_compiling_tests_view(
         &self,
-        tests: &Vec<(usize, Vec<RoswaalCompilationError>)>,
+        failures: &Vec<RoswaalTestCompilationFailure<'r>>,
     ) -> impl SlackView {
-        let tests_iter = tests
+        let iter = failures
             .iter()
             .map(|e| e.clone())
             .enumerate()
-            .map(|(index, value)| (index < tests.len() - 1, value));
+            .map(|(index, value)| (index < failures.len() - 1, value));
         SlackSection::from_markdown(
-            "⚠️ *The following tests did not compile succeeeeeessfully. They are only listed by naaaaaaaame!*"
+            "⚠️ *The following tests did not compile succeeeeeessfully. They are only listed by the number based on the compilation oooooooooorder!*"
         )
         .flat_chain_block(
-            ForEachView::new(tests_iter, |(is_showing_divider, (test_number, errors))| {
-                let test_number = (*test_number as u32) + 1;
-                NonCompilingTestView { test_number, errors: errors.clone() }
-                    .flat_chain_block(If::is_true(*is_showing_divider, || SlackDivider))
+            ForEachView::new(iter, |(is_showing_divider, failure)| {
+                NonCompilingTestView {
+                    test_number: failure.test_number(),
+                    errors: failure.errors().to_vec(),
+                    syntax_markdown: failure.syntax().markdown_code_block()
+                }
+                .flat_chain_block(If::is_true(*is_showing_divider, || SlackDivider))
             })
         )
+        .erase_to_any_view()
     }
 }
 
 struct NonCompilingTestView {
-    test_number: u32,
+    test_number: usize,
     errors: Vec<RoswaalCompilationError>,
+    syntax_markdown: String,
 }
 
 impl SlackView for NonCompilingTestView {
     fn slack_body(&self) -> impl SlackView {
-        SlackSection::from_markdown(&format!("❗️ *Test {}*", self.test_number)).flat_chain_block(
-            ForEachView::new(self.errors.iter(), |error| CompilationErrorView { error }),
-        )
+        SlackSection::from_markdown(&format!("❗️ *Test {}*", self.test_number))
+            .flat_chain_block(SlackSection::from_markdown(&self.syntax_markdown))
+            .flat_chain_block(ForEachView::new(self.errors.iter(), |error| {
+                CompilationErrorView { error }
+            }))
     }
 }
 

@@ -75,6 +75,8 @@ impl<'a> RoswaalTestCompilationResults<'a> {
     }
 }
 
+/// A test compilation failure.
+#[derive(Debug, Clone)]
 pub struct RoswaalTestCompilationFailure<'a> {
     i: usize,
     errors: Vec<RoswaalCompilationError>,
@@ -82,6 +84,10 @@ pub struct RoswaalTestCompilationFailure<'a> {
 }
 
 impl<'a> RoswaalTestCompilationFailure<'a> {
+    /// Returns the order number in which this test appeared in a user entered string of tests
+    /// to compile.
+    ///
+    /// This value is 1 index based.
     pub fn test_number(&self) -> usize {
         self.i + 1
     }
