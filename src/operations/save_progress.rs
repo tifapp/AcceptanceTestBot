@@ -1,11 +1,11 @@
 use anyhow::Result;
 
 use crate::{
-    tests_data::progress::RoswaalTestProgress, utils::sqlite::RoswaalSqlite, with_transaction,
+    tests_data::progress::RoswaalTestProgressUpload, utils::sqlite::RoswaalSqlite, with_transaction,
 };
 
 pub async fn save_test_progress(
-    progress: &Vec<RoswaalTestProgress>,
+    progress: &Vec<RoswaalTestProgressUpload>,
     sqlite: &RoswaalSqlite,
 ) -> Result<()> {
     let mut transaction = sqlite.transaction().await?;

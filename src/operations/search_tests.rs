@@ -1,14 +1,14 @@
 use anyhow::Result;
 
 use crate::{
-    tests_data::{query::RoswaalSearchTestsQuery, storage::RoswaalStoredTest},
+    tests_data::{query::RoswaalSearchTestsQuery, test::RoswaalTest},
     utils::sqlite::RoswaalSqlite,
     with_transaction,
 };
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum SearchTestsStatus {
-    Success(Vec<RoswaalStoredTest>),
+    Success(Vec<RoswaalTest>),
     NoTests,
 }
 
@@ -40,7 +40,7 @@ mod tests {
             merge_branch::MergeBranchStatus, remove_tests::RemoveTestsStatus,
             save_progress::save_test_progress,
         },
-        tests_data::{ordinal::RoswaalTestCommandOrdinal, progress::RoswaalTestProgress},
+        tests_data::{ordinal::RoswaalTestCommandOrdinal, progress::RoswaalTestProgressUpload},
         utils::sqlite::RoswaalSqlite,
     };
 
@@ -241,7 +241,7 @@ Requirement 1: Do the thing
             AddTestsStatus::from_adding_tests(tests_str, &sqlite, &pr_open, &repo).await?;
             let branch_name = pr_open.most_recent_head_branch_name().await.unwrap();
             MergeBranchStatus::from_merging_branch_with_name(&branch_name, &sqlite).await?;
-            let progress = vec![RoswaalTestProgress::new(
+            let progress = vec![RoswaalTestProgressUpload::new(
                 "Bob".to_string(),
                 Some(RoswaalTestCommandOrdinal::new(0)),
                 None,
