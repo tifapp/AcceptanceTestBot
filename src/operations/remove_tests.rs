@@ -3,14 +3,28 @@ use std::{error::Error, fmt::Display, future};
 use anyhow::Result;
 use tokio::{fs::remove_dir_all, spawn};
 
-use crate::{git::{branch_name::{self, RoswaalOwnedBranchKind, RoswaalOwnedGitBranchName}, edit::EditGitRepositoryStatus, metadata::{self, RoswaalGitRepositoryMetadata}, pull_request::{GithubPullRequest, GithubPullRequestOpen}, repo::{RoswaalGitRepository, RoswaalGitRepositoryClient}}, tests_data::query::RoswaalTestNamesString, utils::{dedup::DedupIterator, sqlite::RoswaalSqlite}, with_transaction};
+use crate::{
+    git::{
+        branch_name::RoswaalOwnedGitBranchName,
+        edit::EditGitRepositoryStatus,
+        metadata::RoswaalGitRepositoryMetadata,
+        pull_request::GithubPullRequestOpen,
+        repo::{RoswaalGitRepository, RoswaalGitRepositoryClient},
+    },
+    tests_data::query::RoswaalTestNamesString,
+    utils::{dedup::DedupIterator, sqlite::RoswaalSqlite},
+    with_transaction,
+};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum RemoveTestsStatus {
-    Success { removed_test_names: Vec<String>, should_warn_undeleted_branch: bool },
+    Success {
+        removed_test_names: Vec<String>,
+        should_warn_undeleted_branch: bool,
+    },
     NoTestsRemoved,
     FailedToOpenPullRequest,
-    MergeConflict
+    MergeConflict,
 }
 
 impl RemoveTestsStatus {
@@ -18,10 +32,12 @@ impl RemoveTestsStatus {
         query_str: &str,
         sqlite: &RoswaalSqlite,
         git_repository: &RoswaalGitRepository<impl RoswaalGitRepositoryClient>,
-        pr_open: &impl GithubPullRequestOpen
+        pr_open: &impl GithubPullRequestOpen,
     ) -> Result<Self> {
-        let test_names = RoswaalTestNamesString(query_str);
-        if test_names.is_empty() { return Ok(Self::NoTestsRemoved) }
+        let test_names = RoswaalTestNamesString::new(query_str);
+        if test_names.is_empty() {
+            return Ok(Self::NoTestsRemoved);
+        }
 
         let transaction = git_repository.transaction().await;
         let branch_name = RoswaalOwnedGitBranchName::for_removing_tests();
@@ -34,33 +50,43 @@ impl RemoveTestsStatus {
                 let removed_test_names = Self::remove_test_names(&test_names, &metadata).await?;
                 let pr = metadata.remove_tests_pull_request(&test_names, &branch_name);
                 Ok((pr, removed_test_names))
-            }
-        ).await;
+            },
+        )
+        .await;
 
         match edit_result {
-            Ok(EditGitRepositoryStatus::Success { did_delete_branch, value: removed_test_names }) => {
+            Ok(EditGitRepositoryStatus::Success {
+                did_delete_branch,
+                value: removed_test_names,
+            }) => {
                 let mut transaction = sqlite.transaction().await?;
                 with_transaction!(transaction, async {
-                    transaction.stage_test_removals(&test_names, &branch_name).await?;
-                    Ok(Self::Success { removed_test_names, should_warn_undeleted_branch: !did_delete_branch })
+                    transaction
+                        .stage_test_removals(&test_names, &branch_name)
+                        .await?;
+                    Ok(Self::Success {
+                        removed_test_names,
+                        should_warn_undeleted_branch: !did_delete_branch,
+                    })
                 })
-            },
-            Ok(EditGitRepositoryStatus::MergeConflict) => {
-                Ok(Self::MergeConflict)
-            },
+            }
+            Ok(EditGitRepositoryStatus::MergeConflict) => Ok(Self::MergeConflict),
             Ok(EditGitRepositoryStatus::FailedToOpenPullRequest) => {
                 Ok(Self::FailedToOpenPullRequest)
-            },
+            }
             Err(err) => {
                 let _: NoTestsToRemoveError = err.downcast()?;
-                Ok(Self::Success { removed_test_names: vec![], should_warn_undeleted_branch: true })
+                Ok(Self::Success {
+                    removed_test_names: vec![],
+                    should_warn_undeleted_branch: true,
+                })
             }
         }
     }
 
     async fn remove_test_names(
         test_names: &RoswaalTestNamesString<'_>,
-        metadata: &RoswaalGitRepositoryMetadata
+        metadata: &RoswaalGitRepositoryMetadata,
     ) -> Result<Vec<String>> {
         let futures = test_names.iter().dedup().map(|n| {
             let name = n.to_string();
@@ -100,7 +126,16 @@ mod tests {
     use tokio::fs::try_exists;
 
     use super::*;
-    use crate::{git::{metadata::RoswaalGitRepositoryMetadata, test_support::{with_clean_test_repo_access, NoopGitRepositoryClient, TestGithubPullRequestOpen}}, operations::{add_tests::AddTestsStatus, merge_branch::MergeBranchStatus}, utils::sqlite::RoswaalSqlite};
+    use crate::{
+        git::{
+            metadata::RoswaalGitRepositoryMetadata,
+            test_support::{
+                with_clean_test_repo_access, NoopGitRepositoryClient, TestGithubPullRequestOpen,
+            },
+        },
+        operations::{add_tests::AddTestsStatus, merge_branch::MergeBranchStatus},
+        utils::sqlite::RoswaalSqlite,
+    };
 
     #[tokio::test]
     async fn reports_no_test_removed_when_empty_query_string() {
@@ -108,8 +143,10 @@ mod tests {
             "",
             &RoswaalSqlite::in_memory().await.unwrap(),
             &RoswaalGitRepository::noop().await.unwrap(),
-            &TestGithubPullRequestOpen::new(false)
-        ).await.unwrap();
+            &TestGithubPullRequestOpen::new(false),
+        )
+        .await
+        .unwrap();
         assert_eq!(status, RemoveTestsStatus::NoTestsRemoved)
     }
 
@@ -125,7 +162,8 @@ mod tests {
             assert!(!try_exists(metadata.relative_path("roswaal/blob")).await?);
             Ok(())
         })
-        .await.unwrap();
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -138,7 +176,8 @@ mod tests {
             assert!(pr_open.most_recent_pr().await.is_none());
             Ok(())
         })
-        .await.unwrap();
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -149,10 +188,16 @@ mod tests {
             let pr_open = TestGithubPullRequestOpen::new(false);
             add_and_merge_blob(&sqlite, &repo, &pr_open).await?;
             _ = remove_blob(&sqlite, &repo, &pr_open).await?;
-            assert!(pr_open.most_recent_pr().await.unwrap().title().contains("Remove Tests Blob"));
+            assert!(pr_open
+                .most_recent_pr()
+                .await
+                .unwrap()
+                .title()
+                .contains("Remove Tests Blob"));
             Ok(())
         })
-        .await.unwrap();
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -166,21 +211,24 @@ mod tests {
 Blob
 Zanza The Divine
 ";
-            let status = RemoveTestsStatus::from_removing_tests(
-                test_names_str,
-                &sqlite,
-                &repo,
-                &pr_open
-            ).await?;
+            let status =
+                RemoveTestsStatus::from_removing_tests(test_names_str, &sqlite, &repo, &pr_open)
+                    .await?;
             let expected_status = RemoveTestsStatus::Success {
                 removed_test_names: vec!["Blob".to_string()],
-                should_warn_undeleted_branch: false
+                should_warn_undeleted_branch: false,
             };
             assert_eq!(status, expected_status);
-            assert!(pr_open.most_recent_pr().await.unwrap().title().contains("Remove Tests Blob"));
+            assert!(pr_open
+                .most_recent_pr()
+                .await
+                .unwrap()
+                .title()
+                .contains("Remove Tests Blob"));
             Ok(())
         })
-        .await.unwrap();
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -194,7 +242,8 @@ Zanza The Divine
             assert_eq!(status, RemoveTestsStatus::FailedToOpenPullRequest);
             Ok(())
         })
-        .await.unwrap()
+        .await
+        .unwrap()
     }
 
     #[tokio::test]
@@ -207,7 +256,8 @@ Zanza The Divine
             assert_eq!(status, RemoveTestsStatus::MergeConflict);
             Ok(())
         })
-        .await.unwrap()
+        .await
+        .unwrap()
     }
 
     #[tokio::test]
@@ -229,27 +279,28 @@ Requirement 1: Requirement A
 ```
 ";
             add_and_merge(tests_str, &sqlite, &repo, &pr_open).await?;
-            let status = RemoveTestsStatus::from_removing_tests(
-                "Blob\nBlob",
-                &sqlite,
-                &repo,
-                &pr_open
-            ).await?;
+            let status =
+                RemoveTestsStatus::from_removing_tests("Blob\nBlob", &sqlite, &repo, &pr_open)
+                    .await?;
             match status {
-                RemoveTestsStatus::Success { removed_test_names, should_warn_undeleted_branch: _ } => {
+                RemoveTestsStatus::Success {
+                    removed_test_names,
+                    should_warn_undeleted_branch: _,
+                } => {
                     assert_eq!(removed_test_names, vec!["Blob"])
-                },
-                _ => panic!()
+                }
+                _ => panic!(),
             }
             Ok(())
         })
-        .await.unwrap()
+        .await
+        .unwrap()
     }
 
     async fn add_and_merge_blob(
         sqlite: &RoswaalSqlite,
         repo: &RoswaalGitRepository<NoopGitRepositoryClient>,
-        pr_open: &TestGithubPullRequestOpen
+        pr_open: &TestGithubPullRequestOpen,
     ) -> Result<()> {
         let tests_str = "\
 ```
@@ -265,25 +316,21 @@ Requirement 1: Do the thing
         tests_str: &str,
         sqlite: &RoswaalSqlite,
         repo: &RoswaalGitRepository<NoopGitRepositoryClient>,
-        pr_open: &TestGithubPullRequestOpen
+        pr_open: &TestGithubPullRequestOpen,
     ) -> Result<()> {
-        AddTestsStatus::from_adding_tests(
-            tests_str,
-            sqlite,
-            pr_open,
-            repo
-        ).await?;
+        AddTestsStatus::from_adding_tests(tests_str, sqlite, pr_open, repo).await?;
         MergeBranchStatus::from_merging_branch_with_name(
             &pr_open.most_recent_head_branch_name().await.unwrap(),
-            &sqlite
-        ).await?;
+            &sqlite,
+        )
+        .await?;
         Ok(())
     }
 
     async fn remove_blob(
         sqlite: &RoswaalSqlite,
         repo: &RoswaalGitRepository<NoopGitRepositoryClient>,
-        pr_open: &TestGithubPullRequestOpen
+        pr_open: &TestGithubPullRequestOpen,
     ) -> Result<RemoveTestsStatus> {
         RemoveTestsStatus::from_removing_tests("Blob", sqlite, repo, pr_open).await
     }

@@ -5,7 +5,9 @@ pub struct WarnUndeletedBranchView;
 
 impl SlackView for WarnUndeletedBranchView {
     fn slack_body(&self) -> impl SlackView {
-        SlackSection::from_markdown("🟡 _The local branch created by this operation was not deleted._")
+        SlackSection::from_markdown(
+            "🟡 _The local branch created by this operation was not deleted._",
+        )
     }
 }
 
@@ -20,7 +22,7 @@ mod tests {
         assert_slack_view_snapshot(
             "warn-undeleted-branch",
             &WarnUndeletedBranchView,
-            SnapshotMode::Comparing
+            SnapshotMode::Comparing,
         )
     }
 }

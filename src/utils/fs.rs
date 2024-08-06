@@ -1,4 +1,8 @@
-use std::{fs::{read_dir, remove_dir}, io::{self, Result}, path::Path};
+use std::{
+    fs::{read_dir, remove_dir},
+    io::{self, Result},
+    path::Path,
+};
 
 use tokio::task::spawn_blocking;
 
@@ -9,7 +13,9 @@ pub async fn remove_dir_all_empty(path: impl AsRef<Path>) -> Result<()> {
 }
 
 fn remove_dir_all_empty_sync(path: impl AsRef<Path>) -> Result<()> {
-    if !path.as_ref().is_dir() { return Ok(()) }
+    if !path.as_ref().is_dir() {
+        return Ok(());
+    }
     let mut dir = read_dir(path.as_ref().to_owned())?;
     let mut next_entry = dir.next();
     while let Some(entry) = next_entry.and_then(|e| e.ok()) {
@@ -21,7 +27,7 @@ fn remove_dir_all_empty_sync(path: impl AsRef<Path>) -> Result<()> {
     dir = read_dir(path.as_ref().to_owned())?;
     if dir.next().is_none() {
         remove_dir(path)?;
-        return Ok(())
+        return Ok(());
     }
     Ok(())
 }

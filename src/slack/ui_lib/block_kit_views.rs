@@ -9,18 +9,24 @@ use super::{primitive_view::PrimitiveView, slack_view::SlackView};
 pub struct SlackSection {
     #[serde(rename = "type")]
     _type: &'static str,
-    text: SlackText
+    text: SlackText,
 }
 
 impl SlackSection {
     /// A convenience constructor to create a section from markdown.
     pub fn from_markdown(markdown: &str) -> Self {
-        Self { _type: "section", text: SlackText::markdown(markdown) }
+        Self {
+            _type: "section",
+            text: SlackText::markdown(markdown),
+        }
     }
 
     /// A convenience constructor to create a section from plain text.
     pub fn from_plaintext(text: &str) -> Self {
-        Self { _type: "section", text: SlackText::plain(text) }
+        Self {
+            _type: "section",
+            text: SlackText::plain(text),
+        }
     }
 
     /// Constructs an empty section.
@@ -40,7 +46,10 @@ impl SlackSection {
     ///
     /// This has no effect on markdown text.
     pub fn emoji_enabled(self, is_enabled: bool) -> Self {
-        Self { text: self.text.emoji_enabled(is_enabled), ..self }
+        Self {
+            text: self.text.emoji_enabled(is_enabled),
+            ..self
+        }
     }
 }
 
@@ -49,16 +58,24 @@ impl SlackSection {
 pub struct SlackText {
     _type: &'static str,
     text: String,
-    emoji: bool
+    emoji: bool,
 }
 
 impl SlackText {
     pub fn markdown(markdown: &str) -> Self {
-        Self { _type: "mrkdwn", text: markdown.to_string(), emoji: true }
+        Self {
+            _type: "mrkdwn",
+            text: markdown.to_string(),
+            emoji: true,
+        }
     }
 
     pub fn plain(text: &str) -> Self {
-        Self { _type: "plain_text", text: text.to_string(), emoji: true }
+        Self {
+            _type: "plain_text",
+            text: text.to_string(),
+            emoji: true,
+        }
     }
 }
 
@@ -67,7 +84,10 @@ impl SlackText {
     ///
     /// This has no effect on markdown text.
     pub fn emoji_enabled(self, is_enabled: bool) -> Self {
-        Self { emoji: is_enabled, ..self }
+        Self {
+            emoji: is_enabled,
+            ..self
+        }
     }
 
     fn is_markdown(&self) -> bool {
@@ -76,11 +96,12 @@ impl SlackText {
 }
 
 impl Serialize for SlackText {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
-        let mut state = serializer.serialize_struct(
-            "SlackText",
-            if self.is_markdown() { 2 } else { 3 }
-        )?;
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut state =
+            serializer.serialize_struct("SlackText", if self.is_markdown() { 2 } else { 3 })?;
         if !self.is_markdown() && !self.emoji {
             state.serialize_field("emoji", &self.emoji)?
         }
@@ -93,7 +114,7 @@ impl Serialize for SlackText {
 #[derive(Debug, PartialEq, Eq, Serialize, Clone)]
 pub struct SlackDivider {
     #[serde(rename = "type")]
-    _type: &'static str
+    _type: &'static str,
 }
 
 /// A slack divider component.
@@ -111,12 +132,15 @@ impl SlackView for SlackDivider {
 pub struct SlackHeader {
     #[serde(rename = "type")]
     _type: &'static str,
-    text: SlackText
+    text: SlackText,
 }
 
 impl SlackHeader {
     pub fn new(text: &str) -> Self {
-        Self { _type: "header", text: SlackText::plain(text) }
+        Self {
+            _type: "header",
+            text: SlackText::plain(text),
+        }
     }
 }
 
@@ -146,7 +170,9 @@ mod tests {
 
     impl SlackView for NestedView {
         fn slack_body(&self) -> impl SlackView {
-            TextView.flat_chain_block(SlackDivider).flat_chain_block(TextView)
+            TextView
+                .flat_chain_block(SlackDivider)
+                .flat_chain_block(TextView)
         }
     }
 
@@ -154,7 +180,7 @@ mod tests {
     fn nested_view_flattens_to_proper_json() {
         assert_blocks_json(
             &NestedView,
-            r#"[{"text":{"text":"Hello World!","type":"mrkdwn"},"type":"section"},{"type":"divider"},{"text":{"text":"Hello World!","type":"mrkdwn"},"type":"section"}]"#
+            r#"[{"text":{"text":"Hello World!","type":"mrkdwn"},"type":"section"},{"type":"divider"},{"text":{"text":"Hello World!","type":"mrkdwn"},"type":"section"}]"#,
         );
     }
 }

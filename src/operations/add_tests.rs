@@ -3,14 +3,34 @@ use std::{iter::zip, process::Output};
 use anyhow::Result;
 use tokio::spawn;
 
-use crate::{generation::{interface::RoswaalTypescriptGenerate, test_case::TestCaseTypescript}, git::{branch_name::{self, RoswaalOwnedGitBranchName}, edit::EditGitRepositoryStatus, metadata::{self, RoswaalGitRepositoryMetadata}, pull_request::{GithubPullRequest, GithubPullRequestOpen}, repo::{RoswaalGitRepository, RoswaalGitRepositoryClient}}, language::{ast::{extract_tests_syntax, RoswaalTestSyntax}, compiler::{RoswaalCompilationError, RoswaalCompile, RoswaalCompileContext}, test::RoswaalTest}, location::{name::RoswaalLocationName, storage::LoadLocationsFilter}, utils::sqlite::RoswaalSqlite, with_transaction};
+use crate::{
+    generation::{interface::RoswaalTypescriptGenerate, test_case::TestCaseTypescript},
+    git::{
+        branch_name::{self, RoswaalOwnedGitBranchName},
+        edit::EditGitRepositoryStatus,
+        metadata::{self, RoswaalGitRepositoryMetadata},
+        pull_request::{GithubPullRequest, GithubPullRequestOpen},
+        repo::{RoswaalGitRepository, RoswaalGitRepositoryClient},
+    },
+    language::{
+        ast::{extract_tests_syntax, RoswaalTestSyntax},
+        compiler::{RoswaalCompilationError, RoswaalCompile, RoswaalCompileContext},
+        test::RoswaalTest,
+    },
+    location::{name::RoswaalLocationName, storage::LoadLocationsFilter},
+    utils::sqlite::RoswaalSqlite,
+    with_transaction,
+};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum AddTestsStatus {
-    Success { results: RoswaalTestCompilationResults, should_warn_undeleted_branch: bool },
+    Success {
+        results: RoswaalTestCompilationResults,
+        should_warn_undeleted_branch: bool,
+    },
     NoTestsFound,
     MergeConflict,
-    FailedToOpenPullRequest
+    FailedToOpenPullRequest,
 }
 
 impl AddTestsStatus {
@@ -18,16 +38,18 @@ impl AddTestsStatus {
         tests_str: &str,
         sqlite: &RoswaalSqlite,
         pr_open: &impl GithubPullRequestOpen,
-        git_repository: &RoswaalGitRepository<impl RoswaalGitRepositoryClient>
+        git_repository: &RoswaalGitRepository<impl RoswaalGitRepositoryClient>,
     ) -> Result<Self> {
         let tests_syntax = extract_tests_syntax(tests_str);
-        if tests_syntax.is_empty() { return Ok(AddTestsStatus::NoTestsFound) }
+        if tests_syntax.is_empty() {
+            return Ok(AddTestsStatus::NoTestsFound);
+        }
 
         let mut transaction = sqlite.transaction().await?;
         let (location_names, git_transaction) = with_transaction!(transaction, async {
-            let location_names = transaction.location_names_in_alphabetical_order(
-                LoadLocationsFilter::MergedOnly
-            ).await?;
+            let location_names = transaction
+                .location_names_in_alphabetical_order(LoadLocationsFilter::MergedOnly)
+                .await?;
             Ok((location_names, git_repository.transaction().await))
         })?;
 
@@ -35,7 +57,10 @@ impl AddTestsStatus {
         let branch_name = RoswaalOwnedGitBranchName::for_adding_tests();
         let results = RoswaalTestCompilationResults::compile(&tests_syntax, &location_names);
         if !results.has_compiling_tests() {
-            return Ok(Self::Success { results, should_warn_undeleted_branch: false })
+            return Ok(Self::Success {
+                results,
+                should_warn_undeleted_branch: false,
+            });
         }
 
         let edit_status = EditGitRepositoryStatus::from_editing_new_branch(
@@ -44,39 +69,46 @@ impl AddTestsStatus {
             pr_open,
             async {
                 Self::generate_typescript(&results, &metadata).await?;
-                Ok((results.pull_request(&tests_syntax, &branch_name, &metadata), ()))
-            }
-        ).await?;
+                Ok((
+                    results.pull_request(&tests_syntax, &branch_name, &metadata),
+                    (),
+                ))
+            },
+        )
+        .await?;
 
         match edit_status {
-            EditGitRepositoryStatus::Success { did_delete_branch, value: _ } => {
+            EditGitRepositoryStatus::Success {
+                did_delete_branch,
+                value: _,
+            } => {
                 transaction = sqlite.transaction().await?;
                 with_transaction!(transaction, async {
-                    transaction.save_tests(&results.tests(), &branch_name).await?;
-                    Ok(Self::Success { results, should_warn_undeleted_branch: !did_delete_branch })
+                    transaction
+                        .save_tests(&results.tests(), &branch_name)
+                        .await?;
+                    Ok(Self::Success {
+                        results,
+                        should_warn_undeleted_branch: !did_delete_branch,
+                    })
                 })
-            },
-            EditGitRepositoryStatus::FailedToOpenPullRequest => {
-                Ok(Self::FailedToOpenPullRequest)
-            },
-            EditGitRepositoryStatus::MergeConflict => {
-                Ok(Self::MergeConflict)
             }
+            EditGitRepositoryStatus::FailedToOpenPullRequest => Ok(Self::FailedToOpenPullRequest),
+            EditGitRepositoryStatus::MergeConflict => Ok(Self::MergeConflict),
         }
     }
 
     async fn generate_typescript(
         results: &RoswaalTestCompilationResults,
-        metadata: &RoswaalGitRepositoryMetadata
+        metadata: &RoswaalGitRepositoryMetadata,
     ) -> Result<()> {
         let mut tests = results.tests();
         tests.dedup_by(|t1, t2| t1.name() == t2.name());
-        let futures = tests.iter()
-            .map(|test| {
-                let test = test.clone();
-                let dir_path = metadata.test_dirpath(&test.name());
-                spawn(async move { test.typescript().save_in_dir(&dir_path).await })
-            });
+        let futures = tests.iter().map(|test| {
+            let test = test.clone();
+            let dir_path = metadata.test_dirpath(&test.name());
+            spawn(async move { test.typescript().save_in_dir(&dir_path).await })
+        });
         for future in futures {
             future.await??
         }
@@ -87,13 +119,13 @@ impl AddTestsStatus {
 /// A data type constructed from compiling multiple test cases at a time.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct RoswaalTestCompilationResults {
-    results: Vec<Result<RoswaalTest, Vec<RoswaalCompilationError>>>
+    results: Vec<Result<RoswaalTest, Vec<RoswaalCompilationError>>>,
 }
 
 impl RoswaalTestCompilationResults {
     pub fn compile(
         syntax: &Vec<RoswaalTestSyntax<'_>>,
-        location_names: &Vec<RoswaalLocationName>
+        location_names: &Vec<RoswaalLocationName>,
     ) -> Self {
         let results = syntax
             .iter()
@@ -113,13 +145,12 @@ impl RoswaalTestCompilationResults {
     }
 
     pub fn tests(&self) -> Vec<RoswaalTest> {
-        self.results.iter()
-            .filter_map(|r| r.clone().ok())
-            .collect()
+        self.results.iter().filter_map(|r| r.clone().ok()).collect()
     }
 
     pub fn errors(&self) -> Vec<(usize, Vec<RoswaalCompilationError>)> {
-        self.results.iter()
+        self.results
+            .iter()
             .enumerate()
             .filter_map(|(i, r)| r.clone().err().map(|e| (i, e)))
             .collect()
@@ -137,7 +168,7 @@ impl RoswaalTestCompilationResults {
         &self,
         syntax: &Vec<RoswaalTestSyntax<'_>>,
         branch_name: &RoswaalOwnedGitBranchName,
-        metadata: &RoswaalGitRepositoryMetadata
+        metadata: &RoswaalGitRepositoryMetadata,
     ) -> GithubPullRequest {
         let test_names_with_syntax = zip(self.results.iter(), syntax.iter())
             .filter_map(|(r, syntax)| {
@@ -155,7 +186,17 @@ impl RoswaalTestCompilationResults {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{git::{branch_name, metadata::RoswaalGitRepositoryMetadata, repo::RoswaalGitRepository, test_support::{read_string, with_clean_test_repo_access, TestGithubPullRequestOpen}}, language::{compiler::RoswaalCompilationErrorCode, test::RoswaalTestCommand}, operations::{add_locations::AddLocationsStatus, merge_branch::MergeBranchStatus}, utils::sqlite::RoswaalSqlite};
+    use crate::{
+        git::{
+            branch_name,
+            metadata::RoswaalGitRepositoryMetadata,
+            repo::RoswaalGitRepository,
+            test_support::{read_string, with_clean_test_repo_access, TestGithubPullRequestOpen},
+        },
+        language::{compiler::RoswaalCompilationErrorCode, test::RoswaalTestCommand},
+        operations::{add_locations::AddLocationsStatus, merge_branch::MergeBranchStatus},
+        utils::sqlite::RoswaalSqlite,
+    };
 
     #[tokio::test]
     async fn reports_results_of_compiling_multiple_tests() {
@@ -271,32 +312,39 @@ Set Location: Test
                 "Test, 5.0, 5.0",
                 &repo,
                 &sqlite,
-                &pr_open
-            ).await?;
+                &pr_open,
+            )
+            .await?;
             _ = AddLocationsStatus::from_adding_locations(
                 "Test 2, 5.0, 5.0",
                 &repo,
                 &sqlite,
-                &pr_open
-            ).await?;
+                &pr_open,
+            )
+            .await?;
             let branch_name = pr_open.most_recent_head_branch_name().await.unwrap();
             _ = MergeBranchStatus::from_merging_branch_with_name(&branch_name, &sqlite).await?;
             let status = AddTestsStatus::from_adding_tests(
                 tests_str,
                 &sqlite,
                 &TestGithubPullRequestOpen::new(false),
-                &RoswaalGitRepository::noop().await?
-            ).await?;
+                &RoswaalGitRepository::noop().await?,
+            )
+            .await?;
             match status {
-                AddTestsStatus::Success { results, should_warn_undeleted_branch: _ } => {
+                AddTestsStatus::Success {
+                    results,
+                    should_warn_undeleted_branch: _,
+                } => {
                     assert!(results.raw_results()[0].is_ok());
                     assert!(results.raw_results()[1].is_err());
-                },
-                _ => panic!()
+                }
+                _ => panic!(),
             }
             Ok(())
         })
-        .await.unwrap()
+        .await
+        .unwrap()
     }
 
     #[tokio::test]
@@ -315,14 +363,13 @@ Requirement 1: Do the thing
                 tests_str,
                 &sqlite,
                 &TestGithubPullRequestOpen::new(false),
-                 &RoswaalGitRepository::noop().await?
-            ).await?;
-            let test_case_code = read_string(
-                &metadata.relative_path("roswaal/abc-123/TestCase.test.ts")
-            ).await?;
-            let test_action_code = read_string(
-                &metadata.relative_path("roswaal/abc-123/TestActions.ts")
-            ).await?;
+                &RoswaalGitRepository::noop().await?,
+            )
+            .await?;
+            let test_case_code =
+                read_string(&metadata.relative_path("roswaal/abc-123/TestCase.test.ts")).await?;
+            let test_action_code =
+                read_string(&metadata.relative_path("roswaal/abc-123/TestActions.ts")).await?;
             let expected_test_case_code = "\
 // Generated by Roswaal, do not touch.
 
@@ -356,7 +403,8 @@ export const doTheThing = async () => {
             assert_eq!(test_action_code, expected_test_actions_code);
             Ok(())
         })
-        .await.unwrap()
+        .await
+        .unwrap()
     }
 
     #[tokio::test]
@@ -380,13 +428,17 @@ Requirement 1: Do the thing
                 tests_str,
                 &sqlite,
                 &pr_open,
-                 &RoswaalGitRepository::noop().await?
-            ).await?;
+                &RoswaalGitRepository::noop().await?,
+            )
+            .await?;
             let pr = pr_open.most_recent_pr().await.unwrap();
-            assert!(pr.title().contains("Add Tests \"ABC 123\", \"I am the strong\""));
+            assert!(pr
+                .title()
+                .contains("Add Tests \"ABC 123\", \"I am the strong\""));
             Ok(())
         })
-        .await.unwrap()
+        .await
+        .unwrap()
     }
 
     #[tokio::test]
@@ -405,12 +457,14 @@ Requirement 1: Do the thing
                 tests_str,
                 &sqlite,
                 &pr_open,
-                &RoswaalGitRepository::noop().await?
-            ).await?;
+                &RoswaalGitRepository::noop().await?,
+            )
+            .await?;
             assert_eq!(status, AddTestsStatus::FailedToOpenPullRequest);
             Ok(())
         })
-        .await.unwrap()
+        .await
+        .unwrap()
     }
 
     #[tokio::test]
@@ -429,12 +483,14 @@ Requirement 1: Do the thing
                 tests_str,
                 &sqlite,
                 &pr_open,
-                &RoswaalGitRepository::noop_ensuring_merge_conflicts().await?
-            ).await?;
+                &RoswaalGitRepository::noop_ensuring_merge_conflicts().await?,
+            )
+            .await?;
             assert_eq!(status, AddTestsStatus::MergeConflict);
             Ok(())
         })
-        .await.unwrap()
+        .await
+        .unwrap()
     }
 
     #[tokio::test]
@@ -446,8 +502,12 @@ Requirement 1: Do the thing
             tests_str,
             &sqlite,
             &pr_open,
-            &RoswaalGitRepository::noop_ensuring_merge_conflicts().await.unwrap()
-        ).await.unwrap();
+            &RoswaalGitRepository::noop_ensuring_merge_conflicts()
+                .await
+                .unwrap(),
+        )
+        .await
+        .unwrap();
         assert_eq!(status, AddTestsStatus::NoTestsFound);
     }
 
@@ -467,13 +527,18 @@ lkjdlkjlkjalkjslkdjdflkj
             tests_str,
             &sqlite,
             &pr_open,
-            &RoswaalGitRepository::noop().await.unwrap()
-        ).await.unwrap();
+            &RoswaalGitRepository::noop().await.unwrap(),
+        )
+        .await
+        .unwrap();
         match status {
-            AddTestsStatus::Success { results: _, should_warn_undeleted_branch } => {
+            AddTestsStatus::Success {
+                results: _,
+                should_warn_undeleted_branch,
+            } => {
                 assert!(!should_warn_undeleted_branch)
-            },
-            _ => panic!()
+            }
+            _ => panic!(),
         }
         let pr = pr_open.most_recent_pr().await;
         assert_eq!(pr, None)
@@ -498,8 +563,9 @@ Requirement 1: D
                 tests_str,
                 &RoswaalSqlite::in_memory().await?,
                 &TestGithubPullRequestOpen::new(false),
-                &RoswaalGitRepository::noop().await.unwrap()
-            ).await?;
+                &RoswaalGitRepository::noop().await.unwrap(),
+            )
+            .await?;
             let expected_test_case_code = "\
 // Generated by Roswaal, do not touch.
 
@@ -517,11 +583,13 @@ test(\"Bob\", async () => {
 ";
             let test_case_code = read_string(
                 &RoswaalGitRepositoryMetadata::for_testing()
-                    .relative_path("roswaal/bob/TestCase.test.ts")
-            ).await?;
+                    .relative_path("roswaal/bob/TestCase.test.ts"),
+            )
+            .await?;
             assert_eq!(test_case_code, expected_test_case_code);
             Ok(())
         })
-        .await.unwrap();
+        .await
+        .unwrap();
     }
 }

@@ -5,10 +5,11 @@ pub struct FailedToOpenPullRequestView;
 
 impl SlackView for FailedToOpenPullRequestView {
     fn slack_body(&self) -> impl SlackView {
-        SlackSection::from_markdown("🔴 *Error: Failed to open Pull Request*")
-            .flat_chain_block(
-                SlackSection::from_markdown("_The pull request could not be opeeeeened. Check the logs for deeeeeeetails._")
-            )
+        SlackSection::from_markdown("🔴 *Error: Failed to open Pull Request*").flat_chain_block(
+            SlackSection::from_markdown(
+                "_The pull request could not be opeeeeened. Check the logs for deeeeeeetails._",
+            ),
+        )
     }
 }
 
@@ -23,7 +24,7 @@ mod tests {
         assert_slack_view_snapshot(
             "failed-to-open-pull-request",
             &FailedToOpenPullRequestView,
-            SnapshotMode::Comparing
+            SnapshotMode::Comparing,
         )
     }
 }

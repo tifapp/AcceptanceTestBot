@@ -5,12 +5,14 @@ use super::{blocks::_SlackBlocksCollection, slack_view::SlackView};
 
 #[derive(Debug, Clone)]
 pub(super) struct PrimitiveView {
-    json: Option<serde_json::Value>
+    json: Option<serde_json::Value>,
 }
 
 impl PrimitiveView {
     pub(super) fn new(view: &(impl SlackView + Serialize)) -> Self {
-        Self { json: Some(json!(view)) }
+        Self {
+            json: Some(json!(view)),
+        }
     }
 
     pub(super) fn empty() -> Self {

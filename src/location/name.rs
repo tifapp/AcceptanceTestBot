@@ -9,13 +9,11 @@ use crate::utils::{normalize::RoswaalNormalize, string::UppercaseFirstAsciiChara
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum RoswaalLocationNameParsingError {
     Empty,
-    InvalidFormat
+    InvalidFormat,
 }
 
-pub type RoswaalLocationParsingResult = Result<
-    RoswaalLocationName,
-    RoswaalLocationNameParsingError
->;
+pub type RoswaalLocationParsingResult =
+    Result<RoswaalLocationName, RoswaalLocationNameParsingError>;
 
 /// A valid location name representing a place.
 ///
@@ -23,7 +21,7 @@ pub type RoswaalLocationParsingResult = Result<
 /// for formatting the name in different contexts.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct RoswaalLocationName {
-    pub(super) raw_value: String
+    pub(super) raw_value: String,
 }
 
 impl RoswaalLocationName {
@@ -45,7 +43,9 @@ impl FromStr for RoswaalLocationName {
         if s.is_empty() {
             Err(RoswaalLocationNameParsingError::Empty)
         } else if LOCATION_NAME_REGEX.is_match(s) {
-            Ok(Self { raw_value: s.to_string() })
+            Ok(Self {
+                raw_value: s.to_string(),
+            })
         } else {
             Err(RoswaalLocationNameParsingError::InvalidFormat)
         }
@@ -92,7 +92,7 @@ mod roswaal_location_tests {
             "Santa | Cruz",
             "Na(mek)",
             "1234567890",
-            "     198397939"
+            "     198397939",
         ];
         for str in strings {
             let name = RoswaalLocationName::from_str(str);
@@ -102,11 +102,7 @@ mod roswaal_location_tests {
 
     #[test]
     fn test_from_str_returns_success_when_valid() {
-        let strings = [
-            "hello world",
-            "San Francisco",
-            "    1 beach street"
-        ];
+        let strings = ["hello world", "San Francisco", "    1 beach street"];
         for str in strings {
             let name = RoswaalLocationName::from_str(str).unwrap();
             assert_eq!(name.raw_name(), str);

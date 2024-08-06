@@ -4,7 +4,7 @@ use std::env;
 #[derive(Debug, PartialEq, Eq)]
 pub enum RoswaalEnvironement {
     Dev,
-    Prod
+    Prod,
 }
 
 impl RoswaalEnvironement {

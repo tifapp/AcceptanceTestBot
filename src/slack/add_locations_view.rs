@@ -1,12 +1,26 @@
 use std::borrow::Borrow;
 
-use crate::{location::location::{RoswaalLocationStringError, RoswaalStringLocations}, operations::add_locations::AddLocationsStatus};
+use crate::{
+    location::location::{RoswaalLocationStringError, RoswaalStringLocations},
+    operations::add_locations::AddLocationsStatus,
+};
 
-use super::{merge_conflict_view::MergeConflictView, pr_open_fail_view::FailedToOpenPullRequestView, ui_lib::{block_kit_views::{SlackDivider, SlackHeader, SlackSection}, empty_view::EmptySlackView, if_view::If, slack_view::SlackView}, users::MATTHEW_SLACK_USER_ID, warn_undeleted_branch_view::WarnUndeletedBranchView};
+use super::{
+    merge_conflict_view::MergeConflictView,
+    pr_open_fail_view::FailedToOpenPullRequestView,
+    ui_lib::{
+        block_kit_views::{SlackDivider, SlackHeader, SlackSection},
+        empty_view::EmptySlackView,
+        if_view::If,
+        slack_view::SlackView,
+    },
+    users::MATTHEW_SLACK_USER_ID,
+    warn_undeleted_branch_view::WarnUndeletedBranchView,
+};
 
 /// A view for adding locations.
 pub struct AddLocationsView {
-    status: AddLocationsStatus
+    status: AddLocationsStatus,
 }
 
 impl AddLocationsView {
@@ -17,8 +31,7 @@ impl AddLocationsView {
 
 impl SlackView for AddLocationsView {
     fn slack_body(&self) -> impl SlackView {
-        SlackHeader::new("Add Locations")
-            .flat_chain_block(self.status_view())
+        SlackHeader::new("Add Locations").flat_chain_block(self.status_view())
     }
 }
 
@@ -88,9 +101,7 @@ impl AddLocationsView {
         for error in string_locations.errors() {
             body.push_str(&format!("- *{}* ", error.raw_associated_location_name()));
             match error {
-                RoswaalLocationStringError::InvalidName(_, _) => {
-                    body.push_str("(Invalid Name)")
-                },
+                RoswaalLocationStringError::InvalidName(_, _) => body.push_str("(Invalid Name)"),
                 RoswaalLocationStringError::InvalidCoordinate { name: _ } => {
                     body.push_str("(Invalid Coordinate)")
                 }
@@ -103,7 +114,11 @@ impl AddLocationsView {
 
 #[cfg(test)]
 mod tests {
-    use crate::{location::location::RoswaalStringLocations, operations::add_locations::AddLocationsStatus, slack::ui_lib::test_support::{assert_slack_view_snapshot, SnapshotMode}};
+    use crate::{
+        location::location::RoswaalStringLocations,
+        operations::add_locations::AddLocationsStatus,
+        slack::ui_lib::test_support::{assert_slack_view_snapshot, SnapshotMode},
+    };
 
     use super::AddLocationsView;
 
@@ -117,8 +132,11 @@ New York
         let locations = RoswaalStringLocations::from_roswaal_locations_str(string);
         assert_slack_view_snapshot(
             "add-locations-success",
-            &AddLocationsView::new(AddLocationsStatus::Success { locations, did_delete_branch: true }),
-            SnapshotMode::Comparing
+            &AddLocationsView::new(AddLocationsStatus::Success {
+                locations,
+                did_delete_branch: true,
+            }),
+            SnapshotMode::Comparing,
         )
     }
 
@@ -132,8 +150,11 @@ New York
         let locations = RoswaalStringLocations::from_roswaal_locations_str(string);
         assert_slack_view_snapshot(
             "add-locations-warn-undeleted-branch",
-            &AddLocationsView::new(AddLocationsStatus::Success { locations, did_delete_branch: false }),
-            SnapshotMode::Comparing
+            &AddLocationsView::new(AddLocationsStatus::Success {
+                locations,
+                did_delete_branch: false,
+            }),
+            SnapshotMode::Comparing,
         )
     }
 
@@ -145,8 +166,11 @@ Antarctica, 50.20982098092, 50.09830883
         let locations = RoswaalStringLocations::from_roswaal_locations_str(string);
         assert_slack_view_snapshot(
             "add-locations-no-failures",
-            &AddLocationsView::new(AddLocationsStatus::Success { locations, did_delete_branch: true }),
-            SnapshotMode::Comparing
+            &AddLocationsView::new(AddLocationsStatus::Success {
+                locations,
+                did_delete_branch: true,
+            }),
+            SnapshotMode::Comparing,
         )
     }
 
@@ -158,8 +182,11 @@ Antarctica, 50.20982098092, 50.09830883
         let locations = RoswaalStringLocations::from_roswaal_locations_str(string);
         assert_slack_view_snapshot(
             "add-locations-no-successes",
-            &AddLocationsView::new(AddLocationsStatus::Success { locations, did_delete_branch: true }),
-            SnapshotMode::Comparing
+            &AddLocationsView::new(AddLocationsStatus::Success {
+                locations,
+                did_delete_branch: true,
+            }),
+            SnapshotMode::Comparing,
         )
     }
 
@@ -168,7 +195,7 @@ Antarctica, 50.20982098092, 50.09830883
         assert_slack_view_snapshot(
             "add-locations-no-locations",
             &AddLocationsView::new(AddLocationsStatus::NoLocationsAdded),
-            SnapshotMode::Comparing
+            SnapshotMode::Comparing,
         )
     }
 
@@ -177,7 +204,7 @@ Antarctica, 50.20982098092, 50.09830883
         assert_slack_view_snapshot(
             "add-locations-pr-fail",
             &AddLocationsView::new(AddLocationsStatus::FailedToOpenPullRequest),
-            SnapshotMode::Comparing
+            SnapshotMode::Comparing,
         )
     }
 
@@ -186,7 +213,7 @@ Antarctica, 50.20982098092, 50.09830883
         assert_slack_view_snapshot(
             "add-locations-merge-conflict",
             &AddLocationsView::new(AddLocationsStatus::MergeConflict),
-            SnapshotMode::Comparing
+            SnapshotMode::Comparing,
         )
     }
 }

@@ -1,19 +1,19 @@
-use axum::response::{IntoResponse, Response};
 use anyhow::Result;
+use axum::response::{IntoResponse, Response};
 use reqwest::StatusCode;
 
 /// A wrapper that wraps an anyhow::Result into an `IntoResponse` compatible struct.
 pub struct ResponseResult<T: IntoResponse> {
-    result: Result<T>
+    result: Result<T>,
 }
 
-impl <T: IntoResponse> ResponseResult<T> {
+impl<T: IntoResponse> ResponseResult<T> {
     pub fn new(result: Result<T>) -> Self {
         Self { result }
     }
 }
 
-impl <T: IntoResponse> IntoResponse for ResponseResult<T> {
+impl<T: IntoResponse> IntoResponse for ResponseResult<T> {
     fn into_response(self) -> Response {
         match self.result {
             Ok(value) => value.into_response(),

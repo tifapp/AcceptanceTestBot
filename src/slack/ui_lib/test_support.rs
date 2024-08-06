@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 
-use super::slack_view::SlackView;
-use std::path::Path;
-use std::{fs::File, io::Write};
-use std::io::Read;
 use super::blocks::SlackBlocks;
 use super::slack_view::render_slack_view;
+use super::slack_view::SlackView;
+use std::io::Read;
+use std::path::Path;
+use std::{fs::File, io::Write};
 
 /// Asserts the json rendered by a slack view.
 #[cfg(test)]
@@ -23,7 +23,7 @@ pub enum SnapshotMode {
     /// Specified that a new snapshot should be compared with the existing one.
     ///
     /// If no snapshot exists, then this option is treated the same as `Recording`.
-    Comparing
+    Comparing,
 }
 
 /// Asserts a snapshot of a `SlackView`.
@@ -40,15 +40,13 @@ pub enum SnapshotMode {
 /// `slack-snapshots-diffs` directory. This directory is useful for comparing snapshots when a test
 /// failure occurs.
 #[cfg(test)]
-pub fn assert_slack_view_snapshot(
-    name: &str,
-    view: &impl SlackView,
-    mode: SnapshotMode
-) {
+pub fn assert_slack_view_snapshot(name: &str, view: &impl SlackView, mode: SnapshotMode) {
     let raw_path = format!("./slack-snapshots/{}.json", name);
     let path = Path::new(&raw_path);
     let is_recording = mode == SnapshotMode::Recording || !path.exists();
-    let blocks = BlockKitBuilderCompatibleBlocks { blocks: render_slack_view(view) };
+    let blocks = BlockKitBuilderCompatibleBlocks {
+        blocks: render_slack_view(view),
+    };
     let blocks_json = serde_json::to_string(&blocks).unwrap();
     if is_recording {
         let mut file = File::create(path).unwrap();
@@ -66,7 +64,7 @@ pub fn assert_slack_view_snapshot(
 
 #[derive(Debug, Serialize)]
 struct BlockKitBuilderCompatibleBlocks {
-    blocks: SlackBlocks
+    blocks: SlackBlocks,
 }
 
 #[cfg(test)]

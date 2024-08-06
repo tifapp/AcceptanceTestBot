@@ -1,6 +1,11 @@
 use std::env;
 
-use axum::{extract::{Query, Request}, http::StatusCode, middleware::Next, response::Response};
+use axum::{
+    extract::{Query, Request},
+    http::StatusCode,
+    middleware::Next,
+    response::Response,
+};
 use bcrypt::{hash, verify, DEFAULT_COST};
 use serde::Deserialize;
 
@@ -12,7 +17,7 @@ pub const DEV_RAW_ENDPOINT_PASSWORD: &str = "nah id win";
 /// password to prevent bad actors from messing with the data stored by this tool.
 #[derive(Debug, Clone)]
 pub struct EndpointPassword {
-    password: String
+    password: String,
 }
 
 impl EndpointPassword {
@@ -24,7 +29,9 @@ impl EndpointPassword {
     }
 
     pub fn dev() -> Self {
-        Self { password: hash(DEV_RAW_ENDPOINT_PASSWORD, DEFAULT_COST).unwrap() }
+        Self {
+            password: hash(DEV_RAW_ENDPOINT_PASSWORD, DEFAULT_COST).unwrap(),
+        }
     }
 }
 
@@ -36,14 +43,14 @@ impl EndpointPassword {
 
 #[derive(Debug, Deserialize)]
 struct QueryParameters {
-    password: String
+    password: String,
 }
 
 /// Middleware to check if the request has the correct `EndpointPassword`.
 pub async fn check_password_middleware(
     req: Request,
     next: Next,
-    password: EndpointPassword
+    password: EndpointPassword,
 ) -> Result<Response, StatusCode> {
     if let Ok::<Query<QueryParameters>, _>(query) = Query::try_from_uri(req.uri()) {
         if password.verify(&query.password) {
@@ -58,7 +65,7 @@ pub async fn check_password_middleware(
 
 #[cfg(test)]
 mod tests {
-    use axum::{response::IntoResponse, routing::post, Router, middleware::from_fn};
+    use axum::{middleware::from_fn, response::IntoResponse, routing::post, Router};
     use axum_test::TestServer;
 
     use super::*;
@@ -66,7 +73,8 @@ mod tests {
     #[tokio::test]
     async fn responds_with_forbidden_when_wrong_password() {
         let server = test_server(EndpointPassword::dev());
-        let resp = server.post("/")
+        let resp = server
+            .post("/")
             .add_query_param("password", "djklhnasdjkhdkjhfijkhsdghfkjh")
             .await;
         resp.assert_status_forbidden();
@@ -82,7 +90,10 @@ mod tests {
     #[tokio::test]
     async fn responds_with_200_when_correct_password() {
         let server = test_server(EndpointPassword::dev());
-        let resp = server.post("/").add_query_param("password", DEV_RAW_ENDPOINT_PASSWORD).await;
+        let resp = server
+            .post("/")
+            .add_query_param("password", DEV_RAW_ENDPOINT_PASSWORD)
+            .await;
         resp.assert_status_ok();
         resp.assert_text(RESPONSE_STR);
     }

@@ -1,15 +1,18 @@
 use std::marker::PhantomData;
 
-use super::{any_view::AnySlackView, blocks::_SlackBlocksCollection, empty_view::EmptySlackView, slack_view::SlackView};
+use super::{
+    any_view::AnySlackView, blocks::_SlackBlocksCollection, empty_view::EmptySlackView,
+    slack_view::SlackView,
+};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct _FlatChainSlackView<Base: SlackView, Other: SlackView> {
     blocks: _SlackBlocksCollection,
     p1: PhantomData<Base>,
-    p2: PhantomData<Other>
+    p2: PhantomData<Other>,
 }
 
-impl <Base: SlackView, Other: SlackView> _FlatChainSlackView<Base, Other> {
+impl<Base: SlackView, Other: SlackView> _FlatChainSlackView<Base, Other> {
     pub(super) fn new(base: Base, other: &Other) -> Self {
         let mut blocks = _SlackBlocksCollection::new();
         base.__push_blocks_into(&mut blocks);
@@ -18,11 +21,15 @@ impl <Base: SlackView, Other: SlackView> _FlatChainSlackView<Base, Other> {
     }
 
     fn from(blocks: _SlackBlocksCollection) -> Self {
-        Self { blocks, p1: PhantomData, p2: PhantomData }
+        Self {
+            blocks,
+            p1: PhantomData,
+            p2: PhantomData,
+        }
     }
 }
 
-impl <Base: SlackView, Other: SlackView> SlackView for _FlatChainSlackView<Base, Other> {
+impl<Base: SlackView, Other: SlackView> SlackView for _FlatChainSlackView<Base, Other> {
     fn slack_body(&self) -> impl SlackView {
         EmptySlackView
     }
@@ -33,7 +40,7 @@ impl <Base: SlackView, Other: SlackView> SlackView for _FlatChainSlackView<Base,
 
     fn flat_chain_block_ref<View: SlackView>(
         mut self,
-        other: &View
+        other: &View,
     ) -> _FlatChainSlackView<Self, View> {
         other.__push_blocks_into(&mut self.blocks);
         _FlatChainSlackView::from(self.blocks)
@@ -54,11 +61,10 @@ mod tests {
 
     impl SlackView for DividersView {
         fn slack_body(&self) -> impl SlackView {
-            SlackDivider.flat_chain_block(SlackDivider)
+            SlackDivider
+                .flat_chain_block(SlackDivider)
                 .flat_chain_block(
-                    SlackDivider.flat_chain_block(
-                        SlackDivider.flat_chain_block(SlackDivider)
-                    )
+                    SlackDivider.flat_chain_block(SlackDivider.flat_chain_block(SlackDivider)),
                 )
                 .flat_chain_block(SlackDivider)
         }
@@ -68,7 +74,7 @@ mod tests {
     fn flat_chain_flattens_nested_dividers() {
         assert_blocks_json(
             &DividersView,
-            r#"[{"type":"divider"},{"type":"divider"},{"type":"divider"},{"type":"divider"},{"type":"divider"},{"type":"divider"}]"#
+            r#"[{"type":"divider"},{"type":"divider"},{"type":"divider"},{"type":"divider"},{"type":"divider"},{"type":"divider"}]"#,
         );
     }
 }

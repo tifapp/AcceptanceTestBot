@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
+use anyhow::Result;
 use sqlx::database::HasArguments;
 use sqlx::query::{Query, QueryAs};
-use sqlx::{query, query_as, Executor, FromRow, Pool, Transaction};
 use sqlx::sqlite::{Sqlite, SqliteArguments, SqliteConnectOptions, SqliteQueryResult, SqliteRow};
-use anyhow::Result;
+use sqlx::{query, query_as, Executor, FromRow, Pool, Transaction};
 use tokio::sync::{Mutex, MutexGuard};
 
 /// A type that serializes transactions to sqlite to prevent sqlite busy errors from ocurring.
 pub struct RoswaalSqlite {
-    mutex: Arc<Mutex<Pool<Sqlite>>>
+    mutex: Arc<Mutex<Pool<Sqlite>>>,
 }
 
 const SQLITE_IN_MEMORY_PATH: &str = ":memory:";
@@ -18,13 +18,17 @@ impl RoswaalSqlite {
     /// Attempts to open a new sqlite connection at the specified path.
     pub async fn open(path: &str) -> Result<Self> {
         let pool = if path != SQLITE_IN_MEMORY_PATH {
-            let options = SqliteConnectOptions::new().filename(path).create_if_missing(true);
+            let options = SqliteConnectOptions::new()
+                .filename(path)
+                .create_if_missing(true);
             Pool::<Sqlite>::connect_with(options).await?
         } else {
             Pool::<Sqlite>::connect(path).await?
         };
         Self::migrate_v1(&pool).await?;
-        Ok(RoswaalSqlite { mutex: Arc::new(Mutex::new(pool)) })
+        Ok(RoswaalSqlite {
+            mutex: Arc::new(Mutex::new(pool)),
+        })
     }
 
     /// Attempts to open an in-memory sqlite connection.
@@ -71,7 +75,7 @@ CREATE TABLE IF NOT EXISTS StagedTestRemovals (
     creation_date DATETIME NOT NULL DEFAULT (unixepoch()),
     PRIMARY KEY(name, unmerged_branch_name)
 );
-            "
+            ",
         )
         .execute(pool)
         .await?;
@@ -92,10 +96,10 @@ impl RoswaalSqlite {
 #[derive(Debug)]
 pub struct RoswaalSqliteTransaction<'a> {
     pool: MutexGuard<'a, Pool<Sqlite>>,
-    transaction: Transaction<'static, Sqlite>
+    transaction: Transaction<'static, Sqlite>,
 }
 
-impl <'a> RoswaalSqliteTransaction<'a> {
+impl<'a> RoswaalSqliteTransaction<'a> {
     /// Returns the underlying sqlx connection for this transaction.
     pub fn connection(&mut self) -> impl Executor<Database = Sqlite> {
         self.transaction.as_mut()
@@ -129,7 +133,7 @@ macro_rules! with_transaction {
                 } else {
                     Ok(value)
                 }
-            },
+            }
             Err(error) => {
                 let result = $transaction.rollback().await;
                 if let Err(err) = result {
@@ -139,7 +143,7 @@ macro_rules! with_transaction {
                 }
             }
         }
-    }
+    };
 }
 
 /// Returns a list of substitutable array parameters for use in sqlite queries that check if a
@@ -157,7 +161,10 @@ macro_rules! with_transaction {
 /// }
 /// ```
 pub fn sqlite_array_fields(count: usize) -> String {
-    format!("({})", (0..count).map(|_| "?").collect::<Vec<&str>>().join(", "))
+    format!(
+        "({})",
+        (0..count).map(|_| "?").collect::<Vec<&str>>().join(", ")
+    )
 }
 
 pub type SqliteQuery<'q> = Query<'q, Sqlite, SqliteArguments<'q>>;
@@ -166,23 +173,27 @@ pub type SqliteQueryAs<'q, Output> = QueryAs<'q, Sqlite, Output, SqliteArguments
 /// A repeated Sqlite Query.
 pub struct SqliteRepeat<'q, Value> {
     statements: String,
-    values: &'q Vec<Value>
+    values: &'q Vec<Value>,
 }
 
 /// Repeats the SQL statement for each value in `values`.
 pub fn sqlite_repeat<'q, Value>(
     statement: &'q str,
-    values: &'q Vec<Value>
+    values: &'q Vec<Value>,
 ) -> SqliteRepeat<'q, Value> {
-    let statements = values.iter().map(|_| statement).collect::<Vec<&str>>().join("\n");
+    let statements = values
+        .iter()
+        .map(|_| statement)
+        .collect::<Vec<&str>>()
+        .join("\n");
     SqliteRepeat { statements, values }
 }
 
-impl <'q, Value> SqliteRepeat<'q, Value> {
+impl<'q, Value> SqliteRepeat<'q, Value> {
     /// Given a function with a query and each value, binds the value to the query.
     pub fn bind_to_query(
         &'q self,
-        bind: impl Fn(SqliteQuery<'q>, &'q Value) -> Result<SqliteQuery<'q>>
+        bind: impl Fn(SqliteQuery<'q>, &'q Value) -> Result<SqliteQuery<'q>>,
     ) -> Result<SqliteQuery<'q>> {
         let mut query = query::<Sqlite>(&self.statements);
         for value in self.values.iter() {
@@ -195,7 +206,7 @@ impl <'q, Value> SqliteRepeat<'q, Value> {
     pub fn bind_custom_values_to_query<V>(
         &'q self,
         values: impl Iterator<Item = V>,
-        bind: impl Fn(SqliteQuery<'q>, &V) -> Result<SqliteQuery<'q>>
+        bind: impl Fn(SqliteQuery<'q>, &V) -> Result<SqliteQuery<'q>>,
     ) -> Result<SqliteQuery<'q>> {
         let mut query = query::<Sqlite>(&self.statements);
         for value in values {
@@ -207,7 +218,7 @@ impl <'q, Value> SqliteRepeat<'q, Value> {
     /// Given a function with q query and each value, binds the value to the query.
     pub fn bind_to_query_as<Output: for<'r> FromRow<'r, SqliteRow>>(
         &'q self,
-        bind: impl Fn(SqliteQueryAs<'q, Output>, &'q Value) -> Result<SqliteQueryAs<'q, Output>>
+        bind: impl Fn(SqliteQueryAs<'q, Output>, &'q Value) -> Result<SqliteQueryAs<'q, Output>>,
     ) -> Result<SqliteQueryAs<'q, Output>> {
         let mut query = query_as::<Sqlite, Output>(&self.statements);
         for value in self.values.iter() {
@@ -224,7 +235,9 @@ mod tests {
     use super::*;
 
     #[derive(FromRow, Debug, PartialEq, Eq)]
-    struct TestRecord { id: i32 }
+    struct TestRecord {
+        id: i32,
+    }
 
     #[tokio::test]
     async fn test_basic_query() {
@@ -259,8 +272,12 @@ mod tests {
         });
         transaction = sqlite.transaction().await.unwrap();
         let transaction_result = with_transaction!(transaction, async {
-            _ = query("INSERT INTO Test (id) VALUES (5)").execute(transaction.connection()).await?;
-            _ = query("INSERT INTO Test (id) VALUES (1)").execute(transaction.connection()).await?;
+            _ = query("INSERT INTO Test (id) VALUES (5)")
+                .execute(transaction.connection())
+                .await?;
+            _ = query("INSERT INTO Test (id) VALUES (1)")
+                .execute(transaction.connection())
+                .await?;
             Ok(())
         });
         transaction = sqlite.transaction().await.unwrap();

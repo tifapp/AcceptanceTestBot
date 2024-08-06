@@ -2,7 +2,7 @@
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct LocationCoordinate2D {
     pub(super) latitude: f32,
-    pub(super) longitude: f32
+    pub(super) longitude: f32,
 }
 
 impl LocationCoordinate2D {
@@ -14,7 +14,10 @@ impl LocationCoordinate2D {
         if !(-90.0..90.0).contains(&latitude) || !(-180.0..180.0).contains(&longitude) {
             None
         } else {
-            Some(Self { latitude, longitude })
+            Some(Self {
+                latitude,
+                longitude,
+            })
         }
     }
 }
@@ -35,13 +38,19 @@ mod test {
 
     #[test]
     fn test_coordinate_creation() {
-        assert_eq!(LocationCoordinate2D::try_new(-100.79832794, 67.290890), None);
+        assert_eq!(
+            LocationCoordinate2D::try_new(-100.79832794, 67.290890),
+            None
+        );
         assert_eq!(LocationCoordinate2D::try_new(43.29872, 200.2979398), None);
         assert_eq!(LocationCoordinate2D::try_new(100.79832794, 67.290890), None);
         assert_eq!(LocationCoordinate2D::try_new(43.29872, -200.2979398), None);
         assert_eq!(
             LocationCoordinate2D::try_new(32.209820, -120.289739),
-            Some(LocationCoordinate2D { latitude: 32.209820, longitude: -120.289739 })
+            Some(LocationCoordinate2D {
+                latitude: 32.209820,
+                longitude: -120.289739
+            })
         )
     }
 }

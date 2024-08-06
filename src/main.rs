@@ -1,12 +1,12 @@
-mod language;
-mod utils;
 mod generation;
-mod location;
 mod git;
-mod operations;
-mod tests_data;
-mod slack;
 mod http;
+mod language;
+mod location;
+mod operations;
+mod slack;
+mod tests_data;
+mod utils;
 
 use std::sync::Arc;
 

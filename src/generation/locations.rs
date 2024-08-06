@@ -6,7 +6,8 @@ pub type LocationsTypescript = String;
 
 impl RoswaalTypescriptGenerate<LocationsTypescript> for RoswaalLocation {
     fn typescript(&self) -> LocationsTypescript {
-        format!("\
+        format!(
+            "\
   export const {} = {{
     latitude: {:.16},
     longitude: {:.16}
@@ -43,7 +44,12 @@ impl RoswaalTypescriptGenerate<LocationsTypescript> for Vec<&RoswaalLocation> {
 mod test {
     use std::str::FromStr;
 
-    use crate::{generation::interface::RoswaalTypescriptGenerate, location::{coordinate::LocationCoordinate2D, location::RoswaalLocation, name::RoswaalLocationName}};
+    use crate::{
+        generation::interface::RoswaalTypescriptGenerate,
+        location::{
+            coordinate::LocationCoordinate2D, location::RoswaalLocation, name::RoswaalLocationName,
+        },
+    };
 
     #[test]
     fn test_location_typescript() {
@@ -63,11 +69,11 @@ mod test {
     fn test_locations_vector_typescript() {
         let location1 = RoswaalLocation::new(
             RoswaalLocationName::from_str("Oakland").unwrap(),
-            LocationCoordinate2D::try_new(50.0, 50.0).unwrap()
+            LocationCoordinate2D::try_new(50.0, 50.0).unwrap(),
         );
         let location2 = RoswaalLocation::new(
             RoswaalLocationName::from_str("New York").unwrap(),
-            LocationCoordinate2D::try_new(60.0, 60.0).unwrap()
+            LocationCoordinate2D::try_new(60.0, 60.0).unwrap(),
         );
         let locations = vec![&location1, &location2];
         let expected_ts = "\

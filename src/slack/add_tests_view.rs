@@ -1,11 +1,33 @@
 use std::borrow::Borrow;
 
-use crate::{language::{compiler::{RoswaalCompilationDuplicateErrorCode, RoswaalCompilationError, RoswaalCompilationErrorCode}, test::RoswaalTest}, location::name::RoswaalLocationNameParsingError, operations::add_tests::{AddTestsStatus, RoswaalTestCompilationResults}};
+use crate::{
+    language::{
+        compiler::{
+            RoswaalCompilationDuplicateErrorCode, RoswaalCompilationError,
+            RoswaalCompilationErrorCode,
+        },
+        test::RoswaalTest,
+    },
+    location::name::RoswaalLocationNameParsingError,
+    operations::add_tests::{AddTestsStatus, RoswaalTestCompilationResults},
+};
 
-use super::{merge_conflict_view::MergeConflictView, pr_open_fail_view::FailedToOpenPullRequestView, ui_lib::{block_kit_views::{SlackDivider, SlackHeader, SlackSection}, empty_view::EmptySlackView, for_each_view::ForEachView, if_view::If, slack_view::SlackView}, users::MATTHEW_SLACK_USER_ID, warn_undeleted_branch_view::WarnUndeletedBranchView};
+use super::{
+    merge_conflict_view::MergeConflictView,
+    pr_open_fail_view::FailedToOpenPullRequestView,
+    ui_lib::{
+        block_kit_views::{SlackDivider, SlackHeader, SlackSection},
+        empty_view::EmptySlackView,
+        for_each_view::ForEachView,
+        if_view::If,
+        slack_view::SlackView,
+    },
+    users::MATTHEW_SLACK_USER_ID,
+    warn_undeleted_branch_view::WarnUndeletedBranchView,
+};
 
 pub struct AddTestsView {
-    status: AddTestsStatus
+    status: AddTestsStatus,
 }
 
 impl AddTestsView {
@@ -16,8 +38,7 @@ impl AddTestsView {
 
 impl SlackView for AddTestsView {
     fn slack_body(&self) -> impl SlackView {
-        SlackHeader::new("Add Tests")
-            .flat_chain_block(self.status_view())
+        SlackHeader::new("Add Tests").flat_chain_block(self.status_view())
     }
 }
 
@@ -81,8 +102,12 @@ impl AddTestsView {
         SlackSection::from_markdown(&body)
     }
 
-    fn non_compiling_tests_view(&self, tests: &Vec<(usize, Vec<RoswaalCompilationError>)>) -> impl SlackView {
-        let tests_iter = tests.iter()
+    fn non_compiling_tests_view(
+        &self,
+        tests: &Vec<(usize, Vec<RoswaalCompilationError>)>,
+    ) -> impl SlackView {
+        let tests_iter = tests
+            .iter()
             .map(|e| e.clone())
             .enumerate()
             .map(|(index, value)| (index < tests.len() - 1, value));
@@ -101,23 +126,22 @@ impl AddTestsView {
 
 struct NonCompilingTestView {
     test_number: u32,
-    errors: Vec<RoswaalCompilationError>
+    errors: Vec<RoswaalCompilationError>,
 }
 
 impl SlackView for NonCompilingTestView {
     fn slack_body(&self) -> impl SlackView {
-        SlackSection::from_markdown(&format!("❗️ *Test {}*", self.test_number))
-            .flat_chain_block(
-                ForEachView::new(self.errors.iter(), |error| CompilationErrorView { error })
-            )
+        SlackSection::from_markdown(&format!("❗️ *Test {}*", self.test_number)).flat_chain_block(
+            ForEachView::new(self.errors.iter(), |error| CompilationErrorView { error }),
+        )
     }
 }
 
 struct CompilationErrorView<'v> {
-    error: &'v RoswaalCompilationError
+    error: &'v RoswaalCompilationError,
 }
 
-impl <'v> SlackView for CompilationErrorView<'v> {
+impl<'v> SlackView for CompilationErrorView<'v> {
     fn slack_body(&self) -> impl SlackView {
         let mut body = String::new();
         match self.error.code() {
@@ -210,34 +234,47 @@ impl <'v> SlackView for CompilationErrorView<'v> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{language::ast::RoswaalTestSyntax, operations::add_tests::{AddTestsStatus, RoswaalTestCompilationResults}, slack::ui_lib::test_support::{assert_slack_view_snapshot, SnapshotMode}};
+    use crate::{
+        language::ast::RoswaalTestSyntax,
+        operations::add_tests::{AddTestsStatus, RoswaalTestCompilationResults},
+        slack::ui_lib::test_support::{assert_slack_view_snapshot, SnapshotMode},
+    };
 
     use super::AddTestsView;
 
     #[test]
     fn success_no_compile_errors_snapshot() {
         let tests = vec![
-            RoswaalTestSyntax::from("\
+            RoswaalTestSyntax::from(
+                "\
 New Test: Big Chungus
 Step 1: Big
 Requirement 1: Chungus
-"),
-            RoswaalTestSyntax::from("\
+",
+            ),
+            RoswaalTestSyntax::from(
+                "\
 New Test: Big Chungus II
 Step 1: Big
 Requirement 1: Chungus
-"),
-            RoswaalTestSyntax::from("\
+",
+            ),
+            RoswaalTestSyntax::from(
+                "\
 New Test: Big Chungus III
 Step 1: Big
 Requirement 1: Chungus
-")
+",
+            ),
         ];
         let results = RoswaalTestCompilationResults::compile(&tests, &vec![]);
         assert_slack_view_snapshot(
             "add-tests-success-no-compilation-errors",
-            &AddTestsView::new(AddTestsStatus::Success { results, should_warn_undeleted_branch: false }),
-            SnapshotMode::Comparing
+            &AddTestsView::new(AddTestsStatus::Success {
+                results,
+                should_warn_undeleted_branch: false,
+            }),
+            SnapshotMode::Comparing,
         )
     }
 
@@ -246,93 +283,124 @@ Requirement 1: Chungus
         let tests = vec![
             RoswaalTestSyntax::from(""),
             RoswaalTestSyntax::from("New Test: Big Chungus II"),
-            RoswaalTestSyntax::from("\
+            RoswaalTestSyntax::from(
+                "\
 New Test: Big Chungus III
 Step 1: Big
-"),
-            RoswaalTestSyntax::from("\
+",
+            ),
+            RoswaalTestSyntax::from(
+                "\
 New Test: Big Chungus III
 Requirement 1: Big
-"),
-            RoswaalTestSyntax::from("\
+",
+            ),
+            RoswaalTestSyntax::from(
+                "\
 New Test: Big Chungus III
 Step 1: Big
 Step 1: Big 2
-"),
-            RoswaalTestSyntax::from("\
+",
+            ),
+            RoswaalTestSyntax::from(
+                "\
 New Test: Big Chungus III
 Requirement 1: Big
 Requirement 2: Big 2
-"),
-            RoswaalTestSyntax::from("\
+",
+            ),
+            RoswaalTestSyntax::from(
+                "\
 New Test: Big Chungus IIII
 Step 1: Big
 Requirement 1: Chungus
 Set Location: The Middle of Nowhere
-"),
-            RoswaalTestSyntax::from("\
+",
+            ),
+            RoswaalTestSyntax::from(
+                "\
 New Test: Big Chungus IIII
 Step 1: Big
 Requirement 1: Chungus
 Set Location: IN09*09809480valid
-"),
-            RoswaalTestSyntax::from("\
+",
+            ),
+            RoswaalTestSyntax::from(
+                "\
 New Test: Big Chungus IIII
 Step 1: Big
 Requirement 1: Chungus
 New Test: Big Chungus IIIII
-"),
-            RoswaalTestSyntax::from("\
+",
+            ),
+            RoswaalTestSyntax::from(
+                "\
 asioljdoasjodjasodjosa
-"),
-            RoswaalTestSyntax::from("\
+",
+            ),
+            RoswaalTestSyntax::from(
+                "\
 New Test: Hello World
 Fake Command: This is a fake command!
-")
+",
+            ),
         ];
         let results = RoswaalTestCompilationResults::compile(&tests, &vec![]);
         assert_slack_view_snapshot(
             "add-tests-success-all-compilation-errors",
-            &AddTestsView::new(AddTestsStatus::Success { results, should_warn_undeleted_branch: false }),
-            SnapshotMode::Comparing
+            &AddTestsView::new(AddTestsStatus::Success {
+                results,
+                should_warn_undeleted_branch: false,
+            }),
+            SnapshotMode::Comparing,
         )
     }
 
     #[test]
     fn success_mixed_compilation_results_snapshot() {
         let tests = vec![
-            RoswaalTestSyntax::from("\
+            RoswaalTestSyntax::from(
+                "\
 New Test: Big Chungus III
 Step 1: Big
-"),
-            RoswaalTestSyntax::from("\
+",
+            ),
+            RoswaalTestSyntax::from(
+                "\
 New Test: This is a Valid Test
 Step 1: Thing
 Requirement 1: Thhing
-")
+",
+            ),
         ];
         let results = RoswaalTestCompilationResults::compile(&tests, &vec![]);
         assert_slack_view_snapshot(
             "add-tests-success-mixed-compilation-results",
-            &AddTestsView::new(AddTestsStatus::Success { results, should_warn_undeleted_branch: true }),
-            SnapshotMode::Comparing
+            &AddTestsView::new(AddTestsStatus::Success {
+                results,
+                should_warn_undeleted_branch: true,
+            }),
+            SnapshotMode::Comparing,
         )
     }
 
     #[test]
     fn success_warn_undeleted_branch_snapshot() {
-        let tests = vec![
-            RoswaalTestSyntax::from("\
+        let tests = vec![RoswaalTestSyntax::from(
+            "\
 New Test: Big Chungus
 Step 1: Big
 Requirement 1: Chungus
-")
-        ];
+",
+        )];
         let results = RoswaalTestCompilationResults::compile(&tests, &vec![]);
         assert_slack_view_snapshot(
             "add-tests-success-warn-undeleted-branch-errors",
-            &AddTestsView::new(AddTestsStatus::Success { results, should_warn_undeleted_branch: true }),
-            SnapshotMode::Comparing
+            &AddTestsView::new(AddTestsStatus::Success {
+                results,
+                should_warn_undeleted_branch: true,
+            }),
+            SnapshotMode::Comparing,
         )
     }
 
@@ -341,7 +409,7 @@ Requirement 1: Chungus
         assert_slack_view_snapshot(
             "add-tests-no-tests-found",
             &AddTestsView::new(AddTestsStatus::NoTestsFound),
-            SnapshotMode::Comparing
+            SnapshotMode::Comparing,
         )
     }
 
@@ -350,7 +418,7 @@ Requirement 1: Chungus
         assert_slack_view_snapshot(
             "add-tests-pr-fail",
             &AddTestsView::new(AddTestsStatus::FailedToOpenPullRequest),
-            SnapshotMode::Comparing
+            SnapshotMode::Comparing,
         )
     }
 
@@ -359,7 +427,7 @@ Requirement 1: Chungus
         assert_slack_view_snapshot(
             "add-tests-merge-conflict",
             &AddTestsView::new(AddTestsStatus::MergeConflict),
-            SnapshotMode::Comparing
+            SnapshotMode::Comparing,
         )
     }
 }

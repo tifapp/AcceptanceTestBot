@@ -8,7 +8,7 @@ impl ToAsciiCamelCase for String {
             .map(|str| str.to_lowercase())
             .reduce(|mut acc, str| {
                 acc.push_str(str.uppercase_first_ascii_char().as_str());
-                return acc
+                return acc;
             })
             .unwrap_or(self.to_string())
     }
@@ -17,9 +17,11 @@ impl ToAsciiCamelCase for String {
 pub trait UppercaseFirstAsciiCharacter: ToString {
     fn uppercase_first_ascii_char(&self) -> String {
         let mut str = self.to_string();
-        if str.is_empty() { return str }
+        if str.is_empty() {
+            return str;
+        }
         str[0..1].make_ascii_uppercase();
-        return str
+        return str;
     }
 
     fn to_ascii_pascal_case(&self) -> String {
@@ -74,7 +76,10 @@ mod string_utils_tests {
     #[test]
     fn test_string_to_camel_case_with_spaced_words() {
         let str = String::from("Hello world this is a test");
-        assert_eq!(str.to_ascii_camel_case(), String::from("helloWorldThisIsATest"))
+        assert_eq!(
+            str.to_ascii_camel_case(),
+            String::from("helloWorldThisIsATest")
+        )
     }
 
     #[test]
@@ -84,7 +89,10 @@ mod string_utils_tests {
 
     #[test]
     fn test_pascal_case_uppercases_first_letter_of_all_words_and_trims_white_space() {
-        assert_eq!("santa cruz".to_ascii_pascal_case(), String::from("SantaCruz"))
+        assert_eq!(
+            "santa cruz".to_ascii_pascal_case(),
+            String::from("SantaCruz")
+        )
     }
 
     #[test]
@@ -98,7 +106,7 @@ mod string_utils_tests {
             ("hello + world", "hello-+-world"),
             ("hello@world", "hello@world"),
             ("   hello world   ", "hello-world"),
-            ("hello    world", "hello----world")
+            ("hello    world", "hello----world"),
         ];
         for (before, after) in strings {
             assert_eq!(before.to_ascii_kebab_case(), after.to_string())

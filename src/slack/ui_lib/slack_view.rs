@@ -1,4 +1,8 @@
-use super::{any_view::AnySlackView, blocks::{SlackBlocks, _SlackBlocksCollection}, flat_chain_view::_FlatChainSlackView};
+use super::{
+    any_view::AnySlackView,
+    blocks::{SlackBlocks, _SlackBlocksCollection},
+    flat_chain_view::_FlatChainSlackView,
+};
 
 /// A trait for implementing a slack view.
 ///
@@ -12,10 +16,7 @@ pub trait SlackView: Sized {
     ///
     /// `other` will be flattened when serialized into a slack message, so it is safe to call
     /// `flat_chain_block` inside the `slack_body` of `other` without incurring uneccessary nesting.
-    fn flat_chain_block<Other: SlackView>(
-        self,
-        other: Other
-    ) -> _FlatChainSlackView<Self, Other> {
+    fn flat_chain_block<Other: SlackView>(self, other: Other) -> _FlatChainSlackView<Self, Other> {
         self.flat_chain_block_ref(&other)
     }
 
@@ -25,7 +26,7 @@ pub trait SlackView: Sized {
     /// `flat_chain_block` inside the `slack_body` of `other` without incurring uneccessary nesting.
     fn flat_chain_block_ref<Other: SlackView>(
         self,
-        other: &Other
+        other: &Other,
     ) -> _FlatChainSlackView<Self, Other> {
         _FlatChainSlackView::new(self, other)
     }
