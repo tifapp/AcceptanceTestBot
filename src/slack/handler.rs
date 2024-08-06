@@ -4,6 +4,7 @@ use super::{
     command::RoswaalSlackCommand,
     error_view::ErrorView,
     message::{SlackMessage, SlackSendMessage},
+    message_view::MessageView,
     pending_view::PendingView,
     ui_lib::{
         blocks::SlackBlocks,
@@ -72,7 +73,9 @@ pub async fn handle_slack_request(
         });
         render_slack_view(&PendingView)
     } else {
-        render_slack_view(&view_for_request(handler.as_ref(), &request).await)
+        render_slack_view(&MessageView::new(
+            &view_for_request(handler.as_ref(), &request).await,
+        ))
     }
 }
 
