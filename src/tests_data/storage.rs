@@ -341,654 +341,500 @@ impl RoswaalTest {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use std::str::FromStr;
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
 
-//     use super::*;
-//     use crate::{
-//         git::branch_name::{self, RoswaalOwnedGitBranchName},
-//         language::test::{RoswaalTest, RoswaalTestCommand},
-//         location::name::RoswaalLocationName,
-//         tests_data::ordinal::RoswaalTestCommandOrdinal,
-//         utils::sqlite::RoswaalSqlite,
-//     };
+    use super::*;
+    use crate::{
+        git::branch_name::RoswaalOwnedGitBranchName,
+        location::name::RoswaalLocationName,
+        tests_data::{
+            ordinal::RoswaalTestCommandOrdinal,
+            progress::RoswaalTestProgressUploadErrorDescription, test::RoswaalTestProgressStatus,
+        },
+        utils::sqlite::RoswaalSqlite,
+    };
 
-//     #[tokio::test]
-//     async fn test_store_and_retrieve_unmerged_tests() {
-//         let branch_name = RoswaalOwnedGitBranchName::new("test");
-//         let sqlite = RoswaalSqlite::in_memory().await.unwrap();
-//         let mut transaction = sqlite.transaction().await.unwrap();
-//         let tests = vec![
-//             RoswaalTest::new(
-//                 "Test 1".to_string(),
-//                 None,
-//                 vec![
-//                     RoswaalTestCommand::Step {
-//                         label: "Step 1".to_string(),
-//                         name: "Step 1".to_string(),
-//                         requirement: "Requirement 1".to_string(),
-//                     },
-//                     RoswaalTestCommand::SetLocation {
-//                         location_name: RoswaalLocationName::from_str("test").unwrap(),
-//                     },
-//                 ],
-//             ),
-//             RoswaalTest::new(
-//                 "Test 2".to_string(),
-//                 None,
-//                 vec![RoswaalTestCommand::Step {
-//                     label: "Step 1".to_string(),
-//                     name: "Step A".to_string(),
-//                     requirement: "Requirement A".to_string(),
-//                 }],
-//             ),
-//         ];
-//         transaction.save_tests(&tests, &branch_name).await.unwrap();
-//         let stored_tests = transaction
-//             .tests_in_alphabetical_order(&RoswaalSearchTestsQuery::AllTests)
-//             .await
-//             .unwrap();
-//         let expected_tests = vec![
-//             RoswaalStoredTest {
-//                 name: "Test 1".to_string(),
-//                 description: None,
-//                 steps: vec![
-//                     RoswaalTestCommand::Step {
-//                         label: "Step 1".to_string(),
-//                         name: "Step 1".to_string(),
-//                         requirement: "Requirement 1".to_string(),
-//                     },
-//                     RoswaalTestCommand::SetLocation {
-//                         location_name: RoswaalLocationName::from_str("test").unwrap(),
-//                     },
-//                 ],
-//                 error: None,
-//                 command_failure_ordinal: None,
-//                 unmerged_branch_name: Some(branch_name.clone()),
-//                 last_run_date: None,
-//             },
-//             RoswaalStoredTest {
-//                 name: "Test 2".to_string(),
-//                 description: None,
-//                 steps: vec![RoswaalTestCommand::Step {
-//                     label: "Step 1".to_string(),
-//                     name: "Step A".to_string(),
-//                     requirement: "Requirement A".to_string(),
-//                 }],
-//                 error: None,
-//                 command_failure_ordinal: None,
-//                 unmerged_branch_name: Some(branch_name.clone()),
-//                 last_run_date: None,
-//             },
-//         ];
-//         assert_eq!(stored_tests, expected_tests)
-//     }
+    #[tokio::test]
+    async fn test_store_and_retrieve_unmerged_tests() {
+        let branch_name = RoswaalOwnedGitBranchName::new("test");
+        let sqlite = RoswaalSqlite::in_memory().await.unwrap();
+        let mut transaction = sqlite.transaction().await.unwrap();
+        let tests = vec![
+            RoswaalCompiledTest::mock1("Test 1"),
+            RoswaalCompiledTest::mock2("Test 2"),
+        ];
+        transaction.save_tests(&tests, &branch_name).await.unwrap();
+        let stored_tests = transaction
+            .tests_in_alphabetical_order(&RoswaalSearchTestsQuery::AllTests)
+            .await
+            .unwrap();
+        let expected_tests = vec![
+            RoswaalTest::new(
+                "Test 1".to_string(),
+                None,
+                vec![
+                    RoswaalCompiledTestCommand::Step {
+                        label: "Step 1".to_string(),
+                        name: "Step 1".to_string(),
+                        requirement: "Requirement 1".to_string(),
+                    },
+                    RoswaalCompiledTestCommand::SetLocation {
+                        location_name: RoswaalLocationName::from_str("test").unwrap(),
+                    },
+                ],
+                None,
+                None,
+                None,
+                Some(branch_name.clone()),
+                None,
+            ),
+            RoswaalTest::new(
+                "Test 2".to_string(),
+                None,
+                vec![RoswaalCompiledTestCommand::Step {
+                    label: "Step 1".to_string(),
+                    name: "Step A".to_string(),
+                    requirement: "Requirement A".to_string(),
+                }],
+                None,
+                None,
+                None,
+                Some(branch_name.clone()),
+                None,
+            ),
+        ];
+        assert_eq!(stored_tests, expected_tests)
+    }
 
-//     #[tokio::test]
-//     async fn test_store_duplicate_named_tests_on_same_branch_replaces_initially_inserted_test() {
-//         let branch_name = RoswaalOwnedGitBranchName::new("test");
-//         let sqlite = RoswaalSqlite::in_memory().await.unwrap();
-//         let mut transaction = sqlite.transaction().await.unwrap();
-//         let tests = vec![
-//             RoswaalTest::new(
-//                 "Test".to_string(),
-//                 None,
-//                 vec![
-//                     RoswaalTestCommand::Step {
-//                         label: "Step 1".to_string(),
-//                         name: "Step 1".to_string(),
-//                         requirement: "Requirement 1".to_string(),
-//                     },
-//                     RoswaalTestCommand::SetLocation {
-//                         location_name: RoswaalLocationName::from_str("test").unwrap(),
-//                     },
-//                 ],
-//             ),
-//             RoswaalTest::new(
-//                 "Test".to_string(),
-//                 None,
-//                 vec![RoswaalTestCommand::Step {
-//                     label: "Step 1".to_string(),
-//                     name: "Step A".to_string(),
-//                     requirement: "Requirement A".to_string(),
-//                 }],
-//             ),
-//         ];
-//         transaction.save_tests(&tests, &branch_name).await.unwrap();
-//         let stored_tests = transaction
-//             .tests_in_alphabetical_order(&RoswaalSearchTestsQuery::AllTests)
-//             .await
-//             .unwrap();
-//         let expected_tests = vec![RoswaalStoredTest {
-//             name: "Test".to_string(),
-//             description: None,
-//             steps: vec![RoswaalTestCommand::Step {
-//                 label: "Step 1".to_string(),
-//                 name: "Step A".to_string(),
-//                 requirement: "Requirement A".to_string(),
-//             }],
-//             error: None,
-//             command_failure_ordinal: None,
-//             unmerged_branch_name: Some(branch_name.clone()),
-//             last_run_date: None,
-//         }];
-//         assert_eq!(stored_tests, expected_tests)
-//     }
+    #[tokio::test]
+    async fn test_store_duplicate_named_tests_on_same_branch_replaces_initially_inserted_test() {
+        let branch_name = RoswaalOwnedGitBranchName::new("test");
+        let sqlite = RoswaalSqlite::in_memory().await.unwrap();
+        let mut transaction = sqlite.transaction().await.unwrap();
+        let tests = vec![
+            RoswaalCompiledTest::mock1("Test"),
+            RoswaalCompiledTest::mock2("Test"),
+        ];
+        transaction.save_tests(&tests, &branch_name).await.unwrap();
+        let stored_tests = transaction
+            .tests_in_alphabetical_order(&RoswaalSearchTestsQuery::AllTests)
+            .await
+            .unwrap();
+        let expected_tests = vec![RoswaalTest::new(
+            "Test".to_string(),
+            None,
+            vec![RoswaalCompiledTestCommand::Step {
+                label: "Step 1".to_string(),
+                name: "Step A".to_string(),
+                requirement: "Requirement A".to_string(),
+            }],
+            None,
+            None,
+            None,
+            Some(branch_name.clone()),
+            None,
+        )];
+        assert_eq!(stored_tests, expected_tests)
+    }
 
-//     #[tokio::test]
-//     async fn test_store_and_retrieve_unmerged_tests_with_same_name_and_different_branches() {
-//         let branch_name1 = RoswaalOwnedGitBranchName::new("test");
-//         let branch_name2 = RoswaalOwnedGitBranchName::new("test");
-//         let sqlite = RoswaalSqlite::in_memory().await.unwrap();
-//         let mut transaction = sqlite.transaction().await.unwrap();
-//         let mut tests = vec![RoswaalTest::new(
-//             "Test".to_string(),
-//             None,
-//             vec![RoswaalTestCommand::Step {
-//                 label: "Step 1".to_string(),
-//                 name: "Step 1".to_string(),
-//                 requirement: "Requirement 1".to_string(),
-//             }],
-//         )];
-//         transaction.save_tests(&tests, &branch_name1).await.unwrap();
-//         tests = vec![RoswaalTest::new(
-//             "Test".to_string(),
-//             None,
-//             vec![RoswaalTestCommand::Step {
-//                 label: "Step 1".to_string(),
-//                 name: "Step A".to_string(),
-//                 requirement: "Requirement A".to_string(),
-//             }],
-//         )];
-//         transaction.save_tests(&tests, &branch_name2).await.unwrap();
-//         let stored_tests = transaction
-//             .tests_in_alphabetical_order(&RoswaalSearchTestsQuery::AllTests)
-//             .await
-//             .unwrap();
-//         let expected_tests = vec![
-//             RoswaalStoredTest {
-//                 name: "Test".to_string(),
-//                 description: None,
-//                 steps: vec![RoswaalTestCommand::Step {
-//                     label: "Step 1".to_string(),
-//                     name: "Step 1".to_string(),
-//                     requirement: "Requirement 1".to_string(),
-//                 }],
-//                 error: None,
-//                 command_failure_ordinal: None,
-//                 unmerged_branch_name: Some(branch_name1.clone()),
-//                 last_run_date: None,
-//             },
-//             RoswaalStoredTest {
-//                 name: "Test".to_string(),
-//                 description: None,
-//                 steps: vec![RoswaalTestCommand::Step {
-//                     label: "Step 1".to_string(),
-//                     name: "Step A".to_string(),
-//                     requirement: "Requirement A".to_string(),
-//                 }],
-//                 error: None,
-//                 command_failure_ordinal: None,
-//                 unmerged_branch_name: Some(branch_name2.clone()),
-//                 last_run_date: None,
-//             },
-//         ];
-//         assert_eq!(stored_tests, expected_tests)
-//     }
+    #[tokio::test]
+    async fn test_store_and_retrieve_unmerged_tests_with_same_name_and_different_branches() {
+        let branch_name1 = RoswaalOwnedGitBranchName::new("test");
+        let branch_name2 = RoswaalOwnedGitBranchName::new("test");
+        let sqlite = RoswaalSqlite::in_memory().await.unwrap();
+        let mut transaction = sqlite.transaction().await.unwrap();
+        let mut tests = vec![RoswaalCompiledTest::new(
+            "Test".to_string(),
+            None,
+            vec![RoswaalCompiledTestCommand::Step {
+                label: "Step 1".to_string(),
+                name: "Step 1".to_string(),
+                requirement: "Requirement 1".to_string(),
+            }],
+        )];
+        transaction.save_tests(&tests, &branch_name1).await.unwrap();
+        tests = vec![RoswaalCompiledTest::new(
+            "Test".to_string(),
+            None,
+            vec![RoswaalCompiledTestCommand::Step {
+                label: "Step 1".to_string(),
+                name: "Step A".to_string(),
+                requirement: "Requirement A".to_string(),
+            }],
+        )];
+        transaction.save_tests(&tests, &branch_name2).await.unwrap();
+        let stored_tests = transaction
+            .tests_in_alphabetical_order(&RoswaalSearchTestsQuery::AllTests)
+            .await
+            .unwrap();
+        let expected_tests = vec![
+            RoswaalTest::new(
+                "Test".to_string(),
+                None,
+                vec![RoswaalCompiledTestCommand::Step {
+                    label: "Step 1".to_string(),
+                    name: "Step 1".to_string(),
+                    requirement: "Requirement 1".to_string(),
+                }],
+                None,
+                None,
+                None,
+                Some(branch_name1.clone()),
+                None,
+            ),
+            RoswaalTest::new(
+                "Test".to_string(),
+                None,
+                vec![RoswaalCompiledTestCommand::Step {
+                    label: "Step 1".to_string(),
+                    name: "Step A".to_string(),
+                    requirement: "Requirement A".to_string(),
+                }],
+                None,
+                None,
+                None,
+                Some(branch_name2.clone()),
+                None,
+            ),
+        ];
+        assert_eq!(stored_tests, expected_tests)
+    }
 
-//     #[tokio::test]
-//     async fn test_returns_empty_vector_when_no_inserted_tests() {
-//         let sqlite = RoswaalSqlite::in_memory().await.unwrap();
-//         let mut transaction = sqlite.transaction().await.unwrap();
-//         let tests = transaction
-//             .tests_in_alphabetical_order(&RoswaalSearchTestsQuery::AllTests)
-//             .await
-//             .unwrap();
-//         assert_eq!(tests, vec![])
-//     }
+    #[tokio::test]
+    async fn test_returns_empty_vector_when_no_inserted_tests() {
+        let sqlite = RoswaalSqlite::in_memory().await.unwrap();
+        let mut transaction = sqlite.transaction().await.unwrap();
+        let tests = transaction
+            .tests_in_alphabetical_order(&RoswaalSearchTestsQuery::AllTests)
+            .await
+            .unwrap();
+        assert_eq!(tests, vec![])
+    }
 
-//     #[tokio::test]
-//     async fn test_store_and_merge_tests_removes_branch_name_of_merged_branch() {
-//         let branch_name = RoswaalOwnedGitBranchName::new("test");
-//         let sqlite = RoswaalSqlite::in_memory().await.unwrap();
-//         let mut transaction = sqlite.transaction().await.unwrap();
-//         let mut tests = vec![RoswaalTest::new(
-//             "Test 1".to_string(),
-//             None,
-//             vec![
-//                 RoswaalTestCommand::Step {
-//                     label: "Step 1".to_string(),
-//                     name: "Step 1".to_string(),
-//                     requirement: "Requirement 1".to_string(),
-//                 },
-//                 RoswaalTestCommand::SetLocation {
-//                     location_name: RoswaalLocationName::from_str("test").unwrap(),
-//                 },
-//             ],
-//         )];
-//         transaction.save_tests(&tests, &branch_name).await.unwrap();
-//         let branch_name2 = RoswaalOwnedGitBranchName::new("test-2");
-//         tests = vec![RoswaalTest::new(
-//             "Test 2".to_string(),
-//             None,
-//             vec![RoswaalTestCommand::Step {
-//                 label: "Step 1".to_string(),
-//                 name: "Step A".to_string(),
-//                 requirement: "Requirement A".to_string(),
-//             }],
-//         )];
-//         transaction.save_tests(&tests, &branch_name2).await.unwrap();
-//         transaction
-//             .merge_unmerged_tests(&branch_name)
-//             .await
-//             .unwrap();
-//         let stored_tests_branch_names = transaction
-//             .tests_in_alphabetical_order(&RoswaalSearchTestsQuery::AllTests)
-//             .await
-//             .unwrap()
-//             .iter()
-//             .map(|t| t.unmerged_branch_name.clone())
-//             .collect::<Vec<Option<RoswaalOwnedGitBranchName>>>();
-//         assert_eq!(stored_tests_branch_names, vec![None, Some(branch_name2)])
-//     }
+    #[tokio::test]
+    async fn test_store_and_merge_tests_removes_branch_name_of_merged_branch() {
+        let branch_name = RoswaalOwnedGitBranchName::new("test");
+        let sqlite = RoswaalSqlite::in_memory().await.unwrap();
+        let mut transaction = sqlite.transaction().await.unwrap();
+        let mut tests = vec![RoswaalCompiledTest::mock1("Test")];
+        transaction.save_tests(&tests, &branch_name).await.unwrap();
+        let branch_name2 = RoswaalOwnedGitBranchName::new("test-2");
+        tests = vec![RoswaalCompiledTest::mock2("Test 2")];
+        transaction.save_tests(&tests, &branch_name2).await.unwrap();
+        transaction
+            .merge_unmerged_tests(&branch_name)
+            .await
+            .unwrap();
+        let stored_tests = transaction
+            .tests_in_alphabetical_order(&RoswaalSearchTestsQuery::AllTests)
+            .await
+            .unwrap();
+        let stored_tests_branch_names = stored_tests
+            .iter()
+            .map(|t| t.unmerged_branch_name().clone())
+            .collect::<Vec<Option<&RoswaalOwnedGitBranchName>>>();
+        assert_eq!(stored_tests_branch_names, vec![None, Some(&branch_name2)])
+    }
 
-//     #[tokio::test]
-//     async fn test_store_and_merge_tests_with_same_name_overwrites_previous_merged() {
-//         let branch_name = RoswaalOwnedGitBranchName::new("test");
-//         let sqlite = RoswaalSqlite::in_memory().await.unwrap();
-//         let mut transaction = sqlite.transaction().await.unwrap();
-//         let mut tests = vec![RoswaalTest::new(
-//             "Test".to_string(),
-//             None,
-//             vec![
-//                 RoswaalTestCommand::Step {
-//                     label: "Step 1".to_string(),
-//                     name: "Step 1".to_string(),
-//                     requirement: "Requirement 1".to_string(),
-//                 },
-//                 RoswaalTestCommand::SetLocation {
-//                     location_name: RoswaalLocationName::from_str("test").unwrap(),
-//                 },
-//             ],
-//         )];
-//         transaction.save_tests(&tests, &branch_name).await.unwrap();
-//         transaction
-//             .merge_unmerged_tests(&branch_name)
-//             .await
-//             .unwrap();
-//         let branch_name2 = RoswaalOwnedGitBranchName::new("test-2");
-//         tests = vec![RoswaalTest::new(
-//             "Test".to_string(),
-//             None,
-//             vec![RoswaalTestCommand::Step {
-//                 label: "Step 1".to_string(),
-//                 name: "Step A".to_string(),
-//                 requirement: "Requirement A".to_string(),
-//             }],
-//         )];
-//         transaction.save_tests(&tests, &branch_name2).await.unwrap();
-//         transaction
-//             .merge_unmerged_tests(&branch_name2)
-//             .await
-//             .unwrap();
-//         let stored_tests = transaction
-//             .tests_in_alphabetical_order(&RoswaalSearchTestsQuery::AllTests)
-//             .await
-//             .unwrap();
-//         let expected_tests = vec![RoswaalStoredTest {
-//             name: "Test".to_string(),
-//             description: None,
-//             steps: vec![RoswaalTestCommand::Step {
-//                 label: "Step 1".to_string(),
-//                 name: "Step A".to_string(),
-//                 requirement: "Requirement A".to_string(),
-//             }],
-//             error: None,
-//             unmerged_branch_name: None,
-//             command_failure_ordinal: None,
-//             last_run_date: None,
-//         }];
-//         assert_eq!(stored_tests, expected_tests)
-//     }
+    #[tokio::test]
+    async fn test_store_and_merge_tests_with_same_name_overwrites_previous_merged() {
+        let branch_name = RoswaalOwnedGitBranchName::new("test");
+        let sqlite = RoswaalSqlite::in_memory().await.unwrap();
+        let mut transaction = sqlite.transaction().await.unwrap();
+        let mut tests = vec![RoswaalCompiledTest::mock1("Test")];
+        transaction.save_tests(&tests, &branch_name).await.unwrap();
+        transaction
+            .merge_unmerged_tests(&branch_name)
+            .await
+            .unwrap();
+        let branch_name2 = RoswaalOwnedGitBranchName::new("test-2");
+        tests = vec![RoswaalCompiledTest::new(
+            "Test".to_string(),
+            None,
+            vec![RoswaalCompiledTestCommand::Step {
+                label: "Step 1".to_string(),
+                name: "Step A".to_string(),
+                requirement: "Requirement A".to_string(),
+            }],
+        )];
+        transaction.save_tests(&tests, &branch_name2).await.unwrap();
+        transaction
+            .merge_unmerged_tests(&branch_name2)
+            .await
+            .unwrap();
+        let stored_tests = transaction
+            .tests_in_alphabetical_order(&RoswaalSearchTestsQuery::AllTests)
+            .await
+            .unwrap();
+        let expected_tests = vec![RoswaalTest::new(
+            "Test".to_string(),
+            None,
+            vec![RoswaalCompiledTestCommand::Step {
+                label: "Step 1".to_string(),
+                name: "Step A".to_string(),
+                requirement: "Requirement A".to_string(),
+            }],
+            None,
+            None,
+            None,
+            None,
+            None,
+        )];
+        assert_eq!(stored_tests, expected_tests)
+    }
 
-//     #[tokio::test]
-//     async fn query_partial_tests() {
-//         let branch_name = RoswaalOwnedGitBranchName::new("test");
-//         let sqlite = RoswaalSqlite::in_memory().await.unwrap();
-//         let mut transaction = sqlite.transaction().await.unwrap();
-//         let tests = vec![
-//             RoswaalTest::new(
-//                 "Dazai Is Insane".to_string(),
-//                 None,
-//                 vec![
-//                     RoswaalTestCommand::Step {
-//                         label: "Step 1".to_string(),
-//                         name: "Step 1".to_string(),
-//                         requirement: "Requirement 1".to_string(),
-//                     },
-//                     RoswaalTestCommand::SetLocation {
-//                         location_name: RoswaalLocationName::from_str("test").unwrap(),
-//                     },
-//                 ],
-//             ),
-//             RoswaalTest::new(
-//                 "Zanza The Divine".to_string(),
-//                 None,
-//                 vec![RoswaalTestCommand::Step {
-//                     label: "Step 1".to_string(),
-//                     name: "Step A".to_string(),
-//                     requirement: "Requirement A".to_string(),
-//                 }],
-//             ),
-//             RoswaalTest::new(
-//                 "L".to_string(),
-//                 None,
-//                 vec![RoswaalTestCommand::Step {
-//                     label: "Step 1".to_string(),
-//                     name: "Step B".to_string(),
-//                     requirement: "Requirement C".to_string(),
-//                 }],
-//             ),
-//         ];
-//         transaction.save_tests(&tests, &branch_name).await.unwrap();
-//         transaction
-//             .merge_unmerged_tests(&branch_name)
-//             .await
-//             .unwrap();
-//         let query_str = "\
-// Zanza The Divine
-// l
-// ";
-//         let stored_tests = transaction
-//             .tests_in_alphabetical_order(&RoswaalSearchTestsQuery::new(query_str))
-//             .await
-//             .unwrap();
-//         let expected_test_names = vec!["L", "Zanza The Divine"];
-//         assert_eq!(
-//             stored_tests.iter().map(|t| t.name()).collect::<Vec<&str>>(),
-//             expected_test_names
-//         )
-//     }
+    #[tokio::test]
+    async fn query_partial_tests() {
+        let branch_name = RoswaalOwnedGitBranchName::new("test");
+        let sqlite = RoswaalSqlite::in_memory().await.unwrap();
+        let mut transaction = sqlite.transaction().await.unwrap();
+        let tests = vec![
+            RoswaalCompiledTest::mock1("Dazai Is Insane"),
+            RoswaalCompiledTest::mock2("Zanza The Divine"),
+            RoswaalCompiledTest::mock2("L"),
+        ];
+        transaction.save_tests(&tests, &branch_name).await.unwrap();
+        transaction
+            .merge_unmerged_tests(&branch_name)
+            .await
+            .unwrap();
+        let query_str = "\
+Zanza The Divine
+l
+";
+        let stored_tests = transaction
+            .tests_in_alphabetical_order(&RoswaalSearchTestsQuery::new(query_str))
+            .await
+            .unwrap();
+        let expected_test_names = vec!["L", "Zanza The Divine"];
+        assert_eq!(
+            stored_tests.iter().map(|t| t.name()).collect::<Vec<&str>>(),
+            expected_test_names
+        )
+    }
 
-//     #[tokio::test]
-//     async fn stage_test_removals_does_not_remove_tests() {
-//         let mut branch_name = RoswaalOwnedGitBranchName::new("test");
-//         let sqlite = RoswaalSqlite::in_memory().await.unwrap();
-//         let mut transaction = sqlite.transaction().await.unwrap();
-//         let tests = vec![RoswaalTest::new(
-//             "Zanza The Divine".to_string(),
-//             None,
-//             vec![RoswaalTestCommand::Step {
-//                 label: "Step 1".to_string(),
-//                 name: "Step A".to_string(),
-//                 requirement: "Requirement A".to_string(),
-//             }],
-//         )];
-//         transaction.save_tests(&tests, &branch_name).await.unwrap();
-//         transaction
-//             .merge_unmerged_tests(&branch_name)
-//             .await
-//             .unwrap();
-//         let names_str = "Zanza The Divine";
-//         branch_name = RoswaalOwnedGitBranchName::new("stage");
-//         transaction
-//             .stage_test_removals(&RoswaalTestNamesString::new(names_str), &branch_name)
-//             .await
-//             .unwrap();
-//         let stored_tests = transaction
-//             .tests_in_alphabetical_order(&RoswaalSearchTestsQuery::new(names_str))
-//             .await
-//             .unwrap();
-//         let expected_test_names = vec!["Zanza The Divine"];
-//         assert_eq!(
-//             stored_tests.iter().map(|t| t.name()).collect::<Vec<&str>>(),
-//             expected_test_names
-//         )
-//     }
+    #[tokio::test]
+    async fn stage_test_removals_does_not_remove_tests() {
+        let mut branch_name = RoswaalOwnedGitBranchName::new("test");
+        let sqlite = RoswaalSqlite::in_memory().await.unwrap();
+        let mut transaction = sqlite.transaction().await.unwrap();
+        let tests = vec![RoswaalCompiledTest::mock2("Zanza The Divine")];
+        transaction.save_tests(&tests, &branch_name).await.unwrap();
+        transaction
+            .merge_unmerged_tests(&branch_name)
+            .await
+            .unwrap();
+        let names_str = "Zanza The Divine";
+        branch_name = RoswaalOwnedGitBranchName::new("stage");
+        transaction
+            .stage_test_removals(&RoswaalTestNamesString::new(names_str), &branch_name)
+            .await
+            .unwrap();
+        let stored_tests = transaction
+            .tests_in_alphabetical_order(&RoswaalSearchTestsQuery::new(names_str))
+            .await
+            .unwrap();
+        let expected_test_names = vec!["Zanza The Divine"];
+        assert_eq!(
+            stored_tests.iter().map(|t| t.name()).collect::<Vec<&str>>(),
+            expected_test_names
+        )
+    }
 
-//     #[tokio::test]
-//     async fn remove_merged_tests_only_removes_merged_tests() {
-//         let branch_name = RoswaalOwnedGitBranchName::new("test");
-//         let sqlite = RoswaalSqlite::in_memory().await.unwrap();
-//         let mut transaction = sqlite.transaction().await.unwrap();
-//         let mut tests = vec![
-//             RoswaalTest::new(
-//                 "Dazai Is Insane".to_string(),
-//                 None,
-//                 vec![
-//                     RoswaalTestCommand::Step {
-//                         label: "Step 1".to_string(),
-//                         name: "Step 1".to_string(),
-//                         requirement: "Requirement 1".to_string(),
-//                     },
-//                     RoswaalTestCommand::SetLocation {
-//                         location_name: RoswaalLocationName::from_str("test").unwrap(),
-//                     },
-//                 ],
-//             ),
-//             RoswaalTest::new(
-//                 "Zanza The Divine".to_string(),
-//                 None,
-//                 vec![RoswaalTestCommand::Step {
-//                     label: "Step 1".to_string(),
-//                     name: "Step A".to_string(),
-//                     requirement: "Requirement A".to_string(),
-//                 }],
-//             ),
-//         ];
-//         transaction.save_tests(&tests, &branch_name).await.unwrap();
-//         transaction
-//             .merge_unmerged_tests(&branch_name)
-//             .await
-//             .unwrap();
-//         let branch_name2 = RoswaalOwnedGitBranchName::new("test-2");
-//         tests = vec![RoswaalTest::new(
-//             "L".to_string(),
-//             None,
-//             vec![RoswaalTestCommand::Step {
-//                 label: "Step 1".to_string(),
-//                 name: "Step B".to_string(),
-//                 requirement: "Requirement C".to_string(),
-//             }],
-//         )];
-//         transaction.save_tests(&tests, &branch_name2).await.unwrap();
-//         let names_str = "\
-// Zanza The Divine
-// L
-// ";
-//         let stage_branch = RoswaalOwnedGitBranchName::new("stage");
-//         transaction
-//             .stage_test_removals(&RoswaalTestNamesString::new(names_str), &stage_branch)
-//             .await
-//             .unwrap();
-//         transaction
-//             .merge_test_removals(&stage_branch)
-//             .await
-//             .unwrap();
-//         let stored_tests = transaction
-//             .tests_in_alphabetical_order(&RoswaalSearchTestsQuery::new(names_str))
-//             .await
-//             .unwrap();
-//         let expected_test_names = vec!["L"];
-//         assert_eq!(
-//             stored_tests.iter().map(|t| t.name()).collect::<Vec<&str>>(),
-//             expected_test_names
-//         )
-//     }
+    #[tokio::test]
+    async fn remove_merged_tests_only_removes_merged_tests() {
+        let branch_name = RoswaalOwnedGitBranchName::new("test");
+        let sqlite = RoswaalSqlite::in_memory().await.unwrap();
+        let mut transaction = sqlite.transaction().await.unwrap();
+        let mut tests = vec![
+            RoswaalCompiledTest::mock1("Dazai Is Insane"),
+            RoswaalCompiledTest::mock2("Zanza The Divine"),
+        ];
+        transaction.save_tests(&tests, &branch_name).await.unwrap();
+        transaction
+            .merge_unmerged_tests(&branch_name)
+            .await
+            .unwrap();
+        let branch_name2 = RoswaalOwnedGitBranchName::new("test-2");
+        tests = vec![RoswaalCompiledTest::mock2("L")];
+        transaction.save_tests(&tests, &branch_name2).await.unwrap();
+        let names_str = "\
+Zanza The Divine
+L
+";
+        let stage_branch = RoswaalOwnedGitBranchName::new("stage");
+        transaction
+            .stage_test_removals(&RoswaalTestNamesString::new(names_str), &stage_branch)
+            .await
+            .unwrap();
+        transaction
+            .merge_test_removals(&stage_branch)
+            .await
+            .unwrap();
+        let stored_tests = transaction
+            .tests_in_alphabetical_order(&RoswaalSearchTestsQuery::new(names_str))
+            .await
+            .unwrap();
+        let expected_test_names = vec!["L"];
+        assert_eq!(
+            stored_tests.iter().map(|t| t.name()).collect::<Vec<&str>>(),
+            expected_test_names
+        )
+    }
 
-//     #[tokio::test]
-//     async fn close_add_branch_removes_unmerged_tests_on_branch() {
-//         let mut branch_name = RoswaalOwnedGitBranchName::new("test");
-//         let sqlite = RoswaalSqlite::in_memory().await.unwrap();
-//         let mut transaction = sqlite.transaction().await.unwrap();
-//         let mut tests = vec![RoswaalTest::new(
-//             "Zanza The Divine".to_string(),
-//             None,
-//             vec![RoswaalTestCommand::Step {
-//                 label: "Step 1".to_string(),
-//                 name: "Step A".to_string(),
-//                 requirement: "Requirement A".to_string(),
-//             }],
-//         )];
-//         transaction.save_tests(&tests, &branch_name).await.unwrap();
-//         tests = vec![RoswaalTest::new(
-//             "L".to_string(),
-//             None,
-//             vec![RoswaalTestCommand::Step {
-//                 label: "Step 1".to_string(),
-//                 name: "Step A".to_string(),
-//                 requirement: "Requirement A".to_string(),
-//             }],
-//         )];
-//         branch_name = RoswaalOwnedGitBranchName::new("test-2");
-//         transaction.save_tests(&tests, &branch_name).await.unwrap();
-//         transaction
-//             .close_add_tests_branch(&branch_name)
-//             .await
-//             .unwrap();
-//         let stored_tests = transaction
-//             .tests_in_alphabetical_order(&RoswaalSearchTestsQuery::AllTests)
-//             .await
-//             .unwrap();
-//         let expected_test_names = vec!["Zanza The Divine"];
-//         assert_eq!(
-//             stored_tests.iter().map(|t| t.name()).collect::<Vec<&str>>(),
-//             expected_test_names
-//         )
-//     }
+    #[tokio::test]
+    async fn close_add_branch_removes_unmerged_tests_on_branch() {
+        let mut branch_name = RoswaalOwnedGitBranchName::new("test");
+        let sqlite = RoswaalSqlite::in_memory().await.unwrap();
+        let mut transaction = sqlite.transaction().await.unwrap();
+        let mut tests = vec![RoswaalCompiledTest::mock1("Zanza The Divine")];
+        transaction.save_tests(&tests, &branch_name).await.unwrap();
+        tests = vec![RoswaalCompiledTest::mock1("L")];
+        branch_name = RoswaalOwnedGitBranchName::new("test-2");
+        transaction.save_tests(&tests, &branch_name).await.unwrap();
+        transaction
+            .close_add_tests_branch(&branch_name)
+            .await
+            .unwrap();
+        let stored_tests = transaction
+            .tests_in_alphabetical_order(&RoswaalSearchTestsQuery::AllTests)
+            .await
+            .unwrap();
+        let expected_test_names = vec!["Zanza The Divine"];
+        assert_eq!(
+            stored_tests.iter().map(|t| t.name()).collect::<Vec<&str>>(),
+            expected_test_names
+        )
+    }
 
-//     #[tokio::test]
-//     async fn close_remove_branch_removes_staged_test_removals() {
-//         let mut branch_name = RoswaalOwnedGitBranchName::new("test");
-//         let sqlite = RoswaalSqlite::in_memory().await.unwrap();
-//         let mut transaction = sqlite.transaction().await.unwrap();
-//         let mut tests = vec![RoswaalTest::new(
-//             "Zanza The Divine".to_string(),
-//             None,
-//             vec![RoswaalTestCommand::Step {
-//                 label: "Step 1".to_string(),
-//                 name: "Step A".to_string(),
-//                 requirement: "Requirement A".to_string(),
-//             }],
-//         )];
-//         transaction.save_tests(&tests, &branch_name).await.unwrap();
-//         transaction
-//             .merge_unmerged_tests(&branch_name)
-//             .await
-//             .unwrap();
-//         branch_name = RoswaalOwnedGitBranchName::new("removal");
-//         transaction
-//             .stage_test_removals(
-//                 &RoswaalTestNamesString::new("Zanza The Divine"),
-//                 &branch_name,
-//             )
-//             .await
-//             .unwrap();
-//         transaction
-//             .close_remove_tests_branch(&branch_name)
-//             .await
-//             .unwrap();
-//         tests = vec![RoswaalTest::new(
-//             "L".to_string(),
-//             None,
-//             vec![RoswaalTestCommand::Step {
-//                 label: "Step 1".to_string(),
-//                 name: "Step A".to_string(),
-//                 requirement: "Requirement A".to_string(),
-//             }],
-//         )];
-//         branch_name = RoswaalOwnedGitBranchName::new("test-2");
-//         transaction.save_tests(&tests, &branch_name).await.unwrap();
-//         transaction
-//             .close_add_tests_branch(&branch_name)
-//             .await
-//             .unwrap();
-//         let stored_tests = transaction
-//             .tests_in_alphabetical_order(&RoswaalSearchTestsQuery::AllTests)
-//             .await
-//             .unwrap();
-//         let expected_test_names = vec!["Zanza The Divine"];
-//         assert_eq!(
-//             stored_tests.iter().map(|t| t.name()).collect::<Vec<&str>>(),
-//             expected_test_names
-//         )
-//     }
+    #[tokio::test]
+    async fn close_remove_branch_removes_staged_test_removals() {
+        let mut branch_name = RoswaalOwnedGitBranchName::new("test");
+        let sqlite = RoswaalSqlite::in_memory().await.unwrap();
+        let mut transaction = sqlite.transaction().await.unwrap();
+        let mut tests = vec![RoswaalCompiledTest::mock1("Zanza The Divine")];
+        transaction.save_tests(&tests, &branch_name).await.unwrap();
+        transaction
+            .merge_unmerged_tests(&branch_name)
+            .await
+            .unwrap();
+        branch_name = RoswaalOwnedGitBranchName::new("removal");
+        transaction
+            .stage_test_removals(
+                &RoswaalTestNamesString::new("Zanza The Divine"),
+                &branch_name,
+            )
+            .await
+            .unwrap();
+        transaction
+            .close_remove_tests_branch(&branch_name)
+            .await
+            .unwrap();
+        tests = vec![RoswaalCompiledTest::mock1("L")];
+        branch_name = RoswaalOwnedGitBranchName::new("test-2");
+        transaction.save_tests(&tests, &branch_name).await.unwrap();
+        transaction
+            .close_add_tests_branch(&branch_name)
+            .await
+            .unwrap();
+        let stored_tests = transaction
+            .tests_in_alphabetical_order(&RoswaalSearchTestsQuery::AllTests)
+            .await
+            .unwrap();
+        let expected_test_names = vec!["Zanza The Divine"];
+        assert_eq!(
+            stored_tests.iter().map(|t| t.name()).collect::<Vec<&str>>(),
+            expected_test_names
+        )
+    }
 
-//     #[tokio::test]
-//     async fn saves_test_progress_for_merged_tests() {
-//         let branch_name = RoswaalOwnedGitBranchName::new("test");
-//         let sqlite = RoswaalSqlite::in_memory().await.unwrap();
-//         let mut transaction = sqlite.transaction().await.unwrap();
-//         let mut tests = vec![
-//             RoswaalTest::new(
-//                 "Dazai Is Insane".to_string(),
-//                 None,
-//                 vec![
-//                     RoswaalTestCommand::Step {
-//                         label: "Step 1".to_string(),
-//                         name: "Step 1".to_string(),
-//                         requirement: "Requirement 1".to_string(),
-//                     },
-//                     RoswaalTestCommand::SetLocation {
-//                         location_name: RoswaalLocationName::from_str("test").unwrap(),
-//                     },
-//                 ],
-//             ),
-//             RoswaalTest::new(
-//                 "Zanza The Divine".to_string(),
-//                 None,
-//                 vec![RoswaalTestCommand::Step {
-//                     label: "Step 1".to_string(),
-//                     name: "Step A".to_string(),
-//                     requirement: "Requirement A".to_string(),
-//                 }],
-//             ),
-//         ];
-//         transaction.save_tests(&tests, &branch_name).await.unwrap();
-//         transaction
-//             .merge_unmerged_tests(&branch_name)
-//             .await
-//             .unwrap();
-//         let branch_name2 = RoswaalOwnedGitBranchName::new("test-2");
-//         tests = vec![RoswaalTest::new(
-//             "Zanza The Divine".to_string(),
-//             None,
-//             vec![RoswaalTestCommand::Step {
-//                 label: "Step 1".to_string(),
-//                 name: "Step B".to_string(),
-//                 requirement: "Requirement C".to_string(),
-//             }],
-//         )];
-//         transaction.save_tests(&tests, &branch_name2).await.unwrap();
+    #[tokio::test]
+    async fn saves_test_progress_for_merged_tests() {
+        let branch_name = RoswaalOwnedGitBranchName::new("test");
+        let sqlite = RoswaalSqlite::in_memory().await.unwrap();
+        let mut transaction = sqlite.transaction().await.unwrap();
+        let mut tests = vec![
+            RoswaalCompiledTest::mock1("Dazai Is Insane"),
+            RoswaalCompiledTest::mock2("Zanza The Divine"),
+        ];
+        transaction.save_tests(&tests, &branch_name).await.unwrap();
+        transaction
+            .merge_unmerged_tests(&branch_name)
+            .await
+            .unwrap();
+        let branch_name2 = RoswaalOwnedGitBranchName::new("test-2");
+        tests = vec![RoswaalCompiledTest::mock1("Zanza the Divine")];
+        transaction.save_tests(&tests, &branch_name2).await.unwrap();
 
-//         let progress = vec![
-//             RoswaalTestProgressUpload::new(
-//                 "Zanza The Divine".to_string(),
-//                 Some(RoswaalTestCommandOrdinal::new(0)),
-//                 Some(RoswaalTestProgressUploadErrorDescription::new(
-//                     "Device died".to_string(),
-//                     "Some stack trace...".to_string(),
-//                 )),
-//             ),
-//             RoswaalTestProgressUpload::new("Dazai Is Insane".to_string(), None, None),
-//         ];
-//         transaction.save_test_progess(&progress).await.unwrap();
-//         let stored_tests = transaction
-//             .tests_in_alphabetical_order(&RoswaalSearchTestsQuery::AllTests)
-//             .await
-//             .unwrap();
-//         assert_eq!(stored_tests[0].command_failure_ordinal, None);
-//         assert_eq!(
-//             stored_tests[1].command_failure_ordinal,
-//             Some(RoswaalTestCommandOrdinal::new(0))
-//         );
-//         assert_eq!(stored_tests[2].command_failure_ordinal, None);
-//         assert!(stored_tests[0].error.is_none());
-//         assert!(stored_tests[1].error.is_some());
-//         assert!(stored_tests[2].error.is_none());
-//         assert!(stored_tests[0].last_run_date.is_some());
-//         assert!(stored_tests[1].last_run_date.is_some());
-//         assert!(stored_tests[2].last_run_date.is_none());
-//     }
-// }
+        let progress = vec![
+            RoswaalTestProgressUpload::new(
+                "Zanza The Divine".to_string(),
+                Some(RoswaalTestCommandOrdinal::new(0)),
+                Some(RoswaalTestProgressUploadErrorDescription::new(
+                    "Device died".to_string(),
+                    "Some stack trace...".to_string(),
+                )),
+            ),
+            RoswaalTestProgressUpload::new("Dazai Is Insane".to_string(), None, None),
+        ];
+        transaction.save_test_progess(&progress).await.unwrap();
+        let stored_tests = transaction
+            .tests_in_alphabetical_order(&RoswaalSearchTestsQuery::AllTests)
+            .await
+            .unwrap();
+        assert_eq!(stored_tests[0].command_failure_ordinal(), None);
+        assert_eq!(
+            stored_tests[1].command_failure_ordinal(),
+            Some(RoswaalTestCommandOrdinal::new(0))
+        );
+        assert_eq!(stored_tests[2].command_failure_ordinal(), None);
+        assert_eq!(
+            stored_tests[0].progress_status(),
+            RoswaalTestProgressStatus::Passed
+        );
+        assert_eq!(
+            stored_tests[1].progress_status(),
+            RoswaalTestProgressStatus::Failed
+        );
+        assert_eq!(
+            stored_tests[2].progress_status(),
+            RoswaalTestProgressStatus::Idle
+        );
+        assert!(stored_tests[0].last_run_date().is_some());
+        assert!(stored_tests[1].last_run_date().is_some());
+        assert!(stored_tests[2].last_run_date().is_none());
+    }
+
+    impl RoswaalCompiledTest {
+        fn mock1(name: &str) -> Self {
+            Self::new(
+                name.to_string(),
+                None,
+                vec![
+                    RoswaalCompiledTestCommand::Step {
+                        label: "Step 1".to_string(),
+                        name: "Step 1".to_string(),
+                        requirement: "Requirement 1".to_string(),
+                    },
+                    RoswaalCompiledTestCommand::SetLocation {
+                        location_name: RoswaalLocationName::from_str("test").unwrap(),
+                    },
+                ],
+            )
+        }
+
+        fn mock2(name: &str) -> Self {
+            Self::new(
+                name.to_string(),
+                None,
+                vec![RoswaalCompiledTestCommand::Step {
+                    label: "Step 1".to_string(),
+                    name: "Step A".to_string(),
+                    requirement: "Requirement A".to_string(),
+                }],
+            )
+        }
+    }
+}

@@ -96,6 +96,16 @@ impl RoswaalTest {
         self.unmerged_branch_name.as_ref()
     }
 
+    pub fn progress_status(&self) -> RoswaalTestProgressStatus {
+        if self.last_run_date().is_none() {
+            RoswaalTestProgressStatus::Idle
+        } else if self.command_failure_ordinal().is_some() {
+            RoswaalTestProgressStatus::Failed
+        } else {
+            RoswaalTestProgressStatus::Passed
+        }
+    }
+
     pub(super) fn push_compiled_command(&mut self, command: RoswaalCompiledTestCommand) {
         self.commands.push(command)
     }
@@ -123,6 +133,8 @@ pub enum RoswaalTestCommandStatus {
     Failed,
     Idle,
 }
+
+pub type RoswaalTestProgressStatus = RoswaalTestCommandStatus;
 
 #[cfg(test)]
 mod tests {
