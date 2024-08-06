@@ -3,15 +3,23 @@ use std::borrow::Borrow;
 use crate::{
     language::test::RoswaalCompiledTestCommand,
     operations::search_tests::SearchTestsStatus,
-    tests_data::test::{RoswaalTest, RoswaalTestCommand, RoswaalTestCommandStatus},
+    tests_data::{
+        ordinal::RoswaalTestCommandOrdinal,
+        test::{
+            RoswaalTest, RoswaalTestCommand, RoswaalTestCommandStatus, RoswaalTestProgressStatus,
+        },
+    },
 };
 
-use super::ui_lib::{
-    block_kit_views::{SlackDivider, SlackHeader, SlackSection},
-    empty_view::EmptySlackView,
-    for_each_view::ForEachView,
-    if_view::If,
-    slack_view::SlackView,
+use super::{
+    branch_name_view::OptionalBranchNameView,
+    ui_lib::{
+        block_kit_views::{SlackDivider, SlackHeader, SlackSection},
+        for_each_view::ForEachView,
+        if_let_view::IfLet,
+        if_view::If,
+        slack_view::SlackView,
+    },
 };
 
 pub struct SearchTestsView {
@@ -33,18 +41,58 @@ impl SlackView for SearchTestsView {
 impl SearchTestsView {
     fn status_view(&self) -> impl SlackView {
         match self.status.borrow() {
-            SearchTestsStatus::Success(tests) => ForEachView::new(
+            SearchTestsStatus::Success(tests) => ProgressStatusCountView {
+                count: count_progress_status(tests, RoswaalTestProgressStatus::Passed),
+                status: RoswaalTestProgressStatus::Passed,
+            }
+            .flat_chain_block(ProgressStatusCountView {
+                count: count_progress_status(tests, RoswaalTestProgressStatus::Failed),
+                status: RoswaalTestProgressStatus::Failed,
+            })
+            .flat_chain_block(ProgressStatusCountView {
+                count: count_progress_status(tests, RoswaalTestProgressStatus::Idle),
+                status: RoswaalTestProgressStatus::Idle,
+            })
+            .flat_chain_block(SlackDivider)
+            .flat_chain_block(ForEachView::new(
                 tests.iter().map(|t| t.clone()).enumerate(),
                 |(index, test)| {
                     TestView { test: test.clone() }
                         .flat_chain_block(If::is_true(*index < tests.len() - 1, || SlackDivider))
                 },
-            )
+            ))
             .erase_to_any_view(),
             SearchTestsStatus::NoTests => {
                 SlackSection::from_markdown("🔴 No tests were fooooooound.").erase_to_any_view()
             }
         }
+    }
+}
+
+fn count_progress_status(tests: &Vec<RoswaalTest>, status: RoswaalTestProgressStatus) -> usize {
+    tests
+        .iter()
+        .filter(|t| t.progress_status() == status)
+        .count()
+}
+
+struct ProgressStatusCountView {
+    count: usize,
+    status: RoswaalTestProgressStatus,
+}
+
+impl SlackView for ProgressStatusCountView {
+    fn slack_body(&self) -> impl SlackView {
+        If::is_true(self.count > 0, || {
+            let word = if self.count == 1 { "Test" } else { "Tests" };
+            SlackSection::from_markdown(&format!(
+                "{} *{} {} {}*",
+                self.status.emoji(),
+                self.count,
+                word,
+                self.status.text()
+            ))
+        })
     }
 }
 
@@ -54,50 +102,56 @@ struct TestView {
 
 impl SlackView for TestView {
     fn slack_body(&self) -> impl SlackView {
-        // SlackSection::from_markdown(&format!("📝 *{}*", self.test.name()))
-        //     .flat_chain_block(IfLet::some(self.test.description(), |text| {
-        //         SlackSection::from_plaintext(text)
-        //     }))
-        //     .flat_chain_block(match self.test.last_run_date() {
-        //         Some(date) => {
-        //             let formatted_date = date.format("%Y-%m-%d %H:%M:%S").to_string();
-        //             let message = format!("_Last Ran: {}_", formatted_date);
-        //             SlackSection::from_markdown(&message)
-        //         }
-        //         None => SlackSection::from_markdown("_This test has never been run._"),
-        //     })
-        //     .flat_chain_block(SlackSection::from_markdown(&format!(
-        //         "{} *Before Launch*",
-        //         self.test.
-        //     )))
-        //     .flat_chain_block(ForEachView::new(
-        //         self.test.commands().iter().map(|e| e.clone()),
-        //         |stored_command| CommandView {
-        //             stored_command: stored_command.clone(),
-        //         },
-        //     ))
-        //     .flat_chain_block(IfLet::some(self.test.error_message(), |message| {
-        //         let message = format!("⚠️ *Error Message*\n{}", message);
-        //         SlackSection::from_markdown(&message)
-        //     }))
-        //     .flat_chain_block(IfLet::some(self.test.error_stack_trace(), |stack_trace| {
-        //         let stack_trace = format!("⚠️ *Stack Trace*\n{}", stack_trace);
-        //         SlackSection::from_markdown(&stack_trace)
-        //     }))
-        //     .flat_chain_block(OptionalBranchNameView::new(
-        //         self.test.unmerged_branch_name(),
-        //     ))
-        EmptySlackView
+        SlackSection::from_markdown(&format!(
+            "📝 *{}* ({} {})",
+            self.test.name(),
+            self.test.progress_status().emoji(),
+            self.test.progress_status().text()
+        ))
+        .flat_chain_block(IfLet::some(self.test.description(), |text| {
+            SlackSection::from_plaintext(text)
+        }))
+        .flat_chain_block(match self.test.last_run_date() {
+            Some(date) => {
+                let formatted_date = date.format("%Y-%m-%d %H:%M:%S").to_string();
+                let message = format!("_Last Ran: {}_", formatted_date);
+                SlackSection::from_markdown(&message)
+            }
+            None => SlackSection::from_markdown("_This test has never been run._"),
+        })
+        .flat_chain_block(SlackSection::from_markdown(&format!(
+            "{} *Before Launch*",
+            self.test
+                .command_status(RoswaalTestCommandOrdinal::for_before_launch())
+                .emoji()
+        )))
+        .flat_chain_block(ForEachView::new(
+            self.test.commands().iter().map(|e| e.clone()),
+            |stored_command| CommandView {
+                command: stored_command.clone(),
+            },
+        ))
+        .flat_chain_block(IfLet::some(self.test.error_message(), |message| {
+            let message = format!("⚠️ *Error Message*\n{}", message);
+            SlackSection::from_markdown(&message)
+        }))
+        .flat_chain_block(IfLet::some(self.test.error_stack_trace(), |stack_trace| {
+            let stack_trace = format!("⚠️ *Stack Trace*\n{}", stack_trace);
+            SlackSection::from_markdown(&stack_trace)
+        }))
+        .flat_chain_block(OptionalBranchNameView::new(
+            self.test.unmerged_branch_name(),
+        ))
     }
 }
 
 struct CommandView {
-    stored_command: RoswaalTestCommand,
+    command: RoswaalTestCommand,
 }
 
 impl SlackView for CommandView {
     fn slack_body(&self) -> impl SlackView {
-        match self.stored_command.command() {
+        match self.command.compiled_command() {
             RoswaalCompiledTestCommand::Step {
                 label,
                 name,
@@ -105,7 +159,7 @@ impl SlackView for CommandView {
             } => {
                 let body = format!(
                     "{} *{}:* {} _({})_\n",
-                    self.status_emoji(),
+                    self.command.status().emoji(),
                     label,
                     name,
                     requirement
@@ -115,7 +169,7 @@ impl SlackView for CommandView {
             RoswaalCompiledTestCommand::SetLocation { location_name } => {
                 let body = format!(
                     "{} *Set Location:* {}\n",
-                    self.status_emoji(),
+                    self.command.status().emoji(),
                     location_name.raw_name()
                 );
                 SlackSection::from_markdown(&body)
@@ -124,18 +178,20 @@ impl SlackView for CommandView {
     }
 }
 
-impl CommandView {
-    fn status_emoji(&self) -> &'static str {
-        self.stored_command.status().status_emoji()
-    }
-}
-
 impl RoswaalTestCommandStatus {
-    fn status_emoji(&self) -> &'static str {
+    fn emoji(&self) -> &'static str {
         match self {
             Self::Passed => "✅",
             Self::Failed => "🔴",
             Self::Idle => "🔘",
+        }
+    }
+
+    fn text(&self) -> &'static str {
+        match self {
+            RoswaalTestCommandStatus::Passed => "Passing",
+            RoswaalTestCommandStatus::Failed => "Failing",
+            RoswaalTestCommandStatus::Idle => "Idle",
         }
     }
 }

@@ -122,7 +122,7 @@ impl RoswaalTestCommand {
         self.status
     }
 
-    pub fn command(&self) -> &RoswaalCompiledTestCommand {
+    pub fn compiled_command(&self) -> &RoswaalCompiledTestCommand {
         &self.command
     }
 }
