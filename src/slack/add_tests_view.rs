@@ -9,7 +9,7 @@ use crate::{
         test::RoswaalTest,
     },
     location::name::RoswaalLocationNameParsingError,
-    operations::add_tests::{AddTestsStatus, RoswaalTestCompilationResults},
+    operations::add_tests::AddTestsStatus,
 };
 
 use super::{
@@ -26,35 +26,39 @@ use super::{
     warn_undeleted_branch_view::WarnUndeletedBranchView,
 };
 
-pub struct AddTestsView {
-    status: AddTestsStatus,
+pub struct AddTestsView<'r> {
+    status: AddTestsStatus<'r>,
 }
 
-impl AddTestsView {
-    pub fn new(status: AddTestsStatus) -> Self {
+impl<'r> AddTestsView<'r> {
+    pub fn new(status: AddTestsStatus<'r>) -> Self {
         Self { status }
     }
 }
 
-impl SlackView for AddTestsView {
+impl<'r> SlackView for AddTestsView<'r> {
     fn slack_body(&self) -> impl SlackView {
         SlackHeader::new("Add Tests").flat_chain_block(self.status_view())
     }
 }
 
-impl AddTestsView {
+impl<'r> AddTestsView<'r> {
     fn status_view(&self) -> impl SlackView {
         match self.status.borrow() {
-            AddTestsStatus::Success { results, should_warn_undeleted_branch } => {
+            AddTestsStatus::Success {
+                results,
+                should_warn_undeleted_branch,
+            } => {
                 If::is_true(
                     results.has_compiling_tests(),
                     || self.compiling_tests_view(&results.tests())
                 )
                 .flat_chain_block(
-                    If::is_true(
-                        results.has_non_compiling_tests(),
-                        || self.non_compiling_tests_view(&results.errors())
-                    )
+                    // If::is_true(
+                    //     results.has_non_compiling_tests(),
+                    //     || self.non_compiling_tests_view(&results.errors())
+                    // )
+                    EmptySlackView
                 )
                 .flat_chain_block(
                     If::is_true(
@@ -78,22 +82,21 @@ impl AddTestsView {
                     )
                 )
                 .erase_to_any_view()
-            },
+            }
             AddTestsStatus::NoTestsFound => {
-                SlackSection::from_markdown("🔴 No tests were fooooooound.")
-                    .erase_to_any_view()
-            },
+                SlackSection::from_markdown("🔴 No tests were fooooooound.").erase_to_any_view()
+            }
             AddTestsStatus::MergeConflict => {
                 MergeConflictView::new(MATTHEW_SLACK_USER_ID).erase_to_any_view()
-            },
+            }
             AddTestsStatus::FailedToOpenPullRequest => {
                 FailedToOpenPullRequestView.erase_to_any_view()
-            },
+            }
         }
     }
 }
 
-impl AddTestsView {
+impl<'r> AddTestsView<'r> {
     fn compiling_tests_view(&self, tests: &Vec<RoswaalTest>) -> impl SlackView {
         let mut body = "✅ *The following tests were compiled succeeeeeeeeessfully!*\n".to_string();
         for test in tests {
@@ -235,8 +238,8 @@ impl<'v> SlackView for CompilationErrorView<'v> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        language::ast::RoswaalTestSyntax,
-        operations::add_tests::{AddTestsStatus, RoswaalTestCompilationResults},
+        language::{ast::RoswaalTestSyntax, compilation_results::RoswaalTestCompilationResults},
+        operations::add_tests::AddTestsStatus,
         slack::ui_lib::test_support::{assert_slack_view_snapshot, SnapshotMode},
     };
 
