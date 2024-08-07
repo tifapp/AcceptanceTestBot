@@ -168,7 +168,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn non_long_running_command_does_uses_view_as_direct_response() {
+    async fn non_long_running_command_uses_view_as_direct_response() {
         let messenger = Arc::new(TestSlackMessager::new());
         let blocks = handle_slack_request(
             Arc::new(SuccessfulHandler),
@@ -176,7 +176,7 @@ mod tests {
             messenger.clone(),
         )
         .await;
-        assert_eq!(blocks, render_slack_view(&TEST_VIEW));
+        assert_eq!(blocks, render_slack_view(&MessageView::new(&TEST_VIEW)));
         assert!(messenger.messages.lock().await.is_empty())
     }
 

@@ -69,8 +69,6 @@ impl<T> EditGitRepositoryStatus<T> {
 
 #[cfg(test)]
 mod tests {
-    use std::{error::Error, fmt::Display};
-
     use tokio::fs::{try_exists, File};
 
     use super::*;
@@ -121,20 +119,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_returns_pr_open_failed_when_pr_fails_to_open() {
-        let new_branch_name = RoswaalOwnedGitBranchName::new("test-edit");
-        let status = EditGitRepositoryStatus::from_editing_new_branch(
-            &new_branch_name,
-            RoswaalGitRepository::noop()
-                .await
-                .unwrap()
-                .transaction()
-                .await,
-            &TestGithubPullRequestOpen::new(true),
-            async { Ok((GithubPullRequest::test(&new_branch_name), ())) },
-        )
+        with_clean_test_repo_access(async {
+            let new_branch_name = RoswaalOwnedGitBranchName::new("test-edit");
+            let status = EditGitRepositoryStatus::from_editing_new_branch(
+                &new_branch_name,
+                RoswaalGitRepository::noop().await?.transaction().await,
+                &TestGithubPullRequestOpen::new(true),
+                async { Ok((GithubPullRequest::test(&new_branch_name), ())) },
+            )
+            .await?;
+            assert_eq!(status, EditGitRepositoryStatus::FailedToOpenPullRequest);
+            Ok(())
+        })
         .await
-        .unwrap();
-        assert_eq!(status, EditGitRepositoryStatus::FailedToOpenPullRequest);
+        .unwrap()
     }
 
     #[tokio::test]

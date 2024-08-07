@@ -210,7 +210,8 @@ mod tests {
     use tokio::{fs::remove_file, time::sleep};
 
     use crate::{
-        git::branch_name::RoswaalOwnedGitBranchName, http::password::DEV_RAW_ENDPOINT_PASSWORD,
+        git::{branch_name::RoswaalOwnedGitBranchName, test_support::with_clean_test_repo_access},
+        http::password::DEV_RAW_ENDPOINT_PASSWORD,
         with_transaction,
     };
 
@@ -221,39 +222,44 @@ mod tests {
 
     #[tokio::test]
     async fn add_and_merge_report_progress_tests() {
-        remove_file("./roswaal-dev.sqlite").await.unwrap();
-        let app = test_app().await;
-        app.add_tests(
-            "\
-```
-New Test: Some Test
-Step A: This is a test
-Requirement A: Make sure that it gets added correctly
-Step B: Merging test
-Requirement B: Merge the test into the tool
-Step C: Progress Update
-Requirement C: Update the progress on the test
-```
-",
-        )
-        .await;
-        let branch_name = app.most_recent_branch_name().await.unwrap();
-        app.merge_test(&branch_name).await;
-        let resp = app
-            .upload_progress(&json!({
-                "results": [
-                    {
-                        "testName": "Some Test",
-                        "commandFailureOrdinal": 1,
-                        "error": {
-                            "message": "I died",
-                            "stackTrace": "Figure it out..."
-                        }
-                    }
-                ]
-            }))
+        with_clean_test_repo_access(async {
+            remove_file("./roswaal-dev.sqlite").await?;
+            let app = test_app().await;
+            app.add_tests(
+                "\
+    ```
+    New Test: Some Test
+    Step A: This is a test
+    Requirement A: Make sure that it gets added correctly
+    Step B: Merging test
+    Requirement B: Merge the test into the tool
+    Step C: Progress Update
+    Requirement C: Update the progress on the test
+    ```
+    ",
+            )
             .await;
-        resp.assert_status(StatusCode::NO_CONTENT)
+            let branch_name = app.most_recent_branch_name().await?;
+            app.merge_test(&branch_name).await;
+            let resp = app
+                .upload_progress(&json!({
+                    "results": [
+                        {
+                            "testName": "Some Test",
+                            "commandFailureOrdinal": 1,
+                            "error": {
+                                "message": "I died",
+                                "stackTrace": "Figure it out..."
+                            }
+                        }
+                    ]
+                }))
+                .await;
+            resp.assert_status(StatusCode::NO_CONTENT);
+            Ok(())
+        })
+        .await
+        .unwrap()
     }
 
     struct TestApp {
