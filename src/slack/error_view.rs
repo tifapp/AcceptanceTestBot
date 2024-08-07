@@ -1,9 +1,10 @@
-use std::backtrace::Backtrace;
+use std::{backtrace::Backtrace, cmp::min};
 
 use anyhow::Error;
 
 use super::ui_lib::{
-    block_kit_views::{SlackHeader, SlackSection},
+    block_kit_views::{SlackDivider, SlackHeader, SlackSection},
+    if_view::If,
     slack_view::SlackView,
 };
 
@@ -17,8 +18,12 @@ impl ErrorView {
     }
 }
 
+const SECTION_MAX_CHARACTERS: usize = 3000;
+
 impl SlackView for ErrorView {
     fn slack_body(&self) -> impl SlackView {
+        let backtrace_string = self.error.backtrace().to_string();
+        let len = min(backtrace_string.len(), SECTION_MAX_CHARACTERS);
         SlackHeader::new("An Error Occurred")
             .flat_chain_block(SlackSection::from_markdown("🔴 *Error*"))
             .flat_chain_block(
@@ -26,9 +31,16 @@ impl SlackView for ErrorView {
             )
             .flat_chain_block(SlackSection::from_markdown("⚠️ *Stack Trace*"))
             .flat_chain_block(
-                SlackSection::from_plaintext(&self.error.backtrace().to_string())
-                    .emoji_enabled(false),
+                SlackSection::from_plaintext(&backtrace_string[0..len]).emoji_enabled(false),
             )
+            .flat_chain_block(If::is_true(
+                backtrace_string.len() > SECTION_MAX_CHARACTERS,
+                || {
+                    SlackDivider.flat_chain_block(SlackSection::from_markdown(
+                        "🟡 _Stack Trace truncated due to 3000 character limit..._",
+                    ))
+                },
+            ))
     }
 }
 

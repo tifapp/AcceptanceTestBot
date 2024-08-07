@@ -604,8 +604,8 @@ mod tests {
             let (repo, metadata) = repo_with_test_metadata().await?;
             let transaction = repo.transaction().await;
 
-            let b1 = RoswaalOwnedGitBranchName::new("test");
-            let b2 = RoswaalOwnedGitBranchName::new("test2");
+            let b1 = RoswaalOwnedGitBranchName::new("test-93838");
+            let b2 = RoswaalOwnedGitBranchName::new("test2-227297");
 
             transaction.checkout_new_branch(&b1).await?;
 
