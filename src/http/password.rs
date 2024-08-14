@@ -41,7 +41,6 @@ impl EndpointPassword {
 
 impl EndpointPassword {
     fn verify(&self, raw_password: &str) -> bool {
-        println!("Password: {} Hash: {}", raw_password, self.password);
         verify(raw_password, &self.password).unwrap_or(false)
     }
 }

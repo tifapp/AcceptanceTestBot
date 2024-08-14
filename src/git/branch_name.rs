@@ -1,12 +1,17 @@
 use nanoid::nanoid;
-use serde::{Deserialize, Serialize};
+use once_cell::sync::Lazy;
+use regex::{Regex, RegexBuilder};
+use serde::{
+    de::{Unexpected, Visitor},
+    Deserialize, Serialize,
+};
 use sqlx::{sqlite::SqliteTypeInfo, Decode, Encode, Sqlite, Type};
 
 /// A type for a git branch name that is created by roswaal.
 ///
 /// Each branch name contains a 10 character nano id as its suffix in order to make each instance
 /// unique. This uniqueness ensures that duplicate branch names do not clash with each other.
-#[derive(Debug, PartialEq, Eq, Clone, Decode, Encode, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Decode, Encode, Serialize)]
 pub struct RoswaalOwnedGitBranchName(String);
 
 impl RoswaalOwnedGitBranchName {
@@ -72,6 +77,42 @@ impl Type<Sqlite> for RoswaalOwnedGitBranchName {
     }
 }
 
+impl<'d> Deserialize<'d> for RoswaalOwnedGitBranchName {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'d>,
+    {
+        deserializer.deserialize_str(RoswaalGitBranchNameVisitor)
+    }
+}
+
+struct RoswaalGitBranchNameVisitor;
+
+static BRANCH_NAME_REGEX: Lazy<Regex> = Lazy::new(|| {
+    RegexBuilder::new(r"^roswaal-.*-.{10}$")
+        .build()
+        .expect("Failed to compile location name regex.")
+});
+
+impl<'de> Visitor<'de> for RoswaalGitBranchNameVisitor {
+    type Value = RoswaalOwnedGitBranchName;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("The format roswaal-<name>-<nano_id>.")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        if BRANCH_NAME_REGEX.is_match(v) {
+            Ok(RoswaalOwnedGitBranchName(v.to_string()))
+        } else {
+            Err(serde::de::Error::invalid_value(Unexpected::Str(v), &self))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::git::branch_name::RoswaalOwnedBranchKind;
@@ -112,5 +153,25 @@ mod tests {
         for (name, kind) in names_to_kind {
             assert_eq!(name.kind(), kind);
         }
+    }
+
+    #[test]
+    fn deserialize_invalid_branches() {
+        let branches = vec![
+            "\"slkhjndkljshjdfjkshdfkj\"",
+            "\"roswaal-hjskjsh\"",
+            "\"roswaal-add-tests-ksdjhbnkjbdjkhbdjhbdjbjdhbjdb\"",
+        ];
+        for branch in branches {
+            assert!(serde_json::from_str::<RoswaalOwnedGitBranchName>(branch).is_err())
+        }
+    }
+
+    #[test]
+    fn deserialize_valid_branch() {
+        assert!(serde_json::from_str::<RoswaalOwnedGitBranchName>(
+            "\"roswaal-remove-tests-G983j839s4\""
+        )
+        .is_ok())
     }
 }
