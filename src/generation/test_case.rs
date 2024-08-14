@@ -90,7 +90,7 @@ export const {} = async () => {{
 
 const TEST_ACTIONS_LAUNCH_IMPORT: &str = "import { TestAppLaunchConfig } from \"../Launch\"\n";
 const TEST_ACTIONS_LOCATION_IMPORT: &str =
-    "import { TestLocations, setUserLocation } from \"../Location\"\n";
+    "import { TestLocations, setUserLocation } from \"../Locations\"\n";
 const TEST_ACTIONS_BEFORE_LAUNCH_FUNCTION: &str = "\
 export const beforeLaunch = async (): Promise<TestAppLaunchConfig> => {
   // Perform any setup work in here, (setting location, reseting device
@@ -294,7 +294,7 @@ export const ensureThatJohnnyIsNotBored = async () => {
             RoswaalCompiledTest::new("A".to_string(), None, vec![command1, command2]).typescript();
         let expected_ts = "\
 import { TestAppLaunchConfig } from \"../Launch\"
-import { TestLocations, setUserLocation } from \"../Location\"
+import { TestLocations, setUserLocation } from \"../Locations\"
 
 export const beforeLaunch = async (): Promise<TestAppLaunchConfig> => {
   // Perform any setup work in here, (setting location, reseting device
