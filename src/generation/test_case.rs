@@ -39,7 +39,7 @@ impl RoswaalTypescriptGenerate<TestCaseTypescript> for RoswaalCompiledTestComman
                 requirement,
             } => {
                 let mut function_name = requirement.to_ascii_camel_case();
-                function_name.retain(|c| !r#"()$@#*,".;:'"#.contains(c));
+                function_name.retain(|c| !r#"()$@#*,".;:'!"#.contains(c));
                 TestCaseTypescript {
                     test_case_code: format!(
                         "\
@@ -90,7 +90,7 @@ export const {} = async () => {{
 
 const TEST_ACTIONS_LAUNCH_IMPORT: &str = "import { TestAppLaunchConfig } from \"../Launch\"\n";
 const TEST_ACTIONS_LOCATION_IMPORT: &str =
-    "import { TestLocations, setUserLocation } from \"../Location\"\n";
+    "import { TestLocations, setUserLocation } from \"../Locations\"\n";
 const TEST_ACTIONS_BEFORE_LAUNCH_FUNCTION: &str = "\
 export const beforeLaunch = async (): Promise<TestAppLaunchConfig> => {
   // Perform any setup work in here, (setting location, reseting device
@@ -294,7 +294,7 @@ export const ensureThatJohnnyIsNotBored = async () => {
             RoswaalCompiledTest::new("A".to_string(), None, vec![command1, command2]).typescript();
         let expected_ts = "\
 import { TestAppLaunchConfig } from \"../Launch\"
-import { TestLocations, setUserLocation } from \"../Location\"
+import { TestLocations, setUserLocation } from \"../Locations\"
 
 export const beforeLaunch = async (): Promise<TestAppLaunchConfig> => {
   // Perform any setup work in here, (setting location, reseting device
@@ -319,7 +319,7 @@ export const setLocationToOakland = async () => {
         let step1 = RoswaalCompiledTestCommand::Step {
             label: "Step 1".to_string(),
             name: "Johnny is signed in".to_string(),
-            requirement: "Ensure Johnny is signed into his account,,,, and is (*$)(*)($# alive"
+            requirement: "Ensure Johnny is signed into his account,,,, and is !!!!(*$)(*)($# alive"
                 .to_string(),
         };
         let step2 = RoswaalCompiledTestCommand::Step {

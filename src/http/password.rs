@@ -1,11 +1,13 @@
 use std::env;
 
+use ::base64::Engine;
 use axum::{
     extract::{Query, Request},
     http::StatusCode,
     middleware::Next,
     response::Response,
 };
+use base64::prelude::BASE64_STANDARD;
 use bcrypt::{hash, verify, DEFAULT_COST};
 use serde::Deserialize;
 
@@ -22,9 +24,11 @@ pub struct EndpointPassword {
 
 impl EndpointPassword {
     pub fn prod() -> Self {
+        let base64_hash = env::var("ENDPOINT_HASHED_PASSWORD")
+            .expect("Make sure to set the ENDPOINT_HASHED_PASSWORD to a BCrypt Hashed Password in the .env.");
+        let bytes = BASE64_STANDARD.decode(base64_hash.as_bytes()).unwrap();
         Self {
-            password: env::var("ENDPOINT_HASHED_PASSWORD")
-                .expect("Make sure to set the ENDPOINT_HASHED_PASSWORD to a BCrypt Hashed Password in the .env.")
+            password: String::from_utf8(bytes).unwrap(),
         }
     }
 

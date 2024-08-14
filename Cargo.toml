@@ -38,6 +38,7 @@ tokio = { version = "1.38.0", features = [
 tower = "0.4.13"
 openssl = { version = "0.10", features = ["vendored"] }
 axum-extra = "0.9.3"
+base64 = "0.22.1"
 
 [dev-dependencies]
 axum-test = "15.3.0"
