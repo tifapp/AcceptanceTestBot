@@ -39,7 +39,7 @@ impl RoswaalTypescriptGenerate<TestCaseTypescript> for RoswaalCompiledTestComman
                 requirement,
             } => {
                 let mut function_name = requirement.to_ascii_camel_case();
-                function_name.retain(|c| !r#"()$@#*,".;:'"#.contains(c));
+                function_name.retain(|c| !r#"()$@#*,".;:'!"#.contains(c));
                 TestCaseTypescript {
                     test_case_code: format!(
                         "\
@@ -319,7 +319,7 @@ export const setLocationToOakland = async () => {
         let step1 = RoswaalCompiledTestCommand::Step {
             label: "Step 1".to_string(),
             name: "Johnny is signed in".to_string(),
-            requirement: "Ensure Johnny is signed into his account,,,, and is (*$)(*)($# alive"
+            requirement: "Ensure Johnny is signed into his account,,,, and is !!!!(*$)(*)($# alive"
                 .to_string(),
         };
         let step2 = RoswaalCompiledTestCommand::Step {
