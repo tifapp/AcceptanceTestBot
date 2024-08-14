@@ -169,9 +169,12 @@ mod tests {
 
     #[test]
     fn deserialize_valid_branch() {
-        assert!(serde_json::from_str::<RoswaalOwnedGitBranchName>(
-            "\"roswaal-remove-tests-G983j839s4\""
-        )
-        .is_ok())
+        let branches = vec![
+            "\"roswaal-add-locations-Lklj839sda\"",
+            "\"roswaal-remove-tests-G983j839s4\"",
+        ];
+        for branch in branches {
+            assert!(serde_json::from_str::<RoswaalOwnedGitBranchName>(branch).is_ok())
+        }
     }
 }
